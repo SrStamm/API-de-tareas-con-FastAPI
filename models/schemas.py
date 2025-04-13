@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
-from datetime import datetime
-from db_models import User, Task, State
+from datetime import datetime as dt, timezone
+from .db_models import State
 
 
 class CreateUser(BaseModel):
@@ -23,12 +23,12 @@ class ReadUser(BaseModel):
 
 class CreateTask(BaseModel):
     description: str
-    date_exp: datetime
+    date_exp: dt
 
 class ReadTask(BaseModel):
     task_id: int
     description: str
-    date_exp: datetime
+    date_exp: dt
     state: State
 
     class Config:
@@ -36,19 +36,17 @@ class ReadTask(BaseModel):
 
 class UpdateTask(BaseModel):
     description: Optional[str]
-    date_exp: Optional[datetime]
+    date_exp: dt | None = None
     state: Optional[State]
 
 class CreateGroup(BaseModel):
     name: str 
     description: str | None = Field(default=None)
-    date_at: datetime = Field(default_factory=datetime.now(datetime.timezone.utc))
 
 class ReadGroup(BaseModel):
     group_id: int
     name: str 
     description: str | None = Field(default=None)
-    users: List[ReadUser]
 
     class Config:
         orm_mode = True

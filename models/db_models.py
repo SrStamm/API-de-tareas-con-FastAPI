@@ -1,5 +1,5 @@
 from sqlmodel import Field, SQLModel, Relationship
-from datetime import datetime
+from datetime import datetime  as dt, timezone
 from enum import Enum
 from typing import Optional, List
 from pydantic import EmailStr
@@ -26,7 +26,7 @@ class Group(SQLModel, table=True):
     group_id: Optional[int] = Field(primary_key=True)
     name: str 
     description: str | None = Field(default=None)
-    date_at: datetime = Field(default_factory=datetime.now(datetime.timezone.utc))
+    date_at: dt = Field(default_factory=lambda: dt.now(timezone.utc))
 
     users: List['User'] = Relationship(back_populates='groups', link_model=group_user)
 
@@ -35,7 +35,7 @@ class Project(SQLModel, table=True):
     group_id: int = Field(foreign_key='group.group_id')
     title: str 
     description: str | None = Field(default=None)
-    date_at: datetime = Field(default_factory=datetime.now(datetime.timezone.utc))
+    date_at: dt = Field(default_factory=lambda: dt.now(timezone.utc))
 
     users: List['User'] = Relationship(back_populates='projects', link_model=project_user)
     tasks: List['Task'] = Relationship(back_populates='project')
@@ -45,7 +45,7 @@ class User(SQLModel, table=True):
     username: str
     email: EmailStr
     password: str
-    created: datetime = Field(default_factory=datetime.now(datetime.timezone.utc))
+    created: dt = Field(default_factory=lambda: dt.now(timezone.utc))
 
     groups: List['Group'] = Relationship(back_populates='users', link_model=group_user)
     projects: List['Project'] = Relationship(back_populates='users', link_model=project_user)
@@ -55,8 +55,8 @@ class Task(SQLModel, table=True):
     task_id: Optional[int] = Field(primary_key=True)
     project_id: int = Field(foreign_key='project.project_id')
     description: str | None = Field(default=None)
-    date_exp: datetime = Field()
+    date_exp: dt
     state: State = Field(default=State.SIN_EMPEZAR)
     
     asigned: List['User'] = Relationship(back_populates='tasks_asigned', link_model=tasks_user)
-    tasks: Optional['Project'] = Relationship(back_populates='tasks')
+    project: Optional['Project'] = Relationship(back_populates='tasks')
