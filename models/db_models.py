@@ -6,7 +6,7 @@ from pydantic import EmailStr
 
 class State(str, Enum):
     COMPLETADO = 'completado'
-    EN_PROCESO = 'en proceos'
+    EN_PROCESO = 'en proceso'
     CANCELADO = 'cancelado'
     SIN_EMPEZAR = 'sin empezar'
 

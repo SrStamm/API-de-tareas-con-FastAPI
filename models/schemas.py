@@ -30,14 +30,15 @@ class ReadTask(BaseModel):
     description: str
     date_exp: dt
     state: State
+    project_id: int
 
     class Config:
         orm_mode = True
 
 class UpdateTask(BaseModel):
-    description: Optional[str]
+    description: str | None = None
     date_exp: dt | None = None
-    state: Optional[State]
+    state: State | None = None
 
 class CreateGroup(BaseModel):
     name: str 
@@ -52,8 +53,8 @@ class ReadGroup(BaseModel):
         orm_mode = True
 
 class UpdateGroup(BaseModel):
-    name: str 
-    description: str | None = Field(default=None)
+    name: str | None = None
+    description: str | None = None
 
 class CreateProject(BaseModel):
     title: str 
@@ -69,5 +70,5 @@ class ReadProject(BaseModel):
         orm_mode = True
 
 class UpdateProject(BaseModel):
-    title: str | None = Field(default=None)
-    description: str | None = Field(default=None)
+    title: str | None = None
+    description: str | None = None
