@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, create_engine, Session, select
+from sqlmodel import SQLModel, create_engine, Session, select, or_
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv

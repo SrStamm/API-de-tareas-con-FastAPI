@@ -1,84 +1,81 @@
 from fastapi import APIRouter, status, HTTPException, Depends
 from models import db_models, schemas
-from db.database import get_session, Session, select, SQLAlchemyError
+from db.database import get_session, Session, select, SQLAlchemyError, or_
 from typing import List
 
 router = APIRouter(tags=['User'])
 
-@router.get('/{group_id}/project')
-def get_projects(group_id: int,
-                 session:Session = Depends(get_session)) -> List[schemas.ReadProject]:
+@router.get('/user')
+def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     try:
-        statement = select(db_models.Project).where(db_models.Project.group_id == group_id)
-        found_projects = session.exec(statement).all()
-        return found_projects
-    
+        statement = select(db_models.User)
+        found_users = session.exec(statement).all()
+        return found_users
     except SQLAlchemyError as e:
-        raise {'error en get_projects': f'error {e}'}
+        raise {'error en get_users': f'error {e}'}
 
-@router.post('/{group_id}/project')
-def create_group( new_project: schemas.CreateProject,
-                  group_id: int,
+@router.post('/user')
+def create_user( new_user: schemas.CreateUser,
                   session:Session = Depends(get_session)):
     try:
-        statement = select(db_models.Group).where(db_models.Group.group_id == group_id)
-        founded_group = session.exec(statement).first()
+        statement = select(db_models.User).where(or_(db_models.User.email == new_user.email, db_models.User.username == new_user.username))
+        founded_user = session.exec(statement).first()
 
-        if not founded_group:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el grupo')
+        if founded_user:
+            if founded_user.username == new_user.username:
+                raise HTTPException(status.HTTP_406_NOT_ACCEPTABLE, detail='Ya existe un usuario con este Username')
+            else:
+                raise HTTPException(status.HTTP_406_NOT_ACCEPTABLE, detail='Ya existe un usuario con este Email')
 
-        new_project = db_models.Project(**new_project.model_dump(), group_id=founded_group.group_id)
+        new_user = db_models.User(**new_user.model_dump())
         
-        session.add(new_project)
+        session.add(new_user)
         session.commit()
 
-        return {'detail':'Se ha creado un nuevo proyecto de forma exitosa'}
+        return {'detail':'Se ha creado un nuevo usuario con exito'}
     except SQLAlchemyError as e:
-        raise {'error en create_project':f'error {e}'}
-    
-@router.patch('/{group_id}/{project_id}')
-def update_group(group_id: int,
-                 project_id: int,
-                 updated_project: schemas.UpdateProject,
-                 session: Session = Depends(get_session)): 
+        raise {'error en create_user':f'error {e}'}
+
+@router.patch('/user/{user_id}')
+def update_user(user_id: int,
+                updated_user: schemas.UpdateUser,
+                session: Session = Depends(get_session)): 
 
     try:
-        statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
-        founded_project = session.exec(statement).first()
+        statement = select(db_models.User).where(db_models.User.user_id == user_id)
+        founded_user = session.exec(statement).first()
         
-        if not founded_project:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el grupo')
+        if not founded_user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
         
-        if founded_project.title != updated_project.title and updated_project.title is not None:
-            founded_project.title = updated_project.title
-            
-        if founded_project.description != updated_project.description and updated_project.description is not None:
-            founded_project.description = updated_project.description
+        if founded_user.username != updated_user.username and updated_user.username:
+            founded_user.username = updated_user.username
+
+        if founded_user.email != updated_user.email and updated_user.email:
+            founded_user.email = updated_user.email
         
         session.commit()
         
-        return {'detail':'Se ha actualizado la informacion del projecto'}
+        return {'detail':'Se ha actualizado el usuario'}
     
     except SQLAlchemyError as e:
-        raise {'error en update_project':f'error {e}'}
-    
+        raise {'error en update_user':f'error {e}'}
 
-@router.delete('/{group_id}/{project_id}')
-def delete_group(group_id: int,
-                 project_id: int,
-                 session: Session = Depends(get_session)):
+@router.delete('/user/{user_id}')
+def delete_user(user_id: int,
+                session: Session = Depends(get_session)):
 
     try:
-        statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
-        founded_project = session.exec(statement).first()
+        statement = select(db_models.User).where(db_models.User.user_id == user_id)
+        founded_user = session.exec(statement).first()
         
-        if not founded_project:
+        if not founded_user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
         
-        session.delete(founded_project)
+        session.delete(founded_user)
         session.commit()
         
-        return {'detail':'Se ha eliminado el proyecto'}
+        return {'detail':'Se ha eliminado el usuario'}
     
     except SQLAlchemyError as e:
-        raise {'error en delete_project':f'error {e}'}
+        raise {'error en delete_user':f'error {e}'}

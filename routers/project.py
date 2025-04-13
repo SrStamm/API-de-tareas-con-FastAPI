@@ -3,9 +3,9 @@ from models import db_models, schemas
 from db.database import get_session, Session, select, SQLAlchemyError
 from typing import List
 
-router = APIRouter(tags=['Project'])
+router = APIRouter(prefix='/project', tags=['Project'])
 
-@router.get('/{group_id}/project')
+@router.get('/{group_id}')
 def get_projects(group_id: int,
                  session:Session = Depends(get_session)) -> List[schemas.ReadProject]:
     try:
@@ -16,7 +16,7 @@ def get_projects(group_id: int,
     except SQLAlchemyError as e:
         raise {'error en get_projects': f'error {e}'}
 
-@router.post('/{group_id}/project')
+@router.post('/{group_id}')
 def create_group( new_project: schemas.CreateProject,
                   group_id: int,
                   session:Session = Depends(get_session)):
@@ -35,7 +35,7 @@ def create_group( new_project: schemas.CreateProject,
         return {'detail':'Se ha creado un nuevo proyecto de forma exitosa'}
     except SQLAlchemyError as e:
         raise {'error en create_project':f'error {e}'}
-    
+
 @router.patch('/{group_id}/{project_id}')
 def update_group(group_id: int,
                  project_id: int,
@@ -61,7 +61,6 @@ def update_group(group_id: int,
     
     except SQLAlchemyError as e:
         raise {'error en update_project':f'error {e}'}
-    
 
 @router.delete('/{group_id}/{project_id}')
 def delete_group(group_id: int,

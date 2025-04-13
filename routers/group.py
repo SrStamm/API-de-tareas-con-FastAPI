@@ -21,7 +21,7 @@ def create_group( new_group: schemas.CreateGroup,
         return {'detail':'Se ha creado un nuevo grupo de forma exitosa'}
     except SQLAlchemyError as e:
         raise {'error en create_group':f'error {e}'}
-    
+
 @router.patch('/{group_id}')
 def update_group(group_id: int,
                  updated_group: schemas.UpdateGroup,
@@ -46,7 +46,6 @@ def update_group(group_id: int,
     
     except SQLAlchemyError as e:
         raise {'error en update_group':f'error {e}'}
-    
 
 @router.delete('/{group_id}')
 def delete_group(group_id: int,
