@@ -61,10 +61,9 @@ class CreateProject(BaseModel):
 
 class ReadProject(BaseModel):
     project_id: int
+    group_id: int
     title: str
-    description: str
-    tasks: List[ReadTask]
-    users: List[ReadUser]
+    description: str | None
 
     class Config:
         orm_mode = True

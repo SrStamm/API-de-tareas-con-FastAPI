@@ -1,6 +1,5 @@
 from fastapi import APIRouter, status, HTTPException, Depends
-from models import db_models
-from models import schemas
+from models import db_models, schemas
 from db.database import get_session, Session, select, SQLAlchemyError
 from typing import List
 
