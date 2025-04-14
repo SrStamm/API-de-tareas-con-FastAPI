@@ -48,6 +48,7 @@ class ReadGroup(BaseModel):
     group_id: int
     name: str 
     description: str | None = Field(default=None)
+    users: List[ReadUser]
 
     class Config:
         orm_mode = True
@@ -65,6 +66,7 @@ class ReadProject(BaseModel):
     group_id: int
     title: str
     description: str | None
+    users: List[ReadUser]
 
     class Config:
         orm_mode = True

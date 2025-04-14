@@ -33,6 +33,7 @@ def create_user( new_user: schemas.CreateUser,
         session.commit()
 
         return {'detail':'Se ha creado un nuevo usuario con exito'}
+
     except SQLAlchemyError as e:
         raise {'error en create_user':f'error {e}'}
 
@@ -42,8 +43,7 @@ def update_user(user_id: int,
                 session: Session = Depends(get_session)): 
 
     try:
-        statement = select(db_models.User).where(db_models.User.user_id == user_id)
-        founded_user = session.exec(statement).first()
+        founded_user = session.get(db_models.User, user_id)
         
         if not founded_user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
@@ -66,8 +66,7 @@ def delete_user(user_id: int,
                 session: Session = Depends(get_session)):
 
     try:
-        statement = select(db_models.User).where(db_models.User.user_id == user_id)
-        founded_user = session.exec(statement).first()
+        founded_user = session.get(db_models.User, user_id)
         
         if not founded_user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')

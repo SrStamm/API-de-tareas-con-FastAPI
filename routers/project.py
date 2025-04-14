@@ -6,8 +6,8 @@ from typing import List
 router = APIRouter(prefix='/project', tags=['Project'])
 
 @router.get('/{group_id}')
-def get_projects(group_id: int,
-                 session:Session = Depends(get_session)) -> List[schemas.ReadProject]:
+def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[schemas.ReadProject]:
+
     try:
         statement = select(db_models.Project).where(db_models.Project.group_id == group_id)
         found_projects = session.exec(statement).all()
@@ -17,7 +17,7 @@ def get_projects(group_id: int,
         raise {'error en get_projects': f'error {e}'}
 
 @router.post('/{group_id}')
-def create_group( new_project: schemas.CreateProject,
+def create_project( new_project: schemas.CreateProject,
                   group_id: int,
                   session:Session = Depends(get_session)):
     try:
@@ -37,7 +37,7 @@ def create_group( new_project: schemas.CreateProject,
         raise {'error en create_project':f'error {e}'}
 
 @router.patch('/{group_id}/{project_id}')
-def update_group(group_id: int,
+def update_project(group_id: int,
                  project_id: int,
                  updated_project: schemas.UpdateProject,
                  session: Session = Depends(get_session)): 
@@ -63,7 +63,7 @@ def update_group(group_id: int,
         raise {'error en update_project':f'error {e}'}
 
 @router.delete('/{group_id}/{project_id}')
-def delete_group(group_id: int,
+def delete_project(group_id: int,
                  project_id: int,
                  session: Session = Depends(get_session)):
 
@@ -81,3 +81,83 @@ def delete_group(group_id: int,
     
     except SQLAlchemyError as e:
         raise {'error en delete_project':f'error {e}'}
+
+
+@router.post('/{group_id}/{project_id}/{user_id}')
+def append_user_project(group_id: int,
+                        user_id: int,
+                        project_id: int,
+                        session: Session = Depends(get_session)):
+
+    try:
+        statement = (select(db_models.Project)
+                     .where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id))
+        
+        founded_project = session.exec(statement).first()
+
+        if not founded_project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No existe o no se encontro el proyecto')
+        
+        # Busca el usuario
+        user = session.get(db_models.User, user_id)
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+
+        # Busca el grupo y verifica si el usuario existe en este
+        group = session.get(db_models.Group, group_id)        
+        
+        if not user in group.users:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario no existe en el grupo')
+        
+        if user in founded_project.users:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario ya existe en el proyecto')
+        
+        # Lo agrega al grupo
+        founded_project.users.append(user)
+        
+        session.commit()
+        
+        return {'detail':'El usuario ha sido agregado al proyecto'}
+    
+    except SQLAlchemyError as e:
+        raise {'error en append_user_project':f'error {e}'}
+
+@router.delete('/{group_id}/{project_id}/{user_id}')
+def delete_user_project(group_id: int,
+                        project_id: int,
+                        user_id: int,
+                        session: Session = Depends(get_session)):
+
+    try:
+        statement = (select(db_models.Project)
+                    .where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id))
+        
+        founded_project = session.exec(statement).first()
+
+        if not founded_project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No existe o no se encontro el proyecto')
+        
+        # Busca el usuario
+        user = session.get(db_models.User, user_id)
+
+        # Busca el grupo y verifica si el usuario existe en este
+        group = session.get(db_models.Group, group_id)        
+        
+        if not user in group.users:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario no existe en el grupo')
+
+        if not founded_project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+
+        if user in founded_project.users:
+            # Lo elimina del proyecto
+            founded_project.users.remove(user)
+            session.commit()
+            
+            return {'detail':'El usuario ha sido eliminado del proyecto'}
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario no esta en el proyecto')
+    
+    except SQLAlchemyError as e:
+        raise {'error en delete_user_project':f'error {e}'}

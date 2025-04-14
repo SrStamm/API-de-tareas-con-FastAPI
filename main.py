@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import group, project, user, task
+from routers import group, project, task, user
 from db.database import create_db_and_tables
 from contextlib import asynccontextmanager
 
