@@ -2,6 +2,7 @@ from fastapi import APIRouter, status, HTTPException, Depends
 from models import db_models, schemas
 from db.database import get_session, Session, select, SQLAlchemyError
 from typing import List
+from .auth import auth_user
 
 router = APIRouter(prefix='/project', tags=['Project'])
 
@@ -16,9 +17,11 @@ def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[
     except SQLAlchemyError as e:
         raise {'error en get_projects': f'error {e}'}
 
+
 @router.post('/{group_id}', description='Crea un nuevo proyecto en un grupo')
 def create_project( new_project: schemas.CreateProject,
                   group_id: int,
+                  user: db_models.User = Depends(auth_user),
                   session:Session = Depends(get_session)):
     try:
         statement = select(db_models.Group).where(db_models.Group.group_id == group_id)
@@ -27,14 +30,27 @@ def create_project( new_project: schemas.CreateProject,
         if not founded_group:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el grupo')
 
-        new_project = db_models.Project(**new_project.model_dump(), group_id=founded_group.group_id)
+        project = db_models.Project(**new_project.model_dump(), group_id=founded_group.group_id)
         
-        session.add(new_project)
+        session.add(project)
+        session.commit()
+        session.refresh(project)
+
+        # Agregar al usuario creador al grupo con el rol de administrador
+        project_user = db_models.project_user(
+            project_id=project.project_id,
+            user_id=user.user_id,
+            permission=db_models.Project_Permission.ADMIN
+        )
+        session.add(project_user)
         session.commit()
 
         return {'detail':'Se ha creado un nuevo proyecto de forma exitosa'}
+    
     except SQLAlchemyError as e:
-        raise {'error en create_project':f'error {e}'}
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f'Error al crear el proyecto: {str(e)}')
 
 @router.patch('/{group_id}/{project_id}', description='Modifica un proyecto de un grupo')
 def update_project(group_id: int,
@@ -161,3 +177,67 @@ def delete_user_project(group_id: int,
     
     except SQLAlchemyError as e:
         raise {'error en delete_user_project':f'error {e}'}
+
+
+@router.patch('/{group_id}/{project_id}/{user_id}', description='Modifica el rol de un usuario en un proyecto')
+def update_user_project(group_id: int,
+                        user_id: int,
+                        project_id: int,
+                        update_role: schemas.UpdatePermissionUser,
+                        session: Session = Depends(get_session)):
+
+    try:
+        # Verifica que exista el proyecto
+        statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
+        project = session.exec(statement).first()
+
+        if project is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
+                
+        # Busca el usuario
+        statement = (select(db_models.project_user)
+                     .join(db_models.Project, db_models.project_user.project_id == db_models.Project.project_id)
+                     .where(db_models.project_user.user_id == user_id))
+
+        user = session.exec(statement).first()
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+
+        user.permission = update_role.permission
+        
+        session.commit()
+
+        return {'detail':'Se ha cambiado los permisos del usuario en el proyecto'}
+    
+    except SQLAlchemyError as e:
+        raise {'error en append_user_project':f'error {e}'}
+
+
+@router.get('/{group_id}/{project_id}/users', description='Obtiene todos los grupos')
+def get_user_in_group(group_id: int,
+                      project_id: int,
+                      session:Session = Depends(get_session)
+                    ) -> List[schemas.ReadProjectUser]:
+    
+    statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
+    
+    project = session.exec(statement).first()
+
+    if project is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
+
+    statement = (select(db_models.User, db_models.project_user.permission)
+                 .join(db_models.project_user, db_models.project_user.user_id == db_models.User.user_id)
+                 .where(db_models.project_user.project_id == project_id))
+    
+    results = session.exec(statement).all()
+
+    if not results:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontraron los usuarios pertenecientes al proyecto')
+    
+    # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
+    return [
+        schemas.ReadProjectUser(user_id=user.user_id, username=user.username, permission=permission)
+        for user, permission in results
+    ]

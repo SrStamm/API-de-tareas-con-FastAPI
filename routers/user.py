@@ -2,7 +2,7 @@ from fastapi import APIRouter, status, HTTPException, Depends
 from models import db_models, schemas
 from db.database import get_session, Session, select, SQLAlchemyError, or_
 from typing import List
-from .auth import encrypt_password
+from .auth import encrypt_password, auth_user
 
 router = APIRouter(tags=['User'])
 
@@ -40,22 +40,31 @@ def create_user( new_user: schemas.CreateUser,
     except SQLAlchemyError as e:
         raise {'error en create_user':f'error {e}'}
 
-@router.patch('/user/{user_id}', description='Actualiza un usuario')
-def update_user(user_id: int,
-                updated_user: schemas.UpdateUser,
+@router.get('/user/me', description='Obtiene el usuario actual')
+def get_users(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
+    try:
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+        return user
+    
+    except SQLAlchemyError as e:
+        raise {'error en get_users': f'error {e}'}
+
+
+@router.patch('/user/me', description='Actualiza un usuario')
+def update_user(updated_user: schemas.UpdateUser,
+                user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)): 
 
     try:
-        founded_user = session.get(db_models.User, user_id)
-        
-        if not founded_user:
+        if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
         
-        if founded_user.username != updated_user.username and updated_user.username:
-            founded_user.username = updated_user.username
+        if user.username != updated_user.username and updated_user.username:
+            user.username = updated_user.username
 
-        if founded_user.email != updated_user.email and updated_user.email:
-            founded_user.email = updated_user.email
+        if user.email != updated_user.email and updated_user.email:
+            user.email = updated_user.email
         
         session.commit()
         
@@ -64,17 +73,15 @@ def update_user(user_id: int,
     except SQLAlchemyError as e:
         raise {'error en update_user':f'error {e}'}
 
-@router.delete('/user/{user_id}', description='Elimina un usuario especifico')
-def delete_user(user_id: int,
+@router.delete('/user/me', description='Elimina un usuario especifico')
+def delete_user(user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)):
 
-    try:
-        founded_user = session.get(db_models.User, user_id)
-        
-        if not founded_user:
+    try:        
+        if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
         
-        session.delete(founded_user)
+        session.delete(user)
         session.commit()
         
         return {'detail':'Se ha eliminado el usuario'}

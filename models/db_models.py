@@ -22,10 +22,12 @@ class Project_Permission(str, Enum):
 class group_user(SQLModel, table=True):
     group_id: int = Field(primary_key=True, foreign_key='group.group_id')
     user_id: int = Field(primary_key=True, foreign_key='user.user_id')
+    role: Group_Role = Field(default=Group_Role.MEMBER)
     
 class project_user(SQLModel, table=True):
     project_id: int = Field(primary_key=True, foreign_key='project.project_id')
     user_id: int = Field(primary_key=True, foreign_key='user.user_id')
+    permission: Project_Permission = Field(default=Project_Permission.WRITE)
     
 class tasks_user(SQLModel, table=True):
     task_id: int = Field(primary_key=True, foreign_key='task.task_id')

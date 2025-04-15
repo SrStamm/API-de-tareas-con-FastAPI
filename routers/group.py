@@ -2,25 +2,42 @@ from fastapi import APIRouter, status, HTTPException, Depends
 from models import db_models, schemas
 from db.database import get_session, Session, select, SQLAlchemyError
 from typing import List
+from .auth import auth_user
 
 router = APIRouter(prefix='/group', tags=['Group'])
 
 @router.get('', description='Obtiene todos los grupos')
 def get_groups(session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:
-    statement = select(db_models.Group)
+    statement = (select(db_models.Group))
     found_group = session.exec(statement).all()
     return found_group
 
 @router.post('', description='Crea un nuevo grupo')
-def create_group( new_group: schemas.CreateGroup,
-                  session:Session = Depends(get_session)):
+def create_group(new_group: schemas.CreateGroup,
+                 user: db_models.User = Depends(auth_user),
+                 session: Session = Depends(get_session)):
     try:
-        new_group = db_models.Group(**new_group.model_dump())
-        session.add(new_group)
+        # Crear el grupo con el usuario creador
+        group = db_models.Group(**new_group.model_dump())
+        session.add(group)
         session.commit()
-        return {'detail':'Se ha creado un nuevo grupo de forma exitosa'}
+        session.refresh(group)
+
+        # Agregar al usuario creador al grupo con el rol de administrador
+        group_user = db_models.group_user(
+            group_id=group.group_id,
+            user_id=user.user_id,
+            role=db_models.Group_Role.ADMIN
+        )
+        session.add(group_user)
+        session.commit()
+
+        return {'detail': 'Se ha creado un nuevo grupo de forma exitosa'}
+
     except SQLAlchemyError as e:
-        raise {'error en create_group':f'error {e}'}
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f'Error al crear el grupo: {str(e)}')
 
 @router.patch('/{group_id}', description='Actualiza a un grupo')
 def update_group(group_id: int,
@@ -137,3 +154,54 @@ def delete_user_group(group_id: int,
     
     except SQLAlchemyError as e:
         raise {'error en delete_user_group':f'error {e}'}
+
+
+@router.patch('/{group_id}/{user_id}', description='Modifica el rol de un usuario en un grupo')
+def update_user_group(group_id: int,
+                        user_id: int,
+                        update_role: schemas.UpdateRoleUser,
+                        session: Session = Depends(get_session)):
+
+    try:
+        # Verifica que exista el grupo
+        statement = select(db_models.Group).where(db_models.Group.group_id == group_id)
+        group = session.exec(statement).first()
+
+        if group is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el grupo')
+                
+        # Busca el usuario
+        statement = (select(db_models.group_user)
+                     .join(db_models.Group, db_models.group_user.group_id == db_models.Group.group_id)
+                     .where(db_models.group_user.user_id == user_id))
+
+        user = session.exec(statement).first()
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+
+        user.role = update_role.role
+        
+        session.commit()
+
+        return {'detail':'Se ha cambiado los permisos del usuario en el grupo'}
+    
+    except SQLAlchemyError as e:
+        raise {'error en append_user_group':f'error {e}'}
+
+@router.get('/{group_id}/users', description='Obtiene todos los grupos')
+def get_user_in_group(group_id: int,
+                      session:Session = Depends(get_session)
+                    ) -> List[schemas.ReadGroupUser]:
+    
+    statement = (select(db_models.User, db_models.group_user.role)
+                 .join(db_models.group_user, db_models.group_user.user_id == db_models.User.user_id)
+                 .where(db_models.group_user.group_id == group_id))
+    
+    results = session.exec(statement).all()
+    
+    # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
+    return [
+        schemas.ReadGroupUser(user_id=user.user_id, username=user.username, role=role)
+        for user, role in results
+    ]

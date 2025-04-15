@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from db.database import get_session, Session, select
 from passlib.context import CryptContext
 from sqlalchemy.exc import SQLAlchemyError
-from models import db_models
+from models import db_models, schemas
 
 router = APIRouter(tags=['Login'])
 
@@ -13,7 +13,7 @@ router = APIRouter(tags=['Login'])
 ALGORITHM = "HS256"
 
 # Duracion de los tokens
-ACCESS_TOKEN_DURATION = 15
+ACCESS_TOKEN_DURATION = 60
 
 # Definimos una llave secreta
 SECRET = "MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr"
@@ -60,16 +60,16 @@ async def require_admin(user : db_models.User = Depends(auth_user)):
                             detail={"UNAUTHORIZED":"No tiene autorizacion para realizar esta accion."})
 
 
-@router.post("/login")
+@router.post("/login", description='Endpoint para logearse. Se necesita username y password.')
 async def login(form: OAuth2PasswordRequestForm = Depends(),
-                session : Session = Depends(get_session)):
+                session : Session = Depends(get_session)) -> schemas.Token:
     
     try:
         statement = select(db_models.User).where(db_models.User.username == form.username)
         user_found = session.exec(statement).first()
 
         print(user_found)
-        
+
         if not user_found:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                                 detail="Usuario no encontrado o no existe")

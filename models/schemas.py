@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
 from datetime import datetime as dt, timezone
-from .db_models import State
+from .db_models import State, Group_Role, Project_Permission
 
 
 class CreateUser(BaseModel):
@@ -14,6 +14,11 @@ class UpdateUser(BaseModel):
     email: EmailStr | None = None
     password: str | None = None
 
+class UpdateRoleUser(BaseModel):
+    role: Group_Role | None = None
+
+class UpdatePermissionUser(BaseModel):
+    permission: Project_Permission | None = None    
 class ReadUser(BaseModel):
     user_id: int
     username: str
@@ -21,6 +26,21 @@ class ReadUser(BaseModel):
     class Config:
         orm_mode = True
 
+class ReadGroupUser(BaseModel):
+    user_id: int
+    username: str
+    role: Group_Role
+
+    class Config:
+        orm_mode = True
+
+class ReadProjectUser(BaseModel):
+    user_id: int
+    username: str
+    permission: Project_Permission
+
+    class Config:
+        orm_mode = True    
 class CreateTask(BaseModel):
     description: str
     date_exp: dt
@@ -74,3 +94,7 @@ class ReadProject(BaseModel):
 class UpdateProject(BaseModel):
     title: str | None = None
     description: str | None = None
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
