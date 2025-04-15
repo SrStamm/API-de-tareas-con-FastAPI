@@ -6,6 +6,7 @@ from .auth import auth_user
 
 router = APIRouter(prefix='/project', tags=['Project'])
 
+
 @router.get('/{group_id}', description='Obtiene todos los proyectos de un grupo')
 def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
@@ -19,7 +20,7 @@ def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[
 
 
 @router.post('/{group_id}', description='Crea un nuevo proyecto en un grupo')
-def create_project( new_project: schemas.CreateProject,
+def create_project(new_project: schemas.CreateProject,
                   group_id: int,
                   user: db_models.User = Depends(auth_user),
                   session:Session = Depends(get_session)):
@@ -53,12 +54,19 @@ def create_project( new_project: schemas.CreateProject,
                             detail=f'Error al crear el proyecto: {str(e)}')
 
 @router.patch('/{group_id}/{project_id}', description='Modifica un proyecto de un grupo')
-def update_project(group_id: int,
+async def update_project(group_id: int,
                  project_id: int,
                  updated_project: schemas.UpdateProject,
+                 user: db_models.User = Depends(auth_user),
                  session: Session = Depends(get_session)): 
 
     try:
+        statement = select(db_models.project_user).where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id)
+        resultado = session.exec(statement).first()
+
+        if not resultado or resultado.permission != 'admin':
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+
         statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
         founded_project = session.exec(statement).first()
         
@@ -80,10 +88,17 @@ def update_project(group_id: int,
 
 @router.delete('/{group_id}/{project_id}', description='Elimina un proyecto de un grupo')
 def delete_project(group_id: int,
-                 project_id: int,
-                 session: Session = Depends(get_session)):
+                   project_id: int,
+                   user: db_models.User = Depends(auth_user),
+                   session: Session = Depends(get_session)):
 
     try:
+        statement = select(db_models.project_user).where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id)
+        resultado = session.exec(statement).first()
+
+        if not resultado or resultado.permission != 'admin':
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+        
         statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
         founded_project = session.exec(statement).first()
         
@@ -103,9 +118,16 @@ def delete_project(group_id: int,
 def append_user_project(group_id: int,
                         user_id: int,
                         project_id: int,
+                        user: db_models.User = Depends(auth_user),
                         session: Session = Depends(get_session)):
 
     try:
+        statement = select(db_models.project_user).where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id)
+        resultado = session.exec(statement).first()
+
+        if not resultado or resultado.permission != 'admin':
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+        
         statement = (select(db_models.Project)
                      .where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id))
         
@@ -143,9 +165,16 @@ def append_user_project(group_id: int,
 def delete_user_project(group_id: int,
                         project_id: int,
                         user_id: int,
+                        user: db_models.User = Depends(auth_user),
                         session: Session = Depends(get_session)):
 
     try:
+        statement = select(db_models.project_user).where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id)
+        resultado = session.exec(statement).first()
+
+        if not resultado or resultado.permission != 'admin':
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+        
         statement = (select(db_models.Project)
                     .where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id))
         
@@ -184,9 +213,16 @@ def update_user_project(group_id: int,
                         user_id: int,
                         project_id: int,
                         update_role: schemas.UpdatePermissionUser,
+                        user: db_models.User = Depends(auth_user),
                         session: Session = Depends(get_session)):
 
     try:
+        statement = select(db_models.project_user).where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id)
+        resultado = session.exec(statement).first()
+
+        if not resultado or resultado.permission != 'admin':
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+        
         # Verifica que exista el proyecto
         statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
         project = session.exec(statement).first()
@@ -196,8 +232,7 @@ def update_user_project(group_id: int,
                 
         # Busca el usuario
         statement = (select(db_models.project_user)
-                     .join(db_models.Project, db_models.project_user.project_id == db_models.Project.project_id)
-                     .where(db_models.project_user.user_id == user_id))
+                     .where(db_models.project_user.user_id == user_id, db_models.project_user.project_id == project_id))
 
         user = session.exec(statement).first()
 

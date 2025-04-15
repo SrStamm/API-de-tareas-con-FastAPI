@@ -51,15 +51,6 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-
-async def require_admin(user : db_models.User = Depends(auth_user)):
-    if user.role == 'admin':
-        return user
-    else:
-        raise HTTPException(status_code=401,
-                            detail={"UNAUTHORIZED":"No tiene autorizacion para realizar esta accion."})
-
-
 @router.post("/login", description='Endpoint para logearse. Se necesita username y password.')
 async def login(form: OAuth2PasswordRequestForm = Depends(),
                 session : Session = Depends(get_session)) -> schemas.Token:
