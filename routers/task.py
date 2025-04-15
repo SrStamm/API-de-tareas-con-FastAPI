@@ -5,7 +5,7 @@ from typing import List
 
 router = APIRouter(prefix='/task', tags=['Task'])
 
-@router.get('')
+@router.get('', description='Obtiene todas las tareas')
 def get_task(session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
     try:
         statement = select(db_models.Task)
@@ -15,7 +15,7 @@ def get_task(session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
     except SQLAlchemyError as e:
         raise {'error en get_task': f'error {e}'}
 
-@router.post('/{project_id}')
+@router.post('/{project_id}', description='Crea una nueva tarea en un proyecto')
 def create_task(new_task: schemas.CreateTask,
                 project_id: int,
                 session: Session = Depends(get_session)):
@@ -36,7 +36,7 @@ def create_task(new_task: schemas.CreateTask,
     except SQLAlchemyError as e:
         raise {'error en create_task':f'error {e}'}
 
-@router.patch('/{project_id}/{task_id}')
+@router.patch('/{project_id}/{task_id}', description='Actualiza una tarea especifica de un proyecto')
 def update_user(task_id: int,
                 project_id: int,
                 updated_task: schemas.UpdateTask,
@@ -65,7 +65,7 @@ def update_user(task_id: int,
     except SQLAlchemyError as e:
         raise {'error en update_task':f'error {e}'}
 
-@router.delete('/{project_id}/{task_id}')
+@router.delete('/{project_id}/{task_id}', description='Elimina una tarea especifica de un proyecto')
 def delete_task(task_id: int,
                 project_id: int,
                 session: Session = Depends(get_session)):

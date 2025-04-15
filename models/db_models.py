@@ -10,6 +10,15 @@ class State(str, Enum):
     CANCELADO = 'cancelado'
     SIN_EMPEZAR = 'sin empezar'
 
+class Group_Role(str, Enum):
+    ADMIN = 'admin'
+    EDITOR = 'editor'
+    MEMBER = 'member'
+
+class Project_Permission(str, Enum):
+    ADMIN = 'admin'
+    WRITE = 'write'
+    READ = 'read'
 class group_user(SQLModel, table=True):
     group_id: int = Field(primary_key=True, foreign_key='group.group_id')
     user_id: int = Field(primary_key=True, foreign_key='user.user_id')

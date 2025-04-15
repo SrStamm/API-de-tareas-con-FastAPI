@@ -5,13 +5,13 @@ from typing import List
 
 router = APIRouter(prefix='/group', tags=['Group'])
 
-@router.get('')
+@router.get('', description='Obtiene todos los grupos')
 def get_groups(session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:
     statement = select(db_models.Group)
     found_group = session.exec(statement).all()
     return found_group
 
-@router.post('')
+@router.post('', description='Crea un nuevo grupo')
 def create_group( new_group: schemas.CreateGroup,
                   session:Session = Depends(get_session)):
     try:
@@ -22,7 +22,7 @@ def create_group( new_group: schemas.CreateGroup,
     except SQLAlchemyError as e:
         raise {'error en create_group':f'error {e}'}
 
-@router.patch('/{group_id}')
+@router.patch('/{group_id}', description='Actualiza a un grupo')
 def update_group(group_id: int,
                  updated_group: schemas.UpdateGroup,
                  session: Session = Depends(get_session)):
@@ -47,7 +47,7 @@ def update_group(group_id: int,
     except SQLAlchemyError as e:
         raise {'error en update_group':f'error {e}'}
 
-@router.delete('/{group_id}')
+@router.delete('/{group_id}', description='Elimina un grupo especifico')
 def delete_group(group_id: int,
                  session: Session = Depends(get_session)):
 
@@ -67,7 +67,7 @@ def delete_group(group_id: int,
         raise {'error en delete_group':f'error {e}'}
 
 
-@router.post('/{group_id}/{user_id}')
+@router.post('/{group_id}/{user_id}', description='Agrega un usuario al grupo')
 def append_user_group(group_id: int,
                       user_id: int,
                       session: Session = Depends(get_session)):
@@ -103,7 +103,7 @@ def append_user_group(group_id: int,
     except SQLAlchemyError as e:
         raise {'error en append_user_group':f'error {e}'}
 
-@router.delete('/{group_id}/{user_id}')
+@router.delete('/{group_id}/{user_id}', description='Elimina un usuario del grupo')
 def delete_user_group(group_id: int,
                       user_id: int,
                       session: Session = Depends(get_session)):

@@ -5,7 +5,7 @@ from typing import List
 
 router = APIRouter(prefix='/project', tags=['Project'])
 
-@router.get('/{group_id}')
+@router.get('/{group_id}', description='Obtiene todos los proyectos de un grupo')
 def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
     try:
@@ -16,7 +16,7 @@ def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[
     except SQLAlchemyError as e:
         raise {'error en get_projects': f'error {e}'}
 
-@router.post('/{group_id}')
+@router.post('/{group_id}', description='Crea un nuevo proyecto en un grupo')
 def create_project( new_project: schemas.CreateProject,
                   group_id: int,
                   session:Session = Depends(get_session)):
@@ -36,7 +36,7 @@ def create_project( new_project: schemas.CreateProject,
     except SQLAlchemyError as e:
         raise {'error en create_project':f'error {e}'}
 
-@router.patch('/{group_id}/{project_id}')
+@router.patch('/{group_id}/{project_id}', description='Modifica un proyecto de un grupo')
 def update_project(group_id: int,
                  project_id: int,
                  updated_project: schemas.UpdateProject,
@@ -62,7 +62,7 @@ def update_project(group_id: int,
     except SQLAlchemyError as e:
         raise {'error en update_project':f'error {e}'}
 
-@router.delete('/{group_id}/{project_id}')
+@router.delete('/{group_id}/{project_id}', description='Elimina un proyecto de un grupo')
 def delete_project(group_id: int,
                  project_id: int,
                  session: Session = Depends(get_session)):
@@ -83,7 +83,7 @@ def delete_project(group_id: int,
         raise {'error en delete_project':f'error {e}'}
 
 
-@router.post('/{group_id}/{project_id}/{user_id}')
+@router.post('/{group_id}/{project_id}/{user_id}', description='Agrega un usuario al proyecto')
 def append_user_project(group_id: int,
                         user_id: int,
                         project_id: int,
@@ -123,7 +123,7 @@ def append_user_project(group_id: int,
     except SQLAlchemyError as e:
         raise {'error en append_user_project':f'error {e}'}
 
-@router.delete('/{group_id}/{project_id}/{user_id}')
+@router.delete('/{group_id}/{project_id}/{user_id}', description='Elimina un usuario del proyecto')
 def delete_user_project(group_id: int,
                         project_id: int,
                         user_id: int,

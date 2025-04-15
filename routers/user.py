@@ -2,10 +2,11 @@ from fastapi import APIRouter, status, HTTPException, Depends
 from models import db_models, schemas
 from db.database import get_session, Session, select, SQLAlchemyError, or_
 from typing import List
+from .auth import encrypt_password
 
 router = APIRouter(tags=['User'])
 
-@router.get('/user')
+@router.get('/user', description='Obtiene los usuarios')
 def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     try:
         statement = select(db_models.User)
@@ -14,7 +15,7 @@ def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     except SQLAlchemyError as e:
         raise {'error en get_users': f'error {e}'}
 
-@router.post('/user')
+@router.post('/user', description='Crea un nuevo usuario')
 def create_user( new_user: schemas.CreateUser,
                   session:Session = Depends(get_session)):
     try:
@@ -28,6 +29,8 @@ def create_user( new_user: schemas.CreateUser,
                 raise HTTPException(status.HTTP_406_NOT_ACCEPTABLE, detail='Ya existe un usuario con este Email')
 
         new_user = db_models.User(**new_user.model_dump())
+
+        new_user.password = encrypt_password(new_user.password)
         
         session.add(new_user)
         session.commit()
@@ -37,7 +40,7 @@ def create_user( new_user: schemas.CreateUser,
     except SQLAlchemyError as e:
         raise {'error en create_user':f'error {e}'}
 
-@router.patch('/user/{user_id}')
+@router.patch('/user/{user_id}', description='Actualiza un usuario')
 def update_user(user_id: int,
                 updated_user: schemas.UpdateUser,
                 session: Session = Depends(get_session)): 
@@ -61,7 +64,7 @@ def update_user(user_id: int,
     except SQLAlchemyError as e:
         raise {'error en update_user':f'error {e}'}
 
-@router.delete('/user/{user_id}')
+@router.delete('/user/{user_id}', description='Elimina un usuario especifico')
 def delete_user(user_id: int,
                 session: Session = Depends(get_session)):
 
