@@ -15,9 +15,10 @@ def get_task(session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
     except SQLAlchemyError as e:
         raise {'error en get_task': f'error {e}'}
 
-@router.post('/{project_id}', description='Crea una nueva tarea en un proyecto')
+@router.post('/{project_id}/{user_id}', description='Crea una nueva tarea en un proyecto')
 def create_task(new_task: schemas.CreateTask,
                 project_id: int,
+                user_id: int,
                 session: Session = Depends(get_session)):
     try:
         statement = select(db_models.Project).where(db_models.Project.project_id == project_id)
@@ -27,17 +28,30 @@ def create_task(new_task: schemas.CreateTask,
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto destinado')
 
         new_task = db_models.Task(**new_task.model_dump(), project_id=founded_project.project_id)
-        
+
+        user = session.get(db_models.User, user_id)
+
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+
         session.add(new_task)
+        session.commit()
+        session.refresh(new_task)
+
+        asigned = db_models.tasks_user( task_id=new_task.task_id,
+                                        user_id=user_id)
+
+        session.add(asigned)
         session.commit()
 
         return {'detail':'Se ha creado una nueva tarea con exito'}
     
     except SQLAlchemyError as e:
-        raise {'error en create_task':f'error {e}'}
+        session.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f'Error {e}')
 
 @router.patch('/{project_id}/{task_id}', description='Actualiza una tarea especifica de un proyecto')
-def update_user(task_id: int,
+def update_task(task_id: int,
                 project_id: int,
                 updated_task: schemas.UpdateTask,
                 session: Session = Depends(get_session)): 
@@ -63,6 +77,7 @@ def update_user(task_id: int,
         return {'detail':'Se ha actualizado la tarea'}
     
     except SQLAlchemyError as e:
+        session.rollback()
         raise {'error en update_task':f'error {e}'}
 
 @router.delete('/{project_id}/{task_id}', description='Elimina una tarea especifica de un proyecto')
@@ -83,4 +98,20 @@ def delete_task(task_id: int,
         return {'detail':'Se ha eliminado la tarea'}
     
     except SQLAlchemyError as e:
+        session.rollback()
         raise {'error en delete_task':f'error {e}'}
+
+@router.get('/{task_id}/users', description='Obtiene los usuarios asignados a una tarea')
+def get_tasks_for_users(task_id: int,
+                        session: Session = Depends(get_session)) -> List[schemas.ReadUser]:
+    try:
+        statement = (select(db_models.User.user_id, db_models.User.username)
+                     .join(db_models.tasks_user, db_models.tasks_user.user_id == db_models.User.user_id)
+                     .where(db_models.tasks_user.task_id == task_id))
+        
+        resultados = session.exec(statement).all()
+
+        return resultados
+
+    except SQLAlchemyError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Error en get_tasks_for_users: {e}')

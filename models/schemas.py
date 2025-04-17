@@ -55,6 +55,16 @@ class ReadTask(BaseModel):
     class Config:
         orm_mode = True
 
+class ReadTaskInProject(BaseModel):
+    task_id: int
+    description: str
+    date_exp: dt
+    state: State
+    users: List[ReadUser]
+
+    class Config:
+        orm_mode = True
+
 class UpdateTask(BaseModel):
     description: str | None = None
     date_exp: dt | None = None

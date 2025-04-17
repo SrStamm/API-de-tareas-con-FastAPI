@@ -38,6 +38,7 @@ def create_user( new_user: schemas.CreateUser,
         return {'detail':'Se ha creado un nuevo usuario con exito'}
 
     except SQLAlchemyError as e:
+        session.rollback()
         raise {'error en create_user':f'error {e}'}
 
 @router.get('/user/me', description='Obtiene el usuario actual')
@@ -49,7 +50,6 @@ def get_users(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     
     except SQLAlchemyError as e:
         raise {'error en get_users': f'error {e}'}
-
 
 @router.patch('/user/me', description='Actualiza un usuario')
 def update_user(updated_user: schemas.UpdateUser,
@@ -71,6 +71,7 @@ def update_user(updated_user: schemas.UpdateUser,
         return {'detail':'Se ha actualizado el usuario'}
     
     except SQLAlchemyError as e:
+        session.rollback()
         raise {'error en update_user':f'error {e}'}
 
 @router.delete('/user/me', description='Elimina un usuario especifico')
@@ -87,4 +88,5 @@ def delete_user(user: db_models.User = Depends(auth_user),
         return {'detail':'Se ha eliminado el usuario'}
     
     except SQLAlchemyError as e:
+        session.rollback()
         raise {'error en delete_user':f'error {e}'}

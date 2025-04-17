@@ -8,9 +8,12 @@ router = APIRouter(prefix='/group', tags=['Group'])
 
 @router.get('', description='Obtiene todos los grupos')
 def get_groups(session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:
-    statement = (select(db_models.Group))
-    found_group = session.exec(statement).all()
-    return found_group
+    try:
+        statement = (select(db_models.Group))
+        found_group = session.exec(statement).all()
+        return found_group
+    except SQLAlchemyError as e:
+        raise {'error en get_groups':f'error {e}'}
 
 @router.post('', description='Crea un nuevo grupo')
 def create_group(new_group: schemas.CreateGroup,
@@ -36,7 +39,7 @@ def create_group(new_group: schemas.CreateGroup,
 
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail=f'Error al crear el grupo: {str(e)}')
 
 @router.patch('/{group_id}', description='Actualiza a un grupo')
@@ -62,6 +65,7 @@ def update_group(group_id: int,
         return {'detail':'Se ha actualizado la informacion del grupo'}
     
     except SQLAlchemyError as e:
+        session.rollback()
         raise {'error en update_group':f'error {e}'}
 
 @router.delete('/{group_id}', description='Elimina un grupo especifico')
@@ -81,8 +85,8 @@ def delete_group(group_id: int,
         return {'detail':'Se ha eliminado el grupo'}
     
     except SQLAlchemyError as e:
+        session.rollback()
         raise {'error en delete_group':f'error {e}'}
-
 
 @router.post('/{group_id}/{user_id}', description='Agrega un usuario al grupo')
 def append_user_group(group_id: int,
@@ -118,6 +122,7 @@ def append_user_group(group_id: int,
         return {'detail':'El usuario ha sido agregado al grupo'}
     
     except SQLAlchemyError as e:
+        session.rollback()
         raise {'error en append_user_group':f'error {e}'}
 
 @router.delete('/{group_id}/{user_id}', description='Elimina un usuario del grupo')
@@ -153,8 +158,8 @@ def delete_user_group(group_id: int,
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario no esta en el grupo')
     
     except SQLAlchemyError as e:
+        session.rollback()
         raise {'error en delete_user_group':f'error {e}'}
-
 
 @router.patch('/{group_id}/{user_id}', description='Modifica el rol de un usuario en un grupo')
 def update_user_group(group_id: int,
@@ -187,6 +192,7 @@ def update_user_group(group_id: int,
         return {'detail':'Se ha cambiado los permisos del usuario en el grupo'}
     
     except SQLAlchemyError as e:
+        session.rollback()
         raise {'error en append_user_group':f'error {e}'}
 
 @router.get('/{group_id}/users', description='Obtiene todos los grupos')
