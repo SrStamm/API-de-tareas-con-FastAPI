@@ -50,6 +50,26 @@ def create_task(new_task: schemas.CreateTask,
         session.rollback()
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f'Error {e}')
 
+@router.post('/{project_id}/{task_id}')
+def asing_user_in_task(task_id: int,
+                       users: schemas.AsignUser,
+                       session: Session = Depends(get_session)):
+    try:
+        task = session.get(db_models.Task, task_id)
+
+        if not task:
+            raise
+
+        for user in users:
+            user_asigned = db_models.tasks_user(task_id=task_id, user_id=user.users)
+            session.add(user_asigned)
+        
+        session.commit()
+
+    except SQLAlchemyError as e:
+        session.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f'Error {e}')
+
 @router.patch('/{project_id}/{task_id}', description='Actualiza una tarea especifica de un proyecto')
 def update_task(task_id: int,
                 project_id: int,

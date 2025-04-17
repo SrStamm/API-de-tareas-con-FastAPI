@@ -45,6 +45,9 @@ class CreateTask(BaseModel):
     description: str
     date_exp: dt
 
+class AsignUser(BaseModel):
+    users: int | List[int] = int
+
 class ReadTask(BaseModel):
     task_id: int
     description: str
