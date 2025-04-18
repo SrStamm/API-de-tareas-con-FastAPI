@@ -4,6 +4,7 @@ from .auth import auth_user
 from db.database import get_session, Session, select, SQLAlchemyError, or_
 from typing import List
 
+
 router = APIRouter(prefix='/task', tags=['Task'])
 
 @router.get('', description='Obtiene todas las tareas')
@@ -65,7 +66,7 @@ def create_task(new_task: schemas.CreateTask,
                 db_models.project_user.user_id == user_exists.user_id,
                 db_models.project_user.project_id == project.project_id))
             
-            user_in_project = session.exec(statement)
+            user_in_project = session.exec(statement).first()
             if not user_in_project:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario en el proyecto')
 
@@ -96,24 +97,77 @@ def create_task(new_task: schemas.CreateTask,
 @router.patch('/{project_id}/{task_id}', description='Actualiza una tarea especifica de un proyecto')
 def update_task(task_id: int,
                 project_id: int,
-                updated_task: schemas.UpdateTask,
+                update_task: schemas.UpdateTask,
                 session: Session = Depends(get_session)): 
 
     try:
-        statement = select(db_models.Task).where(db_models.Task.task_id == task_id, db_models.Task.project_id == project_id)
-        founded_task = session.exec(statement).first()
+        # Verifica que exista el proyecto
+        project = session.get(db_models.Project, project_id)
+        if not project:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
         
-        if not founded_task:
+        # Busca la task seleccionada
+        statement = select(db_models.Task).where(db_models.Task.task_id == task_id, db_models.Task.project_id == project_id)
+        task = session.exec(statement).first()
+        
+        if not task:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro la tarea')
         
-        if founded_task.description != updated_task.description and updated_task.description:
-            founded_task.description = updated_task.description
+        if task.description != update_task.description and update_task.description:
+            task.description = update_task.description
 
-        if founded_task.date_exp != updated_task.date_exp and updated_task.date_exp:
-            founded_task.date_exp = updated_task.date_exp
+        if task.date_exp != update_task.date_exp and update_task.date_exp:
+            task.date_exp = update_task.date_exp
             
-        if founded_task.state != updated_task.state and updated_task.state:
-            founded_task.state = updated_task.state
+        if task.state != update_task.state and update_task.state:
+            task.state = update_task.state
+        
+        # Verifica si hay nuevos usuarios a agregar 
+        if update_task.append_user_ids:
+            for user_id in update_task.append_user_ids:
+                # Verifica que el usuario exista
+                user_exists = session.get(db_models.User, user_id)
+                if not user_exists:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+
+                # Verifica que el usuario exista en el projecto
+                statement = (select(db_models.project_user).where(
+                    db_models.project_user.user_id == user_exists.user_id,
+                    db_models.project_user.project_id == project.project_id))
+                
+                user_in_project = session.exec(statement).first()
+                if not user_in_project:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario en el proyecto')
+
+                # Verifica que el usuario este asignado al task
+                statement = (select(db_models.tasks_user).where(
+                    db_models.tasks_user.user_id == user_exists.user_id,
+                    db_models.tasks_user.task_id == task_id))
+                
+                user_in_task = session.exec(statement).first()
+                if user_in_task:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f'El usuario de id {user_id} no esta asignado a esta tarea')
+
+                # Agrega el usuario al task
+                task_user = db_models.tasks_user(
+                    task_id=task.task_id,
+                    user_id=user_id)
+                session.add(task_user)
+        
+
+        # Verifica si hay usuarios para eliminar de la tarea 
+        if update_task.exclude_user_ids:
+            for user_id in update_task.exclude_user_ids:
+                # Verifica que el usuario este asignado al task
+                statement = (select(db_models.tasks_user).where(
+                    db_models.tasks_user.user_id == user_id,
+                    db_models.tasks_user.task_id == task_id))
+                
+                user_in_task = session.exec(statement).first()
+                if not user_in_task:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND, detail=f'El usuario de id {user_in_task.user_id} no esta asignado a esta tarea')
+
+                session.delete(user_in_task)
         
         session.commit()
         
@@ -135,8 +189,8 @@ def delete_task(task_id: int,
                     db_models.project_user.user_id == user.user_id,
                     db_models.project_user.project_id == project_id))
         
-        user = session.exec(statement)
-        if not user or user.permission != db_models.Project_Permission.ADMIN:
+        user_found = session.exec(statement)
+        if not user_found or user_found.permission != db_models.Project_Permission.ADMIN:
             raise HTTPException(status.HTTP_403_FORBIDDEN, detail='No tienes la autorizacion para realizar esta accion')
         
         # Verifica que exista la task

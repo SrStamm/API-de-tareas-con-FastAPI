@@ -6,6 +6,16 @@ from .auth import auth_user
 
 router = APIRouter(prefix='/project', tags=['Project'])
 
+# Funcion que verifica que un usuario sea admin en un proyecto
+def is_admin_in_project(user: db_models.User, project_id, session: Session = Depends(get_session)):
+    stmt = (select(db_models.project_user).where(
+        db_models.project_user.user_id == user.user_id,
+        db_models.project_user.project_id == project_id))
+    
+    resultado = session.exec(stmt).first()
+
+    if not resultado or resultado.permission != db_models.Project_Permission.ADMIN:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
 
 @router.get('/{group_id}', description='Obtiene todos los proyectos de un grupo')
 def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[schemas.ReadProject]:
@@ -43,6 +53,22 @@ def create_project(new_project: schemas.CreateProject,
             permission=db_models.Project_Permission.ADMIN
         )
         session.add(project_user)
+
+        statement = (select(db_models.group_user.user_id, db_models.group_user.role)
+                     .where(db_models.group_user.group_id == group_id))
+        users_in_group = session.exec(statement).all()
+
+        if users_in_group:
+            for user_id, role in users_in_group:
+                if role == db_models.Group_Role.ADMIN:
+                    
+                    project_user = db_models.project_user(
+                    project_id=project.project_id,
+                    user_id=user_id,
+                    permission=db_models.Project_Permission.ADMIN
+                    )
+                session.add(project_user)
+
         session.commit()
 
         return {'detail':'Se ha creado un nuevo proyecto de forma exitosa'}
@@ -52,18 +78,14 @@ def create_project(new_project: schemas.CreateProject,
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'Error al crear el proyecto: {str(e)}')
 
 @router.patch('/{group_id}/{project_id}', description='Modifica un proyecto de un grupo')
-async def update_project(group_id: int,
+def update_project(group_id: int,
                  project_id: int,
                  updated_project: schemas.UpdateProject,
                  user: db_models.User = Depends(auth_user),
                  session: Session = Depends(get_session)): 
 
     try:
-        statement = select(db_models.project_user).where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id)
-        resultado = session.exec(statement).first()
-
-        if not resultado or resultado.permission != 'admin':
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+        is_admin_in_project(user, project_id)
 
         statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
         founded_project = session.exec(statement).first()
@@ -92,11 +114,7 @@ def delete_project(group_id: int,
                    session: Session = Depends(get_session)):
 
     try:
-        statement = select(db_models.project_user).where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id)
-        resultado = session.exec(statement).first()
-
-        if not resultado or resultado.permission != 'admin':
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+        is_admin_in_project(user, project_id)
         
         statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
         founded_project = session.exec(statement).first()
@@ -114,20 +132,14 @@ def delete_project(group_id: int,
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en delete_project: {str(e)}')
 
 @router.post('/{group_id}/{project_id}/{user_id}', description='Agrega un usuario al proyecto')
-def append_user_project(group_id: int,
+def add_user_to_project(group_id: int,
                         user_id: int,
                         project_id: int,
                         user: db_models.User = Depends(auth_user),
                         session: Session = Depends(get_session)):
 
     try:
-        # Busca si el usuario tiene permisos para agregar un usario al proyecto
-        statement = (select(db_models.project_user)
-                     .where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id))
-        resultado = session.exec(statement).first()
-
-        if not resultado or resultado.permission != 'admin':
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+        is_admin_in_project(user, project_id)
         
         # Busca el projecto actual
         statement = (select(db_models.Project)
@@ -162,21 +174,17 @@ def append_user_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en append_user_project: {str(e)}')
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en add_user_to_project: {str(e)}')
 
 @router.delete('/{group_id}/{project_id}/{user_id}', description='Elimina un usuario del proyecto')
-def delete_user_project(group_id: int,
-                        project_id: int,
-                        user_id: int,
-                        user: db_models.User = Depends(auth_user),
-                        session: Session = Depends(get_session)):
+def remove_user_from_project(group_id: int,
+                            project_id: int,
+                            user_id: int,
+                            user: db_models.User = Depends(auth_user),
+                            session: Session = Depends(get_session)):
 
     try:
-        statement = select(db_models.project_user).where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id)
-        resultado = session.exec(statement).first()
-
-        if not resultado or resultado.permission != 'admin':
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+        is_admin_in_project(user, project_id)
         
         statement = (select(db_models.Project)
                     .where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id))
@@ -209,22 +217,19 @@ def delete_user_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en delete_user_project: {str(e)}')
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en remove_user_from_project: {str(e)}')
 
 @router.patch('/{group_id}/{project_id}/{user_id}', description='Modifica el rol de un usuario en un proyecto')
-def update_user_project(group_id: int,
-                        user_id: int,
-                        project_id: int,
-                        update_role: schemas.UpdatePermissionUser,
-                        user: db_models.User = Depends(auth_user),
-                        session: Session = Depends(get_session)):
+def update_user_permission_in_project(
+                                        group_id: int,
+                                        user_id: int,
+                                        project_id: int,
+                                        update_role: schemas.UpdatePermissionUser,
+                                        user: db_models.User = Depends(auth_user),
+                                        session: Session = Depends(get_session)):
 
     try:
-        statement = select(db_models.project_user).where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id)
-        resultado = session.exec(statement).first()
-
-        if not resultado or resultado.permission != 'admin':
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+        is_admin_in_project(user, project_id)
         
         # Verifica que exista el proyecto
         statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
@@ -250,7 +255,7 @@ def update_user_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en append_user_project: {str(e)}')
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en update_user_permission_in_project: {str(e)}')
 
 @router.get('/{group_id}/{project_id}/users', description='Obtiene todos los grupos')
 def get_user_in_project(group_id: int,
@@ -284,7 +289,7 @@ def get_user_in_project(group_id: int,
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_user_in_project: {str(e)}')
     
 @router.get('/{group_id}/{project_id}/tasks', description='Obtiene todos los grupos')
-def get_user_in_project(group_id: int,
+def get_tasks_in_project(group_id: int,
                         project_id: int,
                         session:Session = Depends(get_session)):
     try:
@@ -309,4 +314,4 @@ def get_user_in_project(group_id: int,
         return project
 
     except SQLAlchemyError as e:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_user_in_project: {str(e)}')
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_tasks_in_project: {str(e)}')

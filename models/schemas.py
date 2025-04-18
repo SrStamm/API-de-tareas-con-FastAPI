@@ -73,7 +73,8 @@ class UpdateTask(BaseModel):
     description: str | None = None
     date_exp: dt | None = None
     state: State | None = None
-    user_ids: Optional[List[int]] = None
+    append_user_ids: Optional[List[int]] = None
+    exclude_user_ids: Optional[List[int]] = None
 
 class CreateGroup(BaseModel):
     name: str 
@@ -88,6 +89,10 @@ class ReadGroup(BaseModel):
     class Config:
         orm_mode = True
 
+class ReadBasicDataGroup(BaseModel):
+    group_id: int
+    name: str
+    users: List[ReadUser]
 class UpdateGroup(BaseModel):
     name: str | None = None
     description: str | None = None
