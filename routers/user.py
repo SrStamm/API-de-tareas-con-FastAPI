@@ -13,7 +13,7 @@ def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
         found_users = session.exec(statement).all()
         return found_users
     except SQLAlchemyError as e:
-        raise {'error en get_users': f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_users: {str(e)}')
 
 @router.post('/user', description='Crea un nuevo usuario')
 def create_user( new_user: schemas.CreateUser,
@@ -39,17 +39,18 @@ def create_user( new_user: schemas.CreateUser,
 
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en create_user':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en create_user: {str(e)}')
 
 @router.get('/user/me', description='Obtiene el usuario actual')
 def get_users(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+        
         return user
     
     except SQLAlchemyError as e:
-        raise {'error en get_users': f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_users: {str(e)}')
 
 @router.patch('/user/me', description='Actualiza un usuario')
 def update_user(updated_user: schemas.UpdateUser,
@@ -72,13 +73,13 @@ def update_user(updated_user: schemas.UpdateUser,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en update_user':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en update_user: {str(e)}')
 
 @router.delete('/user/me', description='Elimina un usuario especifico')
 def delete_user(user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)):
 
-    try:        
+    try:
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
         
@@ -89,4 +90,4 @@ def delete_user(user: db_models.User = Depends(auth_user),
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en delete_user':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en delete_user: {str(e)}')

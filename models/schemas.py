@@ -44,6 +44,7 @@ class ReadProjectUser(BaseModel):
 class CreateTask(BaseModel):
     description: str
     date_exp: dt
+    user_ids: List[int]
 
 class AsignUser(BaseModel):
     users: int | List[int] = int
@@ -72,6 +73,7 @@ class UpdateTask(BaseModel):
     description: str | None = None
     date_exp: dt | None = None
     state: State | None = None
+    user_ids: Optional[List[int]] = None
 
 class CreateGroup(BaseModel):
     name: str 

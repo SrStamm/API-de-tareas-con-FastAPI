@@ -16,7 +16,7 @@ def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[
         return found_projects
     
     except SQLAlchemyError as e:
-        raise {'error en get_projects': f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_projects: {str(e)}')
 
 @router.post('/{group_id}', description='Crea un nuevo proyecto en un grupo')
 def create_project(new_project: schemas.CreateProject,
@@ -49,8 +49,7 @@ def create_project(new_project: schemas.CreateProject,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail=f'Error al crear el proyecto: {str(e)}')
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'Error al crear el proyecto: {str(e)}')
 
 @router.patch('/{group_id}/{project_id}', description='Modifica un proyecto de un grupo')
 async def update_project(group_id: int,
@@ -84,7 +83,7 @@ async def update_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en update_project':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en update_project: {str(e)}')
 
 @router.delete('/{group_id}/{project_id}', description='Elimina un proyecto de un grupo')
 def delete_project(group_id: int,
@@ -112,7 +111,7 @@ def delete_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en delete_project':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en delete_project: {str(e)}')
 
 @router.post('/{group_id}/{project_id}/{user_id}', description='Agrega un usuario al proyecto')
 def append_user_project(group_id: int,
@@ -163,7 +162,7 @@ def append_user_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en append_user_project':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en append_user_project: {str(e)}')
 
 @router.delete('/{group_id}/{project_id}/{user_id}', description='Elimina un usuario del proyecto')
 def delete_user_project(group_id: int,
@@ -210,7 +209,7 @@ def delete_user_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en delete_user_project':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en delete_user_project: {str(e)}')
 
 @router.patch('/{group_id}/{project_id}/{user_id}', description='Modifica el rol de un usuario en un proyecto')
 def update_user_project(group_id: int,
@@ -251,7 +250,7 @@ def update_user_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en append_user_project':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en append_user_project: {str(e)}')
 
 @router.get('/{group_id}/{project_id}/users', description='Obtiene todos los grupos')
 def get_user_in_project(group_id: int,
@@ -282,7 +281,7 @@ def get_user_in_project(group_id: int,
         ]
 
     except SQLAlchemyError as e:
-        raise {'Error en get_user_in_project':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_user_in_project: {str(e)}')
     
 @router.get('/{group_id}/{project_id}/tasks', description='Obtiene todos los grupos')
 def get_user_in_project(group_id: int,
@@ -310,4 +309,4 @@ def get_user_in_project(group_id: int,
         return project
 
     except SQLAlchemyError as e:
-        raise {'Error en get_user_in_project':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_user_in_project: {str(e)}')

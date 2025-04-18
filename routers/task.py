@@ -1,5 +1,6 @@
 from fastapi import APIRouter, status, HTTPException, Depends
 from models import db_models, schemas
+from .auth import auth_user
 from db.database import get_session, Session, select, SQLAlchemyError, or_
 from typing import List
 
@@ -13,62 +14,84 @@ def get_task(session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
         return found_tasks
     
     except SQLAlchemyError as e:
-        raise {'error en get_task': f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_task: {str(e)}')
 
-@router.post('/{project_id}/{user_id}', description='Crea una nueva tarea en un proyecto')
+@router.get('/{project_id}', description='Obtiene todas las tareas asignadas de un proyecto')
+def get_task_in_project(project_id: int,
+                        user: db_models.User = Depends(auth_user),
+                        session: Session = Depends(get_session)) -> List[schemas.ReadTask]:
+    try:
+        # Selecciona las tareas asignadas a los usuarios en el proyecto
+        statement = (select(db_models.Task)
+                     .join(db_models.tasks_user, db_models.tasks_user.task_id == db_models.Task.task_id)
+                     .join(db_models.project_user, db_models.project_user.user_id == db_models.tasks_user.user_id)
+                     .where(db_models.project_user.project_id == project_id, db_models.project_user.user_id == user.user_id))
+        
+        found_tasks = session.exec(statement).all()
+        return found_tasks
+    
+    except SQLAlchemyError as e:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_task_in_project: {str(e)}')
+    
+@router.post('/{project_id}', description='Crea una nueva tarea en un proyecto')
 def create_task(new_task: schemas.CreateTask,
                 project_id: int,
-                user_id: int,
+                group_id: int,
+                user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)):
     try:
+        # Verifica que el projecto exista
         statement = select(db_models.Project).where(db_models.Project.project_id == project_id)
-        founded_project = session.exec(statement).first()
-
-        if not founded_project:
+        project = session.exec(statement).first()
+        if not project:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto destinado')
+        
+        # Verifica que el usuario este autorizado en el proyecto
+        statement = (select(db_models.project_user)
+                     .where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id))
+        
+        project_user = session.exec(statement).first()
 
-        new_task = db_models.Task(**new_task.model_dump(), project_id=founded_project.project_id)
+        if not project_user or project_user.permission != db_models.Project_Permission.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='No tienes permisos')        
 
-        user = session.get(db_models.User, user_id)
+        # Busca el usuario al que va a asignarse la tarea, y si existe en el proyecto
+        for user_id in new_task.user_ids:
+            user_exists = session.get(db_models.User, user_id)
+            if not user_exists:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+            
+            statement = (select(db_models.project_user).where(
+                db_models.project_user.user_id == user_exists.user_id,
+                db_models.project_user.project_id == project.project_id))
+            
+            user_in_project = session.exec(statement)
+            if not user_in_project:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario en el proyecto')
 
-        if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
 
-        session.add(new_task)
+        task = db_models.Task(
+            project_id=project_id,
+            description=new_task.description,
+            date_exp=new_task.date_exp)
+
+        session.add(task)
         session.commit()
-        session.refresh(new_task)
+        session.refresh(task)
 
-        asigned = db_models.tasks_user( task_id=new_task.task_id,
-                                        user_id=user_id)
+        for user_id in new_task.user_ids:
+            task_user = db_models.tasks_user(
+                task_id=task.task_id,
+                user_id=user_id)
+            session.add(task_user)
 
-        session.add(asigned)
         session.commit()
 
-        return {'detail':'Se ha creado una nueva tarea con exito'}
+        return {'detail':'Se ha creado una nueva tarea y asignado los usuarios con exito'}
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f'Error {e}')
-
-@router.post('/{project_id}/{task_id}')
-def asing_user_in_task(task_id: int,
-                       users: schemas.AsignUser,
-                       session: Session = Depends(get_session)):
-    try:
-        task = session.get(db_models.Task, task_id)
-
-        if not task:
-            raise
-
-        for user in users:
-            user_asigned = db_models.tasks_user(task_id=task_id, user_id=user.users)
-            session.add(user_asigned)
-        
-        session.commit()
-
-    except SQLAlchemyError as e:
-        session.rollback()
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f'Error {e}')
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f'Error en create_task: {e}')
 
 @router.patch('/{project_id}/{task_id}', description='Actualiza una tarea especifica de un proyecto')
 def update_task(task_id: int,
@@ -98,14 +121,25 @@ def update_task(task_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en update_task':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en update_task: {str(e)}')
 
 @router.delete('/{project_id}/{task_id}', description='Elimina una tarea especifica de un proyecto')
 def delete_task(task_id: int,
                 project_id: int,
+                user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)):
 
     try:
+        # Verifica que el usuario tenga permisos
+        statement = (select(db_models.project_user).where(
+                    db_models.project_user.user_id == user.user_id,
+                    db_models.project_user.project_id == project_id))
+        
+        user = session.exec(statement)
+        if not user or user.permission != db_models.Project_Permission.ADMIN:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='No tienes la autorizacion para realizar esta accion')
+        
+        # Verifica que exista la task
         statement = select(db_models.Task).where(db_models.Task.task_id == task_id, db_models.Task.project_id == project_id)
         founded_task = session.exec(statement).first()
         
@@ -119,19 +153,20 @@ def delete_task(task_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en delete_task':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en delete_task: {str(e)}')
 
-@router.get('/{task_id}/users', description='Obtiene los usuarios asignados a una tarea')
+@router.get('/{project_id}/{task_id}/users', description='Obtiene los usuarios asignados a una tarea')
 def get_tasks_for_users(task_id: int,
+                        project_id: int,
                         session: Session = Depends(get_session)) -> List[schemas.ReadUser]:
     try:
         statement = (select(db_models.User.user_id, db_models.User.username)
                      .join(db_models.tasks_user, db_models.tasks_user.user_id == db_models.User.user_id)
                      .where(db_models.tasks_user.task_id == task_id))
-        
+
         resultados = session.exec(statement).all()
 
         return resultados
 
     except SQLAlchemyError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f'Error en get_tasks_for_users: {e}')
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f'Error en get_tasks_for_users: {e}')

@@ -13,7 +13,7 @@ def get_groups(session:Session = Depends(get_session)) -> List[schemas.ReadGroup
         found_group = session.exec(statement).all()
         return found_group
     except SQLAlchemyError as e:
-        raise {'error en get_groups':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error {str(e)}')
 
 @router.post('', description='Crea un nuevo grupo')
 def create_group(new_group: schemas.CreateGroup,
@@ -45,9 +45,21 @@ def create_group(new_group: schemas.CreateGroup,
 @router.patch('/{group_id}', description='Actualiza a un grupo')
 def update_group(group_id: int,
                  updated_group: schemas.UpdateGroup,
+                 user: db_models.User = Depends(auth_user),
                  session: Session = Depends(get_session)):
 
     try:
+        statement = (select(db_models.group_user)
+                     .where(db_models.group_user.user_id == user.user_id, db_models.group_user.group_id == group_id))
+        
+        user = session.exec(statement).first()
+
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+        
+        if user.role != 'admin':
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='No estas autorizado')
+
         statement = select(db_models.Group).where(db_models.Group.group_id == group_id)
         founded_group = session.exec(statement).first()
         
@@ -66,7 +78,7 @@ def update_group(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en update_group':f'error {e}'}
+        raise HTTPException(500, detail=f'Error {str(e)}')
 
 @router.delete('/{group_id}', description='Elimina un grupo especifico')
 def delete_group(group_id: int,
@@ -86,7 +98,7 @@ def delete_group(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en delete_group':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en delete_group: {str(e)}')
 
 @router.post('/{group_id}/{user_id}', description='Agrega un usuario al grupo')
 def append_user_group(group_id: int,
@@ -123,7 +135,7 @@ def append_user_group(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en append_user_group':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en append_user_group: {str(e)}')
 
 @router.delete('/{group_id}/{user_id}', description='Elimina un usuario del grupo')
 def delete_user_group(group_id: int,
@@ -159,7 +171,7 @@ def delete_user_group(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en delete_user_group':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en delete_user_group: {str(e)}')
 
 @router.patch('/{group_id}/{user_id}', description='Modifica el rol de un usuario en un grupo')
 def update_user_group(group_id: int,
@@ -193,21 +205,27 @@ def update_user_group(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise {'error en append_user_group':f'error {e}'}
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en append_user_group: {str(e)}')
+
 
 @router.get('/{group_id}/users', description='Obtiene todos los grupos')
 def get_user_in_group(group_id: int,
                       session:Session = Depends(get_session)
                     ) -> List[schemas.ReadGroupUser]:
+
+    try:
+        statement = (select(db_models.User, db_models.group_user.role)
+                    .join(db_models.group_user, db_models.group_user.user_id == db_models.User.user_id)
+                    .where(db_models.group_user.group_id == group_id))
+        
+        results = session.exec(statement).all()
+        
+        # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
+        return [
+            schemas.ReadGroupUser(user_id=user.user_id, username=user.username, role=role)
+            for user, role in results
+        ]
     
-    statement = (select(db_models.User, db_models.group_user.role)
-                 .join(db_models.group_user, db_models.group_user.user_id == db_models.User.user_id)
-                 .where(db_models.group_user.group_id == group_id))
-    
-    results = session.exec(statement).all()
-    
-    # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
-    return [
-        schemas.ReadGroupUser(user_id=user.user_id, username=user.username, role=role)
-        for user, role in results
-    ]
+    except SQLAlchemyError as e:
+        session.rollback()
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en append_user_group: {str(e)}')
