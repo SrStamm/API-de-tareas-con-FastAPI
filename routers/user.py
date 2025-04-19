@@ -4,9 +4,9 @@ from db.database import get_session, Session, select, SQLAlchemyError, or_
 from typing import List
 from .auth import encrypt_password, auth_user
 
-router = APIRouter(tags=['User'])
+router = APIRouter(prefix='/user', tags=['User'])
 
-@router.get('/user', description='Obtiene los usuarios')
+@router.get('', description='Obtiene los usuarios')
 def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     try:
         statement = select(db_models.User)
@@ -15,7 +15,7 @@ def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     except SQLAlchemyError as e:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_users: {str(e)}')
 
-@router.post('/user', description='Crea un nuevo usuario') 
+@router.post('', description='Crea un nuevo usuario') 
 def create_user( new_user: schemas.CreateUser,
                   session:Session = Depends(get_session)):
     try:
@@ -41,22 +41,19 @@ def create_user( new_user: schemas.CreateUser,
         session.rollback()
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en create_user: {str(e)}')
 
-@router.get('/user/me', description='Obtiene el usuario actual')
+@router.get('/me', description='Obtiene el usuario actual')
 def get_users(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
         return user
     except SQLAlchemyError as e:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_users: {str(e)}')
 
-@router.patch('/user/me', description='Actualiza un usuario')
+@router.patch('/me', description='Actualiza un usuario')
 def update_user(updated_user: schemas.UpdateUser,
                 user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)): 
 
-    try:
-        if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
-        
+    try:        
         if user.username != updated_user.username and updated_user.username:
             user.username = updated_user.username
 
@@ -71,14 +68,11 @@ def update_user(updated_user: schemas.UpdateUser,
         session.rollback()
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en update_user: {str(e)}')
 
-@router.delete('/user/me', description='Elimina un usuario especifico')
+@router.delete('/me', description='Elimina un usuario especifico')
 def delete_user(user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)):
 
     try:
-        if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
-        
         session.delete(user)
         session.commit()
         

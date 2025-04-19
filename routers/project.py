@@ -218,7 +218,7 @@ def update_user_permission_in_project(
 
         # Busca el usuario
         statement = (select(db_models.project_user)
-                     .where(db_models.project_user.user_id == user_id, db_models.project_user.project_id == project_id))
+                     .where(db_models.project_user.user_id == user_id, db_models.project_user.project_id == project.project_id))
 
         user = session.exec(statement).first()
 
