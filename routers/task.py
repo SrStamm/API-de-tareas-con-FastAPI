@@ -4,7 +4,6 @@ from .auth import auth_user
 from db.database import get_session, Session, select, SQLAlchemyError, or_
 from typing import List
 
-
 router = APIRouter(prefix='/task', tags=['Task'])
 
 @router.get('', description='Obtiene todas las tareas')

@@ -15,7 +15,7 @@ def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     except SQLAlchemyError as e:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_users: {str(e)}')
 
-@router.post('/user', description='Crea un nuevo usuario')
+@router.post('/user', description='Crea un nuevo usuario') 
 def create_user( new_user: schemas.CreateUser,
                   session:Session = Depends(get_session)):
     try:
@@ -44,11 +44,7 @@ def create_user( new_user: schemas.CreateUser,
 @router.get('/user/me', description='Obtiene el usuario actual')
 def get_users(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
-        if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
-        
         return user
-    
     except SQLAlchemyError as e:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_users: {str(e)}')
 

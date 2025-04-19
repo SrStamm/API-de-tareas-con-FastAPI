@@ -11,9 +11,6 @@ def is_admin_in_group(user, group_id, session: Session):
                      .where(db_models.group_user.user_id == user.user_id, db_models.group_user.group_id == group_id))
     
     found_user = session.exec(stmt).first()
-
-    if not found_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
     
     if found_user.role != 'admin':
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='No estas autorizado')
@@ -46,7 +43,7 @@ def get_groups(session:Session = Depends(get_session)) -> List[schemas.ReadGroup
 
     except SQLAlchemyError as e:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error {str(e)}')
-
+ 
 @router.post('', description='Crea un nuevo grupo')
 def create_group(new_group: schemas.CreateGroup,
                  user: db_models.User = Depends(auth_user),
@@ -105,9 +102,9 @@ def delete_group(group_id: int,
                  session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_group(user, group_id, session)
-
         founded_group = get_group_or_404(group_id, session)
+        
+        is_admin_in_group(user, group_id, session)
         
         session.delete(founded_group)
         session.commit()
@@ -174,9 +171,6 @@ def delete_user_group(group_id: int,
         # Busca el usuario
         found_user = get_user_or_404(user_id, session)
 
-        if not founded_group:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
-
         if found_user in founded_group.users:
             # Lo elimina del grupo
             founded_group.users.remove(found_user)
@@ -229,6 +223,8 @@ def get_user_in_group(group_id: int,
                     ) -> List[schemas.ReadGroupUser]:
 
     try:
+        get_group_or_404(group_id, session)
+        
         statement = (select(db_models.User, db_models.group_user.role)
                     .join(db_models.group_user, db_models.group_user.user_id == db_models.User.user_id)
                     .where(db_models.group_user.group_id == group_id))

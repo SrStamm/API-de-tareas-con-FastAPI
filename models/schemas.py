@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional
 from datetime import datetime as dt, timezone
 from .db_models import State, Group_Role, Project_Permission
@@ -23,24 +23,21 @@ class ReadUser(BaseModel):
     user_id: int
     username: str
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReadGroupUser(BaseModel):
     user_id: int
     username: str
     role: Group_Role
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReadProjectUser(BaseModel):
     user_id: int
     username: str
     permission: Project_Permission
 
-    class Config:
-        orm_mode = True    
+    model_config = ConfigDict(from_attributes=True)
 class CreateTask(BaseModel):
     description: str
     date_exp: dt
@@ -56,8 +53,7 @@ class ReadTask(BaseModel):
     state: State
     project_id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReadTaskInProject(BaseModel):
     task_id: int
@@ -66,8 +62,7 @@ class ReadTaskInProject(BaseModel):
     state: State
     users: List[ReadUser]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UpdateTask(BaseModel):
     description: str | None = None
@@ -86,8 +81,7 @@ class ReadGroup(BaseModel):
     description: str | None = Field(default=None)
     users: List[ReadUser]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ReadBasicDataGroup(BaseModel):
     group_id: int
@@ -108,8 +102,7 @@ class ReadProject(BaseModel):
     description: str | None
     users: List[ReadUser]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class UpdateProject(BaseModel):
     title: str | None = None

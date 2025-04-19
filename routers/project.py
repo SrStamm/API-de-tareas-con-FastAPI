@@ -3,6 +3,7 @@ from models import db_models, schemas
 from db.database import get_session, Session, select, SQLAlchemyError
 from typing import List
 from .auth import auth_user
+from .group import get_group_or_404
 
 router = APIRouter(prefix='/project', tags=['Project'])
 
@@ -17,6 +18,17 @@ def is_admin_in_project(user: db_models.User, project_id, session: Session = Dep
     if not resultado or resultado.permission != db_models.Project_Permission.ADMIN:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
 
+def found_project_or_404(group_id:int, project_id:int, session: Session):
+    stmt = (select(db_models.Project)
+            .where(db_models.Project.group_id == group_id,
+                   db_models.Project.project_id == project_id))
+    founded_project = session.exec(stmt).first()
+    
+    if not founded_project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
+    
+    return founded_project
+
 @router.get('/{group_id}', description='Obtiene todos los proyectos de un grupo')
 def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
@@ -30,15 +42,11 @@ def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[
 
 @router.post('/{group_id}', description='Crea un nuevo proyecto en un grupo')
 def create_project(new_project: schemas.CreateProject,
-                  group_id: int,
-                  user: db_models.User = Depends(auth_user),
-                  session:Session = Depends(get_session)):
+                   group_id: int,
+                   user: db_models.User = Depends(auth_user),
+                   session:Session = Depends(get_session)):
     try:
-        statement = select(db_models.Group).where(db_models.Group.group_id == group_id)
-        founded_group = session.exec(statement).first()
-
-        if not founded_group:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el grupo')
+        founded_group = get_group_or_404(group_id, session)
 
         project = db_models.Project(**new_project.model_dump(), group_id=founded_group.group_id)
         
@@ -54,12 +62,11 @@ def create_project(new_project: schemas.CreateProject,
         )
         session.add(project_user)
 
-        statement = (select(db_models.group_user.user_id, db_models.group_user.role)
-                     .where(db_models.group_user.group_id == group_id))
+        statement = (select(db_models.group_user).where(db_models.group_user.group_id == group_id))
         users_in_group = session.exec(statement).all()
 
         if users_in_group:
-            for user_id, role in users_in_group:
+            for group_id, user_id, role in users_in_group:
                 if role == db_models.Group_Role.ADMIN:
                     
                     project_user = db_models.project_user(
@@ -85,14 +92,10 @@ def update_project(group_id: int,
                  session: Session = Depends(get_session)): 
 
     try:
-        is_admin_in_project(user, project_id)
+        is_admin_in_project(user, project_id, session)
 
-        statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
-        founded_project = session.exec(statement).first()
-        
-        if not founded_project:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el grupo')
-        
+        founded_project = found_project_or_404(group_id, project_id, session)
+                
         if founded_project.title != updated_project.title and updated_project.title is not None:
             founded_project.title = updated_project.title
             
@@ -114,13 +117,9 @@ def delete_project(group_id: int,
                    session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_project(user, project_id)
+        is_admin_in_project(user, project_id, session)
         
-        statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
-        founded_project = session.exec(statement).first()
-        
-        if not founded_project:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
+        founded_project = found_project_or_404(group_id, project_id, session)
         
         session.delete(founded_project)
         session.commit()
@@ -139,16 +138,9 @@ def add_user_to_project(group_id: int,
                         session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_project(user, project_id)
+        is_admin_in_project(user, project_id, session)
         
-        # Busca el projecto actual
-        statement = (select(db_models.Project)
-                     .where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id))
-        
-        founded_project = session.exec(statement).first()
-
-        if not founded_project:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No existe o no se encontro el proyecto')
+        founded_project = found_project_or_404(group_id, project_id, session)
         
         # Busca el usuario
         user = session.get(db_models.User, user_id)
@@ -184,15 +176,9 @@ def remove_user_from_project(group_id: int,
                             session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_project(user, project_id)
+        is_admin_in_project(user, project_id, session)
         
-        statement = (select(db_models.Project)
-                    .where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id))
-        
-        founded_project = session.exec(statement).first()
-
-        if not founded_project:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No existe o no se encontro el proyecto')
+        founded_project = found_project_or_404(group_id, project_id, session)
         
         # Busca el usuario
         user = session.get(db_models.User, user_id)
@@ -202,9 +188,6 @@ def remove_user_from_project(group_id: int,
         
         if not user in group.users:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario no existe en el grupo')
-
-        if not founded_project:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
 
         if user in founded_project.users:
             # Lo elimina del proyecto
@@ -229,15 +212,10 @@ def update_user_permission_in_project(
                                         session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_project(user, project_id)
+        is_admin_in_project(user, project_id, session)
         
-        # Verifica que exista el proyecto
-        statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
-        project = session.exec(statement).first()
+        project = found_project_or_404(group_id, project_id, session)
 
-        if project is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
-                
         # Busca el usuario
         statement = (select(db_models.project_user)
                      .where(db_models.project_user.user_id == user_id, db_models.project_user.project_id == project_id))
@@ -263,12 +241,7 @@ def get_user_in_project(group_id: int,
                       session:Session = Depends(get_session)
                     ) -> List[schemas.ReadProjectUser]:
     try:
-        statement = select(db_models.Project).where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id)
-        
-        project = session.exec(statement).first()
-
-        if project is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
+        found_project_or_404(group_id, project_id, session)
 
         statement = (select(db_models.User, db_models.project_user.permission)
                     .join(db_models.project_user, db_models.project_user.user_id == db_models.User.user_id)

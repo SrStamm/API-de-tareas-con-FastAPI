@@ -19,4 +19,4 @@ app.include_router(auth.router)
 
 @app.get('/')
 def root():
-    return {f'Bienvenido a esta API! Aqui podras crear un grupo, crear proyectos y asignar tareas a los miembros del grupo para completar un proyecto especifico!'}
+    return {'detail':'Bienvenido a esta API!'}
