@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from fastapi import WebSocket
 from typing import List, Optional
 from datetime import datetime as dt, timezone
 from .db_models import State, Group_Role, Project_Permission
