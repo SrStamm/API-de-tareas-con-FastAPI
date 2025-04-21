@@ -112,3 +112,9 @@ class UpdateProject(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+class Message(BaseModel):
+    content: str
+    user_id: int
+    project_id: int
+    timestamp: dt

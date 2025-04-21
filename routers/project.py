@@ -30,7 +30,7 @@ def found_project_or_404(group_id:int, project_id:int, session: Session):
     return founded_project
 
 @router.get('/{group_id}', description='Obtiene todos los proyectos de un grupo')
-def get_projects(group_id: int, session:Session = Depends(get_session)) -> List[schemas.ReadProject]:
+def get_projects(group_id: int, session: Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
     try:
         statement = select(db_models.Project).where(db_models.Project.group_id == group_id)
