@@ -1,5 +1,5 @@
 from fastapi import APIRouter, status, HTTPException, Depends
-from models import db_models, schemas
+from models import db_models, schemas, exceptions
 from db.database import get_session, Session, select, SQLAlchemyError
 from typing import List
 from .auth import auth_user
@@ -20,7 +20,7 @@ def get_group_or_404(group_id: int, session: Session):
     group = session.exec(statement).first()
         
     if not group:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el grupo')
+        raise exceptions.GroupNotFoundError(group_id)
     
     return group
 
@@ -30,7 +30,7 @@ def get_user_or_404(user_id: int, session: Session):
     user = session.exec(statement).first()
 
     if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+        raise exceptions.UserNotFoundError(user_id)
 
     return user
 
@@ -43,7 +43,7 @@ def get_groups(session:Session = Depends(get_session)) -> List[schemas.ReadGroup
 
     except SQLAlchemyError as e:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error {str(e)}')
- 
+
 @router.post('', description='Crea un nuevo grupo')
 def create_group(new_group: schemas.CreateGroup,
                  user: db_models.User = Depends(auth_user),
@@ -120,9 +120,10 @@ def get_groups_in_user(user:db_models.User = Depends(auth_user),
                        session:Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]:
     try:
         statement = (select(db_models.Group)
-                     .join(db_models.group_user, db_models.group_user.group_id == db_models.Group.group_id)
-                     .where(db_models.group_user.user_id == user.user_id)
-                     .order_by(db_models.Group.group_id))
+                    .join(db_models.group_user, db_models.group_user.group_id == db_models.Group.group_id)
+                    .where(db_models.group_user.user_id == user.user_id)
+                    .order_by(db_models.Group.group_id))
+        
         found_group = session.exec(statement).all()
         return found_group
     
@@ -144,13 +145,11 @@ def append_user_group(group_id: int,
         new_user = get_user_or_404(user_id, session)
 
         if new_user in founded_group.users:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario ya existe en el grupo')
+            raise exceptions.UserInGroupError(user_id=new_user.user_id, group_id=founded_group.group_id)
         
         # Lo agrega al grupo
         founded_group.users.append(new_user)
-        
-        session.commit()
-        
+        session.commit()        
         return {'detail':'El usuario ha sido agregado al grupo'}
     
     except SQLAlchemyError as e:
@@ -179,7 +178,7 @@ def delete_user_group(group_id: int,
             return {'detail':'El usuario ha sido eliminado al grupo'}
         
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario no esta en el grupo')
+            raise exceptions.UserNotFoundError(user_id)
     
     except SQLAlchemyError as e:
         session.rollback()

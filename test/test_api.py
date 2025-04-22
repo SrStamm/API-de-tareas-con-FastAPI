@@ -134,8 +134,8 @@ def test_get_groups_in_user(client, auth_headers):
 @pytest.mark.parametrize(
         'group_id, user_id, status, respuesta', [
             (1, 2, 200,  'El usuario ha sido agregado al grupo'),
-            (1, 100000, 404, 'No se encontro el usuario'),
-            (1, 2, 400, 'El usuario ya existe en el grupo'),
+            (1, 100000, 404, 'User whit user_id 100000 not found'),
+            (1, 2, 400, 'User whit user_id 2 is in Group with group_id 1'),
             (2, 2, 200, 'El usuario ha sido agregado al grupo')
         ]
 )
@@ -175,26 +175,26 @@ def test_update_user_group(client, auth_headers, user_id, role, status, respuest
     assert response.json() == {'detail':respuesta}
 
 @pytest.mark.parametrize(
-        'group_id, user_id, status, detail, respuesta', [
-            (1, 2, 200, 'detail', 'El usuario ha sido eliminado al grupo'),
-            (1, 2, 400, 'detail', 'El usuario no esta en el grupo')
+        'group_id, user_id, status, respuesta', [
+            (1, 2, 200, 'El usuario ha sido eliminado al grupo'),
+            (1, 2, 404, 'User whit user_id 2 not found')
         ]
 )
-def test_delete_user_group(client, auth_headers, group_id, user_id, status, detail, respuesta):
+def test_delete_user_group(client, auth_headers, group_id, user_id, status, respuesta):
     response = client.delete(f'/group/{group_id}/{user_id}', headers=auth_headers)
     assert response.status_code == status
-    assert response.json() == {detail: respuesta}
+    assert response.json() == {'detail': respuesta}
 
 @pytest.mark.parametrize(
-        'group_id, status, detail, respuesta', [
-            (1, 200, 'detail', 'Se ha eliminado el grupo'),
-            (100000, 404, 'detail', 'No se encontro el grupo')
+        'group_id, status, respuesta', [
+            (1, 200, 'Se ha eliminado el grupo'),
+            (100000, 404, 'Group whit group_id 100000 not found')
         ]
 )
-def test_delete_group(client, auth_headers, group_id, status, detail, respuesta):
+def test_delete_group(client, auth_headers, group_id, status, respuesta):
     response = client.delete(f'/group/{group_id}', headers=auth_headers)
     assert response.status_code == status
-    assert response.json() == {detail: respuesta}
+    assert response.json() == {'detail': respuesta}
 
 def test_get_projects(client, auth_headers):
     response = client.get('/project/1')
@@ -223,9 +223,9 @@ def test_update_project(client, auth_headers):
 @pytest.mark.parametrize(
         'user_id, status, detail', [
             (2, 200, 'El usuario ha sido agregado al proyecto'),
-            (2, 400, 'El usuario ya existe en el proyecto'),
-            (3, 400, 'El usuario no existe en el grupo'),
-            (100, 404, 'No se encontro el usuario')
+            (2, 400, 'User whit user_id 2 is in project with project_id 1'),
+            (3, 400, 'User whit user_id 3 is in Group with group_id 2'),
+            (100, 404, 'User whit user_id 100 not found')
         ]
 )
 def test_add_user_to_project(client, auth_headers, user_id, status, detail):
@@ -317,7 +317,7 @@ def test_get_users_for_task(client, auth_headers):
 @pytest.mark.parametrize(
         'project_id, user_id, permission, status, detail', [
             (1, 2, db_models.Project_Permission.ADMIN, 200, 'Se ha cambiado los permisos del usuario en el proyecto'),
-            (1, 100000, db_models.Project_Permission.ADMIN, 404, 'No se encontro el usuario')
+            (1, 100000, db_models.Project_Permission.ADMIN, 400, 'User whit user_id 100000 is not in project with project_id 1')
             ]
 )
 def test_update_user_permission_in_project(client, auth_headers, project_id, user_id, permission, status, detail):
@@ -328,8 +328,8 @@ def test_update_user_permission_in_project(client, auth_headers, project_id, use
 @pytest.mark.parametrize(
         'user_id, status, detail', [
             (2, 200, 'El usuario ha sido eliminado del proyecto'),
-            (2, 400, 'El usuario no esta en el proyecto'),
-            (3, 400, 'El usuario no existe en el grupo')
+            (2, 400, 'User whit user_id 2 is not in project with project_id 1'),
+            (3, 400, 'User whit user_id 3 is not in Group with group_id 2')
         ]
 )
 def test_remove_user_from_project(client, auth_headers, user_id, status, detail):
@@ -350,7 +350,7 @@ def test_delete_project(client, auth_headers, project_id, status, detail):
 def test_failed_delete_project(client, auth_headers2):
     response = client.delete(f'/project/2/1', headers=auth_headers2)
     assert response.status_code == 401
-    assert response.json() == {'detail': 'Error: No estas autorizado.'}
+    assert response.json() == {'detail': 'User whit user_id 2 is Not Authorized'}
 
 def test_get_tasks_in_project(client, auth_headers):
     response = client.get('/project/1/2/tasks', headers=auth_headers)

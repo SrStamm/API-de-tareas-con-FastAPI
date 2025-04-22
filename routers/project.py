@@ -1,5 +1,5 @@
 from fastapi import APIRouter, status, HTTPException, Depends
-from models import db_models, schemas
+from models import db_models, schemas, exceptions
 from db.database import get_session, Session, select, SQLAlchemyError
 from typing import List
 from .auth import auth_user
@@ -16,7 +16,7 @@ def is_admin_in_project(user: db_models.User, project_id, session: Session = Dep
     resultado = session.exec(stmt).first()
 
     if not resultado or resultado.permission != db_models.Project_Permission.ADMIN:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail='Error: No estas autorizado.')
+        raise exceptions.NotAuthorized(user.user_id)
 
 def found_project_or_404(group_id:int, project_id:int, session: Session):
     stmt = (select(db_models.Project)
@@ -25,7 +25,7 @@ def found_project_or_404(group_id:int, project_id:int, session: Session):
     founded_project = session.exec(stmt).first()
     
     if not founded_project:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
+        raise exceptions.ProjectNotFoundError(project_id)
     
     return founded_project
 
@@ -146,16 +146,16 @@ def add_user_to_project(group_id: int,
         user = session.get(db_models.User, user_id)
 
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+            raise exceptions.UserNotFoundError(user_id)
 
         # Busca el grupo y verifica si el usuario existe en este
         group = session.get(db_models.Group, group_id)
 
         if not user in group.users:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario no existe en el grupo')
+            raise exceptions.UserInGroupError(user_id=user_id, group_id=group_id)
 
         if user in founded_project.users:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario ya existe en el proyecto')
+            raise exceptions.UserInProjectError(user_id=user_id, project_id=project_id)
         
         # Lo agrega al grupo
         founded_project.users.append(user)
@@ -187,7 +187,7 @@ def remove_user_from_project(group_id: int,
         group = session.get(db_models.Group, group_id)        
         
         if not user in group.users:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario no existe en el grupo')
+            raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
 
         if user in founded_project.users:
             # Lo elimina del proyecto
@@ -196,7 +196,7 @@ def remove_user_from_project(group_id: int,
             
             return {'detail':'El usuario ha sido eliminado del proyecto'}
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='El usuario no esta en el proyecto')
+            raise exceptions.UserNotInProjectError(user_id=user_id, project_id=project_id)
     
     except SQLAlchemyError as e:
         session.rollback()
@@ -223,7 +223,7 @@ def update_user_permission_in_project(
         user = session.exec(statement).first()
 
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+            raise exceptions.UserNotInProjectError(project_id=project_id, user_id=user_id)
 
         user.permission = update_role.permission
         
@@ -282,7 +282,7 @@ def get_tasks_in_project(group_id: int,
         project = session.exec(statement).all()
 
         if project is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
+            raise exceptions.ProjectNotFoundError(project_id=project_id)
 
         return project
 

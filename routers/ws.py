@@ -1,8 +1,9 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
 from typing import List, Dict
 from datetime import datetime
-import json
-from models import schemas
+from models import schemas, db_models
+from db.database import get_session, Session, select
+from .auth import auth_user_ws, auth_user
 
 router = APIRouter()
 
@@ -35,16 +36,55 @@ class ConnectionManager:
                 except Exception:
                     self.active_connections[project_id].remove(connection)
 
+def verify_user_in_project(user_id: int, project_id: int, session: Session = Depends(get_session)):
+    project = session.get(db_models.Project, project_id)
+
+    if not project:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Proyecto no encontrado')
+    
+    stmt = (select(db_models.project_user).where(
+        db_models.project_user.user_id == user_id,
+        db_models.project_user.project_id == project_id
+    ))
+
+    project_user = session.exec(stmt).first()
+
+    if not project_user:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail='No tienes acceso a este proyecto')
+
 manager = ConnectionManager()
 
-@router.websocket("/ws/{project_id}/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: int, project_id: int):
+@router.websocket("/ws/{project_id}")
+async def websocket_endpoint(websocket: WebSocket,
+                            project_id: int,
+                            session: Session = Depends(get_session)):
+
+    # Extraer el token del header Authorization
+    token = websocket.headers.get("authorization") or websocket.headers.get("Authorization")
+    if not token or not token.startswith("Bearer "):
+        await websocket.close(code=1008)  # Policy Violation
+        return
+
+    token = token.split(" ")[1]  # Extraer solo el token
+
+    try:
+        # Autenticar al usuario manualmente
+        user = await auth_user_ws(token, session)
+        verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
+    except HTTPException as e:
+        print(e)
+        await websocket.close(code=1008)
+        return
+
+    
     await manager.connect(websocket, project_id)
     
-    msg_connect = schemas.Message(user_id=client_id,
-                                  project_id=project_id,
-                                  timestamp=datetime.now(),
-                                  content=f'El usuario {client_id} se ha conectado al projecto {project_id}')
+    msg_connect = schemas.Message(
+        user_id=user.user_id,
+        project_id=project_id,
+        timestamp=datetime.now(),
+        content=f'El usuario {user.user_id} se ha conectado al projecto {project_id}'
+    )
     
     await manager.broadcast(msg_connect.model_dump_json(), project_id)
     
@@ -52,19 +92,48 @@ async def websocket_endpoint(websocket: WebSocket, client_id: int, project_id: i
         while True:
             data = await websocket.receive_text()
 
-            msg = schemas.Message(content=data,
-                                user_id=client_id,
-                                project_id=project_id,
-                                timestamp=datetime.now())
+            msg = schemas.Message(
+                content=data,
+                user_id=user.user_id,
+                project_id=project_id,
+                timestamp=datetime.now()
+                )
             
+            message = db_models.ProjectChat(
+                project_id=project_id,
+                user_id=user.user_id,
+                message=data
+                )
+            
+            session.add(message)
+            session.commit()            
             await manager.broadcast(msg.model_dump_json(), project_id)
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, project_id)
         
-        msg_disconnect = schemas.Message(user_id=client_id,
-                                         project_id=project_id,
-                                         timestamp=datetime.now(),
-                                         content=f'El usuario {client_id} se ha desconectado del projecto {project_id}')
+        msg_disconnect = schemas.Message(
+                user_id=user.user_id,
+                project_id=project_id,
+                timestamp=datetime.now(),
+                content=f'El usuario {user.user_id} se ha desconectado del projecto {project_id}'
+                )
         
         await manager.broadcast(msg_disconnect.model_dump_json(), project_id)
+
+@router.get('/chat/{project_id}')
+def get_chat(project_id: int,
+            user: db_models.User = Depends(auth_user),
+            session: Session = Depends(get_session)):
+    
+    stmt = (select(db_models.ProjectChat).where(
+        db_models.ProjectChat.project_id == project_id,
+        db_models.ProjectChat.user_id == user.user_id
+    ))
+
+    messages_chat = session.exec(stmt).all()
+
+    if not messages_chat:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el chat')
+    
+    return messages_chat

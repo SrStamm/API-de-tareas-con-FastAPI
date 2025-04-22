@@ -43,7 +43,7 @@ class Group(SQLModel, table=True):
 
 class Project(SQLModel, table=True):
     project_id: Optional[int] = Field(primary_key=True)
-    group_id: int = Field(foreign_key='group.group_id')
+    group_id: int = Field(foreign_key='group.group_id', index=True)
     title: str 
     description: str | None = Field(default=None)
     date_at: dt = Field(default_factory=lambda: dt.now(timezone.utc))
@@ -64,10 +64,17 @@ class User(SQLModel, table=True):
 
 class Task(SQLModel, table=True):
     task_id: Optional[int] = Field(primary_key=True)
-    project_id: int = Field(foreign_key='project.project_id')
+    project_id: int = Field(foreign_key='project.project_id', index=True)
     description: str | None = Field(default=None)
     date_exp: dt
     state: State = Field(default=State.SIN_EMPEZAR)
     
     asigned: List['User'] = Relationship(back_populates='tasks_asigned', link_model=tasks_user)
     project: Optional['Project'] = Relationship(back_populates='tasks')
+
+class ProjectChat(SQLModel, table=True):
+    chat_id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key='project.project_id', index=True)
+    user_id: int = Field(foreign_key='user.user_id', index=True)
+    message: str
+    timestamp: dt = Field(default_factory=lambda: dt.now(timezone.utc))

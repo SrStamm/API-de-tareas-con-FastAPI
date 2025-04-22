@@ -50,6 +50,21 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
     
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+    
+async def auth_user_ws(token: str, session: Session):
+    try:
+        payload = jwt.decode(token, SECRET, algorithms=ALGORITHM)
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Token inválido")
+
+        user = session.get(db_models.User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token inválido")
 
 @router.post("/login", description='Endpoint para logearse. Se necesita username y password.')
 async def login(form: OAuth2PasswordRequestForm = Depends(),
