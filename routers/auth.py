@@ -6,17 +6,18 @@ from db.database import get_session, Session, select
 from passlib.context import CryptContext
 from sqlalchemy.exc import SQLAlchemyError
 from models import db_models, schemas
+import os
 
 router = APIRouter(tags=['Login'])
 
 # Definimos el algoritmo
-ALGORITHM = "HS256"
+ALGORITHM = os.environ.get('ALGORITHM')
 
 # Duracion de los tokens
 ACCESS_TOKEN_DURATION = 60
 
 # Definimos una llave secreta
-SECRET = "MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr"
+SECRET = os.environ.get('SECRET_KEY')
 
 # Contexto de encriptacion 
 crypt = CryptContext(schemes=["bcrypt"])

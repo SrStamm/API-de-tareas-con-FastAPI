@@ -1,5 +1,6 @@
 from sqlmodel import SQLModel, create_engine, Session, select, or_
 from sqlalchemy import text
+from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv
 import os

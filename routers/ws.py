@@ -1,7 +1,7 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, WebSocketException
 from typing import List, Dict
 from datetime import datetime
-from models import schemas, db_models
+from models import schemas, db_models, exceptions
 from db.database import get_session, Session, select
 from .auth import auth_user_ws, auth_user
 
@@ -40,7 +40,7 @@ def verify_user_in_project(user_id: int, project_id: int, session: Session = Dep
     project = session.get(db_models.Project, project_id)
 
     if not project:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='Proyecto no encontrado')
+        raise exceptions.ProjectNotFoundError(project_id)
     
     stmt = (select(db_models.project_user).where(
         db_models.project_user.user_id == user_id,
@@ -50,33 +50,35 @@ def verify_user_in_project(user_id: int, project_id: int, session: Session = Dep
     project_user = session.exec(stmt).first()
 
     if not project_user:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail='No tienes acceso a este proyecto')
+        raise exceptions.NotAuthorized(user_id)
+    
+async def get_current_user_ws(session: Session, websocket: WebSocket) -> db_models.User:
+    try:
+        # Extraer el token del header Authorization
+        token = websocket.headers.get("authorization").replace("Bearer ", "") or websocket.headers.get("Authorization").replace("Bearer ", "")
+        
+        # Autenticar al usuario manualmente
+        user = await auth_user_ws(token, session)
+        if not user:
+            await websocket.close(code=1008)
+            raise WebSocketException(code=1008)
+
+        return user
+    except HTTPException as e:
+        print(e)
+        await websocket.close(code=1008)
+        return
 
 manager = ConnectionManager()
 
 @router.websocket("/ws/{project_id}")
 async def websocket_endpoint(websocket: WebSocket,
                             project_id: int,
+                            user: db_models.User = Depends(get_current_user_ws),
                             session: Session = Depends(get_session)):
 
-    # Extraer el token del header Authorization
-    token = websocket.headers.get("authorization") or websocket.headers.get("Authorization")
-    if not token or not token.startswith("Bearer "):
-        await websocket.close(code=1008)  # Policy Violation
-        return
+    verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
 
-    token = token.split(" ")[1]  # Extraer solo el token
-
-    try:
-        # Autenticar al usuario manualmente
-        user = await auth_user_ws(token, session)
-        verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
-    except HTTPException as e:
-        print(e)
-        await websocket.close(code=1008)
-        return
-
-    
     await manager.connect(websocket, project_id)
     
     msg_connect = schemas.Message(
@@ -134,6 +136,6 @@ def get_chat(project_id: int,
     messages_chat = session.exec(stmt).all()
 
     if not messages_chat:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el chat')
+        raise exceptions.ChatNotFoundError(project_id)
     
     return messages_chat

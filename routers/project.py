@@ -1,6 +1,6 @@
 from fastapi import APIRouter, status, HTTPException, Depends
 from models import db_models, schemas, exceptions
-from db.database import get_session, Session, select, SQLAlchemyError
+from db.database import get_session, Session, select, selectinload, SQLAlchemyError
 from typing import List
 from .auth import auth_user
 from .group import get_group_or_404
@@ -20,8 +20,8 @@ def is_admin_in_project(user: db_models.User, project_id, session: Session = Dep
 
 def found_project_or_404(group_id:int, project_id:int, session: Session):
     stmt = (select(db_models.Project)
-            .where(db_models.Project.group_id == group_id,
-                   db_models.Project.project_id == project_id))
+            .where(db_models.Project.group_id == group_id, db_models.Project.project_id == project_id))
+    
     founded_project = session.exec(stmt).first()
     
     if not founded_project:
@@ -33,12 +33,15 @@ def found_project_or_404(group_id:int, project_id:int, session: Session):
 def get_projects(group_id: int, session: Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
     try:
-        statement = select(db_models.Project).where(db_models.Project.group_id == group_id)
+        statement = (select(db_models.Project)
+                    .options(selectinload(db_models.Project.users))
+                    .where(db_models.Project.group_id == group_id))
+        
         found_projects = session.exec(statement).all()
         return found_projects
     
     except SQLAlchemyError as e:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_projects: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='get_projects')
 
 @router.post('/{group_id}', description='Crea un nuevo proyecto en un grupo')
 def create_project(new_project: schemas.CreateProject,
@@ -82,14 +85,14 @@ def create_project(new_project: schemas.CreateProject,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'Error al crear el proyecto: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='create_project')
 
 @router.patch('/{group_id}/{project_id}', description='Modifica un proyecto de un grupo')
-def update_project(group_id: int,
-                 project_id: int,
-                 updated_project: schemas.UpdateProject,
-                 user: db_models.User = Depends(auth_user),
-                 session: Session = Depends(get_session)): 
+def update_project( group_id: int,
+                    project_id: int,
+                    updated_project: schemas.UpdateProject,
+                    user: db_models.User = Depends(auth_user),
+                    session: Session = Depends(get_session)): 
 
     try:
         is_admin_in_project(user, project_id, session)
@@ -108,13 +111,14 @@ def update_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en update_project: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='update_project')
 
 @router.delete('/{group_id}/{project_id}', description='Elimina un proyecto de un grupo')
-def delete_project(group_id: int,
-                   project_id: int,
-                   user: db_models.User = Depends(auth_user),
-                   session: Session = Depends(get_session)):
+def delete_project(
+                    group_id: int,
+                    project_id: int,
+                    user: db_models.User = Depends(auth_user),
+                    session: Session = Depends(get_session)):
 
     try:
         is_admin_in_project(user, project_id, session)
@@ -128,7 +132,7 @@ def delete_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en delete_project: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='delete_project')
 
 @router.post('/{group_id}/{project_id}/{user_id}', description='Agrega un usuario al proyecto')
 def add_user_to_project(group_id: int,
@@ -166,7 +170,7 @@ def add_user_to_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en add_user_to_project: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='add_user_to_project')
 
 @router.delete('/{group_id}/{project_id}/{user_id}', description='Elimina un usuario del proyecto')
 def remove_user_from_project(group_id: int,
@@ -200,7 +204,7 @@ def remove_user_from_project(group_id: int,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en remove_user_from_project: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='remove_user_from_project')
 
 @router.patch('/{group_id}/{project_id}/{user_id}', description='Modifica el rol de un usuario en un proyecto')
 def update_user_permission_in_project(
@@ -218,7 +222,7 @@ def update_user_permission_in_project(
 
         # Busca el usuario
         statement = (select(db_models.project_user)
-                     .where(db_models.project_user.user_id == user_id, db_models.project_user.project_id == project.project_id))
+                    .where(db_models.project_user.user_id == user_id, db_models.project_user.project_id == project.project_id))
 
         user = session.exec(statement).first()
 
@@ -233,13 +237,13 @@ def update_user_permission_in_project(
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en update_user_permission_in_project: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='update_user_permission_in_project')
 
 @router.get('/{group_id}/{project_id}/users', description='Obtiene todos los grupos')
 def get_user_in_project(group_id: int,
-                      project_id: int,
-                      session:Session = Depends(get_session)
-                    ) -> List[schemas.ReadProjectUser]:
+                        project_id: int,
+                        session:Session = Depends(get_session)
+                        ) -> List[schemas.ReadProjectUser]:
     try:
         found_project_or_404(group_id, project_id, session)
 
@@ -259,7 +263,7 @@ def get_user_in_project(group_id: int,
         ]
 
     except SQLAlchemyError as e:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_user_in_project: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='get_user_in_project')
     
 @router.get('/{group_id}/{project_id}/tasks', description='Obtiene todos los grupos')
 def get_tasks_in_project(group_id: int,
@@ -287,4 +291,4 @@ def get_tasks_in_project(group_id: int,
         return project
 
     except SQLAlchemyError as e:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_tasks_in_project: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='get_tasks_in_project')

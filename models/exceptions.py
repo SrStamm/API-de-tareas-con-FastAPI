@@ -21,6 +21,13 @@ class ProjectNotFoundError(HTTPException):
             detail=f'Project whit project_id {project_id} not found'
         )
 
+class ChatNotFoundError(HTTPException):
+    def __init__(self, project_id):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Chat whit project_id {project_id} not found'
+        )
+
 class UserNotFoundError(HTTPException):
     def __init__(self, user_id):
         super().__init__(
@@ -54,4 +61,11 @@ class UserNotInGroupError(HTTPException):
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'User whit user_id {user_id} is not in Group with group_id {group_id}'
+        )
+
+class DatabaseError(HTTPException):
+    def __init__(self, error, func: str):
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f'database error en {func}: {str(error)}'
         )

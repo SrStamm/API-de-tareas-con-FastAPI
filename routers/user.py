@@ -1,5 +1,5 @@
 from fastapi import APIRouter, status, HTTPException, Depends
-from models import db_models, schemas
+from models import db_models, schemas, exceptions
 from db.database import get_session, Session, select, SQLAlchemyError, or_
 from typing import List
 from .auth import encrypt_password, auth_user
@@ -13,11 +13,11 @@ def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
         found_users = session.exec(statement).all()
         return found_users
     except SQLAlchemyError as e:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_users: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='get_users')
 
 @router.post('', description='Crea un nuevo usuario') 
-def create_user( new_user: schemas.CreateUser,
-                  session:Session = Depends(get_session)):
+def create_user(new_user: schemas.CreateUser,
+                session:Session = Depends(get_session)):
     try:
         statement = select(db_models.User).where(or_(db_models.User.email == new_user.email, db_models.User.username == new_user.username))
         founded_user = session.exec(statement).first()
@@ -39,14 +39,14 @@ def create_user( new_user: schemas.CreateUser,
 
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en create_user: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='create_user')
 
 @router.get('/me', description='Obtiene el usuario actual')
 def get_users(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
         return user
     except SQLAlchemyError as e:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en get_users: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='get_users')
 
 @router.patch('/me', description='Actualiza un usuario')
 def update_user(updated_user: schemas.UpdateUser,
@@ -66,7 +66,7 @@ def update_user(updated_user: schemas.UpdateUser,
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en update_user: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='update_user')
 
 @router.delete('/me', description='Elimina un usuario especifico')
 def delete_user(user: db_models.User = Depends(auth_user),
@@ -80,4 +80,4 @@ def delete_user(user: db_models.User = Depends(auth_user),
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'error en delete_user: {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='delete_user')
