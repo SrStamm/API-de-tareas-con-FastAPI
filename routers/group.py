@@ -6,15 +6,6 @@ from .auth import auth_user
 
 router = APIRouter(prefix='/group', tags=['Group'])
 
-def is_admin_in_group(user: db_models.User, group_id: int, session: Session):
-    stmt = (select(db_models.group_user)
-                    .where(db_models.group_user.user_id == user.user_id, db_models.group_user.group_id == group_id))
-    
-    found_user = session.exec(stmt).first()
-    
-    if found_user.role != 'admin':
-        raise exceptions.NotAuthorized(found_user.user_id)
-
 def get_group_or_404(group_id: int, session: Session):
     statement = select(db_models.Group).where(db_models.Group.group_id == group_id)
     group = session.exec(statement).first()
@@ -33,6 +24,18 @@ def get_user_or_404(user_id: int, session: Session):
         raise exceptions.UserNotFoundError(user_id)
 
     return user
+
+def is_admin_in_group(user: db_models.User, group_id: int, session: Session):
+    stmt = (select(db_models.group_user)
+                    .where(db_models.group_user.user_id == user.user_id, db_models.group_user.group_id == group_id))
+
+    found_user = session.exec(stmt).first()
+
+    if not found_user:
+        raise exceptions.UserNotInGroupError(user_id=user.user_id, group_id=group_id)
+
+    if found_user.role != db_models.Group_Role.ADMIN:
+        raise exceptions.NotAuthorized(found_user.user_id)
 
 @router.get('', description='Obtiene todos los grupos')
 def get_groups(session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:

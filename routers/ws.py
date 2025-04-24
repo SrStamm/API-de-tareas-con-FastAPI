@@ -51,7 +51,7 @@ def verify_user_in_project(user_id: int, project_id: int, session: Session = Dep
 
     if not project_user:
         raise exceptions.NotAuthorized(user_id)
-    
+
 async def get_current_user_ws(session: Session, websocket: WebSocket) -> db_models.User:
     try:
         # Extraer el token del header Authorization

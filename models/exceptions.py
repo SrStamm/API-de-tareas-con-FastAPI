@@ -63,6 +63,27 @@ class UserNotInGroupError(HTTPException):
             detail=f'User whit user_id {user_id} is not in Group with group_id {group_id}'
         )
 
+class TaskNotFound(HTTPException):
+    def __init__(self, task_id, project_id):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Task whit task_id {task_id} is not in Project with project_id {project_id}'
+        )
+
+class TaskIsAssignedError(HTTPException):
+    def __init__(self, task_id, user_id):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Task whit task_id {task_id} is assigned to User with user_id {user_id}'
+        )
+
+class TaskIsNotAssignedError(HTTPException):
+    def __init__(self, task_id, user_id):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Task whit task_id {task_id} is NOT assigned to User with user_id {user_id}'
+        )
+
 class DatabaseError(HTTPException):
     def __init__(self, error, func: str):
         super().__init__(

@@ -38,9 +38,9 @@ def get_task_in_project(project_id: int,
     try:
         # Selecciona las tareas asignadas a los usuarios en el proyecto
         statement = (select(db_models.Task)
-                     .join(db_models.tasks_user, db_models.tasks_user.task_id == db_models.Task.task_id)
-                     .join(db_models.project_user, db_models.project_user.user_id == db_models.tasks_user.user_id)
-                     .where(db_models.project_user.project_id == project_id, db_models.project_user.user_id == user.user_id))
+                    .join(db_models.tasks_user, db_models.tasks_user.task_id == db_models.Task.task_id)
+                    .join(db_models.project_user, db_models.project_user.user_id == db_models.tasks_user.user_id)
+                    .where(db_models.project_user.project_id == project_id, db_models.project_user.user_id == user.user_id))
         
         found_tasks = session.exec(statement).all()
         return found_tasks
@@ -58,7 +58,7 @@ def create_task(new_task: schemas.CreateTask,
         project = session.get(db_models.Project, project_id)
         
         if not project:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto destinado')
+            raise exceptions.ProjectNotFoundError(project_id)
         
         # Verifica que el usuario este autorizado en el proyecto
         statement = (select(db_models.project_user)
@@ -67,13 +67,13 @@ def create_task(new_task: schemas.CreateTask,
         project_user = session.exec(statement).first()
 
         if not project_user or project_user.permission != db_models.Project_Permission.ADMIN:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='No tienes permisos')        
+            raise exceptions.NotAuthorized(user.user_id)        
 
         # Busca el usuario al que va a asignarse la tarea, y si existe en el proyecto
         for user_id in new_task.user_ids:
             user_exists = session.get(db_models.User, user_id)
             if not user_exists:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+                raise exceptions.UserNotFoundError(user_id)
             
             statement = (select(db_models.project_user).where(
                 db_models.project_user.user_id == user_exists.user_id,
@@ -81,7 +81,7 @@ def create_task(new_task: schemas.CreateTask,
             
             user_in_project = session.exec(statement).first()
             if not user_in_project:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario en el proyecto')
+                raise exceptions.UserInProjectError(user_id=user_id, project_id=project_id)
 
 
         task = db_models.Task(
@@ -115,16 +115,16 @@ def update_task(task_id: int,
 
     try:
         # Verifica que exista el proyecto
-        project = session.get(db_models.Project, project_id)
+        project = session.exec((select(db_models.Project).where(db_models.Project.project_id == project_id))).first()
         if not project:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro el proyecto')
+            raise exceptions.ProjectNotFoundError(project_id=project_id)
         
         # Busca la task seleccionada
         statement = select(db_models.Task).where(db_models.Task.task_id == task_id, db_models.Task.project_id == project_id)
         task = session.exec(statement).first()
         
-        if not task:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro la tarea')
+        if not task: 
+            raise exceptions.TaskNotFound(task_id=task_id, project_id=project_id)
         
         if task.description != update_task.description and update_task.description:
             task.description = update_task.description
@@ -141,7 +141,7 @@ def update_task(task_id: int,
                 # Verifica que el usuario exista
                 user_exists = session.get(db_models.User, user_id)
                 if not user_exists:
-                    raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario')
+                    raise exceptions.UserNotFoundError(user_id)
 
                 # Verifica que el usuario exista en el projecto
                 statement = (select(db_models.project_user).where(
@@ -150,7 +150,7 @@ def update_task(task_id: int,
                 
                 user_in_project = session.exec(statement).first()
                 if not user_in_project:
-                    raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontro el usuario en el proyecto')
+                    raise exceptions.UserNotInProjectError(project_id=project_id, user_id=user_id)
 
                 # Verifica que el usuario este asignado al task
                 statement = (select(db_models.tasks_user).where(
@@ -159,7 +159,7 @@ def update_task(task_id: int,
                 
                 user_in_task = session.exec(statement).first()
                 if user_in_task:
-                    raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f'El usuario de id {user_id} esta asignado a esta tarea')
+                    raise exceptions.TaskIsAssignedError(user_id=user_id, task_id=task_id)
 
                 # Agrega el usuario al task
                 task_user = db_models.tasks_user(
@@ -178,7 +178,7 @@ def update_task(task_id: int,
                 
                 user_in_task = session.exec(statement).first()
                 if not user_in_task:
-                    raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f'El usuario de id {user_id} no esta asignado a esta tarea')
+                    raise exceptions.TaskIsNotAssignedError(user_id=user_id, task_id=task_id)
 
                 session.delete(user_in_task)
         
@@ -204,15 +204,18 @@ def delete_task(task_id: int,
         
         user_found = session.exec(statement).first()
 
-        if not user_found or user_found.permission != db_models.Project_Permission.ADMIN:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, detail='No tienes la autorizacion para realizar esta accion')
+        if not user_found:
+            raise exceptions.UserNotFoundError(user_id=user.user_id)
+        
+        if user_found.permission != db_models.Project_Permission.ADMIN:
+            raise exceptions.NotAuthorized(user.user_id)
         
         # Verifica que exista la task
         statement = select(db_models.Task).where(db_models.Task.task_id == task_id, db_models.Task.project_id == project_id)
         founded_task = session.exec(statement).first()
         
         if not founded_task:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='No se encontro la tarea en el proyecto')
+            raise exceptions.TaskNotFound(task_id=task_id, project_id=project_id)
         
         session.delete(founded_task)
         session.commit()
