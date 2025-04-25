@@ -61,7 +61,7 @@ class ReadTaskInProject(BaseModel):
     description: str
     date_exp: dt
     state: State
-    users: List[ReadUser]
+    asigned: List[ReadUser]
 
     model_config = ConfigDict(from_attributes=True)
 

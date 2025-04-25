@@ -29,7 +29,7 @@ def found_project_or_404(group_id:int, project_id:int, session: Session):
     
     return founded_project
 
-@router.get('/{group_id}', description='Obtiene todos los proyectos de un grupo')
+@router.get('/{group_id}', description="""Obtiene todos los proyectos existentes de un grupo""")
 def get_projects(group_id: int, session: Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
     try:
@@ -43,11 +43,12 @@ def get_projects(group_id: int, session: Session = Depends(get_session)) -> List
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_projects')
 
-@router.post('/{group_id}', description='Crea un nuevo proyecto en un grupo')
-def create_project(new_project: schemas.CreateProject,
-                   group_id: int,
-                   user: db_models.User = Depends(auth_user),
-                   session:Session = Depends(get_session)):
+@router.post('/{group_id}', description= """Permite crear un nuevo proyecto en un grupo al usuario autenticado.
+                                            Para crearlo se necesita un 'title', opcional 'description'""")
+def create_project( new_project: schemas.CreateProject,
+                    group_id: int,
+                    user: db_models.User = Depends(auth_user),
+                    session:Session = Depends(get_session)):
     try:
         founded_group = get_group_or_404(group_id, session)
 
@@ -87,7 +88,8 @@ def create_project(new_project: schemas.CreateProject,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='create_project')
 
-@router.patch('/{group_id}/{project_id}', description='Modifica un proyecto de un grupo')
+@router.patch('/{group_id}/{project_id}', description=  """ Permite modificar un proyecto de un grupo si tiene permiso de Administrador en el proyecto.
+                                                            Se puede modificar 'title' y 'description' """)
 def update_project( group_id: int,
                     project_id: int,
                     updated_project: schemas.UpdateProject,
@@ -113,7 +115,7 @@ def update_project( group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_project')
 
-@router.delete('/{group_id}/{project_id}', description='Elimina un proyecto de un grupo')
+@router.delete('/{group_id}/{project_id}', description="""Permite eliminar un proyecto de un grupo si el usuario autenticado tiene permiso de Administrador en el proyecto""")
 def delete_project(
                     group_id: int,
                     project_id: int,
@@ -134,7 +136,8 @@ def delete_project(
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_project')
 
-@router.post('/{group_id}/{project_id}/{user_id}', description='Agrega un usuario al proyecto')
+@router.post('/{group_id}/{project_id}/{user_id}', description= """ Permite al usuario autenticado con permiso de Administrador
+                                                                    el agregar un usuario al proyecto si este existe en el grupo.""")
 def add_user_to_project(group_id: int,
                         user_id: int,
                         project_id: int,
@@ -172,7 +175,8 @@ def add_user_to_project(group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='add_user_to_project')
 
-@router.delete('/{group_id}/{project_id}/{user_id}', description='Elimina un usuario del proyecto')
+@router.delete('/{group_id}/{project_id}/{user_id}', description="""Permite al usuario autenticado con permiso de Administrador
+                                                                    el eliminar un usuario del proyecto""")
 def remove_user_from_project(group_id: int,
                             project_id: int,
                             user_id: int,
@@ -206,7 +210,8 @@ def remove_user_from_project(group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='remove_user_from_project')
 
-@router.patch('/{group_id}/{project_id}/{user_id}', description='Modifica el rol de un usuario en un proyecto')
+@router.patch('/{group_id}/{project_id}/{user_id}', description= """Permite al usuario autenticado con permiso de Administrador
+                                                                    el modificar el rol de un usuario en un proyecto""")
 def update_user_permission_in_project(
                                         group_id: int,
                                         user_id: int,
@@ -239,7 +244,7 @@ def update_user_permission_in_project(
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_user_permission_in_project')
 
-@router.get('/{group_id}/{project_id}/users', description='Obtiene todos los grupos')
+@router.get('/{group_id}/{project_id}/users', description='Obtiene todos los usuarios de un proyecto')
 def get_user_in_project(group_id: int,
                         project_id: int,
                         session:Session = Depends(get_session)
@@ -265,7 +270,7 @@ def get_user_in_project(group_id: int,
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_user_in_project')
     
-@router.get('/{group_id}/{project_id}/tasks', description='Obtiene todos los grupos')
+@router.get('/{group_id}/{project_id}/tasks', description='Obtiene todas las tareas de un proyecto')
 def get_tasks_in_project(group_id: int,
                         project_id: int,
                         session:Session = Depends(get_session)):

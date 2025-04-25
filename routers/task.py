@@ -1,15 +1,58 @@
 from fastapi import APIRouter, status, HTTPException, Depends
 from models import db_models, schemas, exceptions
 from .auth import auth_user
-from db.database import get_session, Session, select, SQLAlchemyError, or_
+from .project import is_admin_in_project
+from db.database import get_session, Session, select, SQLAlchemyError, or_, joinedload
 from typing import List
 
 router = APIRouter(prefix='/task', tags=['Task'])
 
-@router.get('', description='Obtiene todas las tareas')
-def get_task(session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
+def found_project_or_404(project_id:int, session: Session):
+    stmt = (select(db_models.Project)
+            .where(db_models.Project.project_id == project_id))
+    
+    founded_project = session.exec(stmt).first()
+    
+    if not founded_project:
+        raise exceptions.ProjectNotFoundError(project_id)
+    
+    return founded_project
+
+def found_task_or_404(project_id:int, task_id: int, session: Session) -> db_models.Task:
+    stmt = (select(db_models.Task)
+            .where(db_models.Task.project_id == project_id, db_models.Task.task_id == task_id))
+    
+    task_found = session.exec(stmt).first()
+    
+    if not task_found:
+        raise exceptions.TaskNotFound(task_id=task_id, project_id=project_id)
+    
+    return task_found
+
+def found_user_or_404(user_id:int, session: Session) -> db_models.User:
+    user_found = session.get(db_models.User, user_id)
+    
+    if not user_found:
+        raise exceptions.UserNotFoundError(user_id=user_id)
+    
+    return user_found
+
+def found_user_in_project_or_404(user_id:int, project_id:int, session: Session) -> db_models.User:
+    stmt = (select(db_models.project_user).where(
+                    db_models.project_user.user_id == user_id,
+                    db_models.project_user.project_id == project_id))
+    
+    user = session.exec(stmt).first()
+    
+    if not user:
+        raise exceptions.UserNotInProjectError(user_id=user_id, project_id=project_id)
+    
+    return user
+
+@router.get('', description='Obtiene todas las tareas a las que esta asignada el usuario')
+def get_task(user:db_models.User = Depends(auth_user), session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
     try:
-        statement = select(db_models.Task)
+        statement = select(db_models.Task).where(db_models.Task.task_id == db_models.tasks_user.task_id, db_models.tasks_user.user_id == user.user_id)
         found_tasks = session.exec(statement).all()
         return found_tasks
     
@@ -34,15 +77,16 @@ def get_users_for_task(task_id: int,
 @router.get('/{project_id}', description='Obtiene todas las tareas asignadas de un proyecto')
 def get_task_in_project(project_id: int,
                         user: db_models.User = Depends(auth_user),
-                        session: Session = Depends(get_session)) -> List[schemas.ReadTask]:
+                        session: Session = Depends(get_session)) -> List[schemas.ReadTaskInProject]:
     try:
         # Selecciona las tareas asignadas a los usuarios en el proyecto
         statement = (select(db_models.Task)
                     .join(db_models.tasks_user, db_models.tasks_user.task_id == db_models.Task.task_id)
                     .join(db_models.project_user, db_models.project_user.user_id == db_models.tasks_user.user_id)
-                    .where(db_models.project_user.project_id == project_id, db_models.project_user.user_id == user.user_id))
+                    .where(db_models.project_user.project_id == project_id, db_models.project_user.user_id == user.user_id)
+                    .options(joinedload(db_models.Task.asigned)))
         
-        found_tasks = session.exec(statement).all()
+        found_tasks = session.exec(statement).unique().all()
         return found_tasks
     
     except SQLAlchemyError as e:
@@ -55,34 +99,17 @@ def create_task(new_task: schemas.CreateTask,
                 session: Session = Depends(get_session)):
     try:
         # Verifica que el projecto exista
-        project = session.get(db_models.Project, project_id)
-        
-        if not project:
-            raise exceptions.ProjectNotFoundError(project_id)
-        
+        project = found_project_or_404(project_id=project_id, session=session)
+                
         # Verifica que el usuario este autorizado en el proyecto
-        statement = (select(db_models.project_user)
-                    .where(db_models.project_user.user_id == user.user_id, db_models.project_user.project_id == project_id))
-        
-        project_user = session.exec(statement).first()
-
-        if not project_user or project_user.permission != db_models.Project_Permission.ADMIN:
-            raise exceptions.NotAuthorized(user.user_id)        
+        is_admin_in_project(user=user, project_id=project_id, session=session)
 
         # Busca el usuario al que va a asignarse la tarea, y si existe en el proyecto
-        for user_id in new_task.user_ids:
-            user_exists = session.get(db_models.User, user_id)
-            if not user_exists:
-                raise exceptions.UserNotFoundError(user_id)
-            
-            statement = (select(db_models.project_user).where(
-                db_models.project_user.user_id == user_exists.user_id,
-                db_models.project_user.project_id == project.project_id))
-            
-            user_in_project = session.exec(statement).first()
-            if not user_in_project:
-                raise exceptions.UserInProjectError(user_id=user_id, project_id=project_id)
-
+        if new_task.user_ids:
+            for user_id in new_task.user_ids:
+                found_user_or_404(user_id=user_id, session=session)
+                
+                found_user_in_project_or_404(user_id=user_id, project_id=project_id, session=session)
 
         task = db_models.Task(
             project_id=project_id,
@@ -115,16 +142,10 @@ def update_task(task_id: int,
 
     try:
         # Verifica que exista el proyecto
-        project = session.exec((select(db_models.Project).where(db_models.Project.project_id == project_id))).first()
-        if not project:
-            raise exceptions.ProjectNotFoundError(project_id=project_id)
+        project = found_project_or_404(project_id=project_id, session=session)
         
         # Busca la task seleccionada
-        statement = select(db_models.Task).where(db_models.Task.task_id == task_id, db_models.Task.project_id == project_id)
-        task = session.exec(statement).first()
-        
-        if not task: 
-            raise exceptions.TaskNotFound(task_id=task_id, project_id=project_id)
+        task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
         
         if task.description != update_task.description and update_task.description:
             task.description = update_task.description
@@ -197,27 +218,12 @@ def delete_task(task_id: int,
                 session: Session = Depends(get_session)):
 
     try:
-        # Verifica que el usuario tenga permisos
-        statement = (select(db_models.project_user).where(
-                    db_models.project_user.user_id == user.user_id,
-                    db_models.project_user.project_id == project_id))
-        
-        user_found = session.exec(statement).first()
-
-        if not user_found:
-            raise exceptions.UserNotFoundError(user_id=user.user_id)
-        
-        if user_found.permission != db_models.Project_Permission.ADMIN:
-            raise exceptions.NotAuthorized(user.user_id)
+        is_admin_in_project(user=user, project_id=project_id, session=session)
         
         # Verifica que exista la task
-        statement = select(db_models.Task).where(db_models.Task.task_id == task_id, db_models.Task.project_id == project_id)
-        founded_task = session.exec(statement).first()
-        
-        if not founded_task:
-            raise exceptions.TaskNotFound(task_id=task_id, project_id=project_id)
-        
-        session.delete(founded_task)
+        task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
+                
+        session.delete(task)
         session.commit()
         
         return {'detail':'Se ha eliminado la tarea'}

@@ -41,14 +41,14 @@ def create_user(new_user: schemas.CreateUser,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='create_user')
 
-@router.get('/me', description='Obtiene el usuario actual')
+@router.get('/me', description='Obtiene informacion del usuario actual')
 def get_users(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
         return user
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_users')
 
-@router.patch('/me', description='Actualiza un usuario')
+@router.patch('/me', description='Actualiza el usuario actual')
 def update_user(updated_user: schemas.UpdateUser,
                 user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)): 
@@ -68,7 +68,7 @@ def update_user(updated_user: schemas.UpdateUser,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_user')
 
-@router.delete('/me', description='Elimina un usuario especifico')
+@router.delete('/me', description='Elimina el usuario actual')
 def delete_user(user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)):
 

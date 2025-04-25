@@ -50,7 +50,7 @@ def get_groups(session:Session = Depends(get_session)) -> List[schemas.ReadGroup
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_groups')
 
-@router.post('', description='Crea un nuevo grupo')
+@router.post('', description='El usuario autenticado crea un nuevo grupo, necesita un "name", y opcional "description". El usuario se agrega de forma automatica como Administrador')
 def create_group(new_group: schemas.CreateGroup,
                  user: db_models.User = Depends(auth_user),
                  session: Session = Depends(get_session)):
@@ -76,7 +76,7 @@ def create_group(new_group: schemas.CreateGroup,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='create_group')
 
-@router.patch('/{group_id}', description='Actualiza a un grupo')
+@router.patch('/{group_id}', description='Permite al usuario autenticado con rol Administrador el cambiar informacion del grupo, puede ser el "name" o "description".')
 def update_group(group_id: int,
                 updated_group: schemas.UpdateGroup,
                 user: db_models.User = Depends(auth_user),
@@ -101,10 +101,10 @@ def update_group(group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_group')
 
-@router.delete('/{group_id}', description='Elimina un grupo especifico')
+@router.delete('/{group_id}', description='Permite al usuario autenticado con rol Administrador el eliminar al grupo.')
 def delete_group(group_id: int,
-                 user: db_models.User = Depends(auth_user),
-                 session: Session = Depends(get_session)):
+                user: db_models.User = Depends(auth_user),
+                session: Session = Depends(get_session)):
 
     try:
         founded_group = get_group_or_404(group_id, session)
@@ -120,7 +120,7 @@ def delete_group(group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_group')
     
-@router.get('/me', description='Obtiene todos los grupos')
+@router.get('/me', description='Obtiene todos los grupos a los que pertenece el usuario autenticado')
 def get_groups_in_user( user:db_models.User = Depends(auth_user),
                         session:Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]:
     try:
@@ -135,7 +135,7 @@ def get_groups_in_user( user:db_models.User = Depends(auth_user),
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_groups_in_user')
 
-@router.post('/{group_id}/{user_id}', description='Agrega un usuario al grupo')
+@router.post('/{group_id}/{user_id}', description='Permite al usuario autenticado con rol Administrador el agregar un nuevo usuario al grupo')
 def append_user_group(  group_id: int,
                         user_id: int,
                         user: db_models.User = Depends(auth_user),
@@ -161,7 +161,7 @@ def append_user_group(  group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='append_user_group')
 
-@router.delete('/{group_id}/{user_id}', description='Elimina un usuario del grupo')
+@router.delete('/{group_id}/{user_id}', description='Permite al usuario autenticado con rol Administrador el eliminar un usuario del grupo')
 def delete_user_group(  group_id: int,
                         user_id: int,
                         user: db_models.User = Depends(auth_user),
@@ -189,7 +189,7 @@ def delete_user_group(  group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_user_group')
 
-@router.patch('/{group_id}/{user_id}', description='Modifica el rol de un usuario en un grupo')
+@router.patch('/{group_id}/{user_id}', description='Permite al usuario autenticado con rol Administrador el modificar el rol de un usuario en el grupo')
 def update_user_group(group_id: int,
                         user_id: int,
                         update_role: schemas.UpdateRoleUser,
@@ -221,7 +221,7 @@ def update_user_group(group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_user_group')
 
-@router.get('/{group_id}/users', description='Obtiene todos los grupos')
+@router.get('/{group_id}/users', description='Obtiene todos los usuarios de un grupo')
 def get_user_in_group(group_id: int,
                     session:Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
 
