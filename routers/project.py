@@ -3,7 +3,7 @@ from models import db_models, schemas, exceptions
 from db.database import get_session, Session, select, selectinload, SQLAlchemyError
 from typing import List
 from .auth import auth_user
-from .group import get_group_or_404
+from .group import get_group_or_404, get_user_or_404
 
 router = APIRouter(prefix='/project', tags=['Project'])
 
@@ -97,9 +97,9 @@ def update_project( group_id: int,
                     session: Session = Depends(get_session)): 
 
     try:
-        is_admin_in_project(user, project_id, session)
+        is_admin_in_project(user=user, project_id=project_id, session=session)
 
-        founded_project = found_project_or_404(group_id, project_id, session)
+        founded_project = found_project_or_404(group_id=group_id, project_id=project_id, session=session)
                 
         if founded_project.title != updated_project.title and updated_project.title is not None:
             founded_project.title = updated_project.title
@@ -125,7 +125,7 @@ def delete_project(
     try:
         is_admin_in_project(user, project_id, session)
         
-        founded_project = found_project_or_404(group_id, project_id, session)
+        founded_project = found_project_or_404(group_id=group_id, project_id=project_id, session=session)
         
         session.delete(founded_project)
         session.commit()
@@ -150,16 +150,13 @@ def add_user_to_project(group_id: int,
         founded_project = found_project_or_404(group_id, project_id, session)
         
         # Busca el usuario
-        user = session.get(db_models.User, user_id)
-
-        if not user:
-            raise exceptions.UserNotFoundError(user_id)
+        user = get_user_or_404(user_id=user_id, session=session) 
 
         # Busca el grupo y verifica si el usuario existe en este
-        group = session.get(db_models.Group, group_id)
+        group = get_group_or_404(group_id=group_id, session=session)
 
         if not user in group.users:
-            raise exceptions.UserInGroupError(user_id=user_id, group_id=group_id)
+            raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
 
         if user in founded_project.users:
             raise exceptions.UserInProjectError(user_id=user_id, project_id=project_id)
@@ -189,10 +186,10 @@ def remove_user_from_project(group_id: int,
         founded_project = found_project_or_404(group_id, project_id, session)
         
         # Busca el usuario
-        user = session.get(db_models.User, user_id)
+        user = get_user_or_404(user_id=user_id, session=session)
 
         # Busca el grupo y verifica si el usuario existe en este
-        group = session.get(db_models.Group, group_id)        
+        group = get_group_or_404(group_id=group_id, session=session)
         
         if not user in group.users:
             raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
@@ -259,7 +256,7 @@ def get_user_in_project(group_id: int,
         results = session.exec(statement).all()
 
         if not results:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail='No se encontraron los usuarios pertenecientes al proyecto')
+            raise exceptions.UsersNotFoundInProjectError(project_id=project_id)
         
         # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
         return [
@@ -271,7 +268,8 @@ def get_user_in_project(group_id: int,
         raise exceptions.DatabaseError(error=e, func='get_user_in_project')
     
 @router.get('/{group_id}/{project_id}/tasks', description='Obtiene todas las tareas de un proyecto')
-def get_tasks_in_project(group_id: int,
+def get_tasks_in_project(
+                        group_id: int,
                         project_id: int,
                         session:Session = Depends(get_session)):
     try:

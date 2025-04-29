@@ -25,7 +25,7 @@ def create_user(new_user: schemas.CreateUser,
         if founded_user:
             if founded_user.username == new_user.username:
                 raise HTTPException(status.HTTP_406_NOT_ACCEPTABLE, detail='Ya existe un usuario con este Username')
-            else:
+            elif founded_user.email == new_user.email:
                 raise HTTPException(status.HTTP_406_NOT_ACCEPTABLE, detail='Ya existe un usuario con este Email')
 
         new_user = db_models.User(**new_user.model_dump())
@@ -42,14 +42,14 @@ def create_user(new_user: schemas.CreateUser,
         raise exceptions.DatabaseError(error=e, func='create_user')
 
 @router.get('/me', description='Obtiene informacion del usuario actual')
-def get_users(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
+def get_user_me(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
         return user
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_users')
 
 @router.patch('/me', description='Actualiza el usuario actual')
-def update_user(updated_user: schemas.UpdateUser,
+def update_user_me(updated_user: schemas.UpdateUser,
                 user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)): 
 
@@ -69,7 +69,7 @@ def update_user(updated_user: schemas.UpdateUser,
         raise exceptions.DatabaseError(error=e, func='update_user')
 
 @router.delete('/me', description='Elimina el usuario actual')
-def delete_user(user: db_models.User = Depends(auth_user),
+def delete_user_me(user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)):
 
     try:

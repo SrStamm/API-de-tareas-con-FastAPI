@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from fastapi.testclient import TestClient
 from main import app
 from sqlmodel import SQLModel, create_engine, Session
-from db.database import get_session
+from db.database import get_session, select
 from models import db_models
 from routers.auth import encrypt_password
 
@@ -61,8 +61,8 @@ def test_user2(test_session):
 
 @pytest.fixture
 def auth_headers(client, test_user):
-    response = client.post("/login", data={"username":test_user.username, "password":PASSWORD})
-    assert response.status_code == 200
+    response = client.post("/login", data={"username": test_user.username, "password": PASSWORD})
+    assert response.status_code == 200, f"Error en login: {response.json()}"
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -84,15 +84,38 @@ def test_create_group_init(client, auth_headers, test_user2):
 
 @pytest.fixture
 def test_create_project_init(client, auth_headers, test_user2, test_create_group_init, test_session):
+    print("Ejecutando test_create_project_init")
     hola = test_create_group_init
     print(hola)
 
+    # Crear proyecto
     response = client.post(f'/project/1', headers=auth_headers, json={'title':'creando un proyecto'})
-    assert response.status_code == 200
-    assert response.json() == {'detail': 'Se ha creado un nuevo proyecto de forma exitosa'}
+    assert response.status_code == 200, f"Error al crear proyecto: {response.json()}"
+    print("Proyecto 1 creado")
 
-    client.post('/project/1/2/2', headers=auth_headers)
+    # Asociar user2 (test_user2, user_id=2) al proyecto
+    response = client.post('/project/1/1/2', headers=auth_headers)
+    assert response.status_code == 200, f"Error al asociar user2: {response.json()}"
+    print("Usuario 2 asociado al proyecto 1")
 
+    # Verificar proyecto y asociaciones en la base de datos
+    project = test_session.get(db_models.Project, 1)
+    assert project is not None, "Proyecto 1 no encontrado en la base de datos"
+    stmt = select(db_models.project_user).where(
+        db_models.project_user.user_id == 1,
+        db_models.project_user.project_id == 1
+    )
+    project_user1 = test_session.exec(stmt).first()
+    assert project_user1 is not None, "Usuario 1 no está asociado al proyecto 1"
+    stmt = select(db_models.project_user).where(
+        db_models.project_user.user_id == 2,
+        db_models.project_user.project_id == 1
+    )
+    project_user2 = test_session.exec(stmt).first()
+    assert project_user2 is not None, "Usuario 2 no está asociado al proyecto 1"
+    print("Verificado: Usuarios 1 y 2 están asociados al proyecto 1")
+
+    # Crear una tarea
     response = client.post(
         '/task/1',
         headers=auth_headers,
@@ -102,7 +125,8 @@ def test_create_project_init(client, auth_headers, test_user2, test_create_group
             'user_ids': [1]
         }
     )
-    assert response.status_code == 200 
+    assert response.status_code == 200, f"Error al crear tarea: {response.json()}"
+    print("Tarea creada")
 
     return
 

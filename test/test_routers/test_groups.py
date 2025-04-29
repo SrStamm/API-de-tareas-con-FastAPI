@@ -1,6 +1,8 @@
 import pytest
 from conftest import auth_headers, client, auth_headers2, test_create_group_init, test_user2
-from models import db_models
+from models import db_models, exceptions, schemas
+from sqlalchemy.exc import SQLAlchemyError
+from routers import group
 
 def test_create_group(client, auth_headers, test_user2):
     response = client.post('/group', headers=auth_headers, json={'name':'probando'})
@@ -93,3 +95,207 @@ def test_delete_group(client, auth_headers, group_id, status, respuesta):
     response = client.delete(f'/group/{group_id}', headers=auth_headers)
     assert response.status_code == status
     assert response.json() == {'detail': respuesta}
+
+def test_get_groups_error(mocker):
+    db_session_mock = mocker.Mock()
+
+    db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        group.get_groups(db_session_mock)
+
+    # db_session_mock.rollback.assert_called_once()
+
+def test_create_group_error(mocker):
+    db_session_mock = mocker.Mock()
+
+    db_session_mock.add.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        group.create_group(session=db_session_mock, new_group=schemas.CreateGroup(name='holaaa'))
+
+    db_session_mock.rollback.assert_called_once()
+
+def test_update_group_error(mocker):
+    # Simula un usuario y una session
+    mock_user = mocker.Mock(spec=db_models.User)
+    db_session_mock = mocker.Mock()
+
+    #Simula el grupo obtenido
+    mock_group = mocker.Mock()
+    mock_group.id = 1
+
+    # Configura los mocks para las funciones auxiliares
+    mocker.patch('routers.group.is_admin_in_group') # No lanza la excepcion
+    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+
+    # Simula un error al hacer commit
+    db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
+
+    # Llama al endpoint
+    with pytest.raises(exceptions.DatabaseError):
+        group.update_group(
+                group_id=1,
+                updated_group=schemas.UpdateGroup(name='adioss'),
+                user=mock_user,
+                session=db_session_mock
+            )
+    
+    # Verifica qeu se hizo rollback
+    db_session_mock.rollback.assert_called_once()
+
+def test_delete_group_error(mocker):
+    mock_user = mocker.Mock(spec=db_models.User)
+    db_session_mock = mocker.Mock()
+
+    mock_group = mocker.Mock()
+    mock_group.id = 1
+
+    mocker.patch('routers.group.is_admin_in_group') # No lanza la excepcion
+    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+
+    db_session_mock.delete.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        group.delete_group(
+                group_id=1,
+                user=mock_user,
+                session=db_session_mock
+            )
+    
+    db_session_mock.rollback.assert_called_once()
+
+def test_get_groups_in_user_error(mocker):
+    mock_user = mocker.Mock(spec=db_models.User)
+    db_session_mock = mocker.Mock()
+
+    mock_group = mocker.Mock()
+    mock_group.id = 1
+
+    db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        group.get_groups_in_user(
+                user=mock_user,
+                session=db_session_mock
+            )
+
+def test_append_user_group_error(mocker):
+    mock_user = mocker.Mock(spec=db_models.User)
+    mock_append_user = mocker.Mock(spec=db_models.User)
+    mock_append_user.id = 2
+    db_session_mock = mocker.Mock()
+
+    mock_group = mocker.Mock()
+    mock_group.id = 1
+    mock_group.users = []
+
+    mocker.patch('routers.group.is_admin_in_group')
+    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+
+    db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        group.append_user_group(
+                group_id=1,
+                user_id=mock_append_user.id,
+                user=mock_user,
+                session=db_session_mock
+            )
+    
+    db_session_mock.rollback.assert_called_once()
+
+def test_delete_user_group_error(mocker):
+    mock_user = mocker.Mock(spec=db_models.User)
+    mock_delete_user = mocker.Mock(spec=db_models.User)
+    mock_delete_user.id = 2
+    db_session_mock = mocker.Mock()
+
+    mock_group = mocker.Mock()
+    mock_group.id = 1
+    mock_group.users = [mock_delete_user, mock_user]
+
+    mocker.patch('routers.group.is_admin_in_group')
+    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+    mocker.patch('routers.group.get_user_or_404', return_value=mock_delete_user)
+
+    db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        group.delete_user_group(
+                group_id=1,
+                user_id=mock_delete_user.id,
+                user=mock_user,
+                session=db_session_mock
+            )
+    
+    db_session_mock.rollback.assert_called_once()
+
+def test_update_user_group_error(mocker):
+    mock_user = mocker.Mock(spec=db_models.User)
+    mock_delete_user = mocker.Mock(spec=db_models.User)
+    mock_delete_user.id = 2
+    db_session_mock = mocker.Mock()
+
+    mock_group = mocker.Mock()
+    mock_group.id = 1
+    mock_group.users = [mock_delete_user, mock_user]
+
+    mocker.patch('routers.group.is_admin_in_group')
+    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+
+    db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        group.update_user_group(
+                group_id=1,
+                user_id=mock_delete_user.id,
+                update_role=schemas.UpdateRoleUser(role=db_models.Group_Role.ADMIN),
+                user=mock_user,
+                session=db_session_mock
+            )
+    
+    db_session_mock.rollback.assert_called_once()
+
+def test_get_user_in_group_error(mocker):
+    mock_user = mocker.Mock(spec=db_models.User)
+    mock_delete_user = mocker.Mock(spec=db_models.User)
+    mock_delete_user.id = 2
+    db_session_mock = mocker.Mock()
+
+    mock_group = mocker.Mock()
+    mock_group.id = 1
+    mock_group.users = [mock_delete_user, mock_user]
+
+    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+
+    db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        group.get_user_in_group(
+                group_id=1,
+                session=db_session_mock
+            )
+    
+    db_session_mock.rollback.assert_called_once()
+
+def test_is_admin_in_group_error(mocker):
+    mock_user = mocker.Mock(spec=db_models.User)
+    mock_user.user_id = 1
+    db_session_mock = mocker.Mock()
+
+    mock_group = mocker.Mock()
+    mock_group.id = 1
+
+    db_session_mock.exec.return_value.first.return_value = None
+
+    with pytest.raises(exceptions.UserNotInGroupError) as exc_info:
+        group.update_group(
+                group_id=1,
+                updated_group=schemas.UpdateGroup(name='error'),
+                user=mock_user,
+                session=db_session_mock
+                )
+        
+    assert exc_info.value.user_id == mock_user.user_id
+    assert exc_info.value.group_id == 1

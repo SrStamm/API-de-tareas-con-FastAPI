@@ -51,9 +51,9 @@ def get_groups(session:Session = Depends(get_session)) -> List[schemas.ReadGroup
         raise exceptions.DatabaseError(error=e, func='get_groups')
 
 @router.post('', description='El usuario autenticado crea un nuevo grupo, necesita un "name", y opcional "description". El usuario se agrega de forma automatica como Administrador')
-def create_group(new_group: schemas.CreateGroup,
-                 user: db_models.User = Depends(auth_user),
-                 session: Session = Depends(get_session)):
+def create_group(   new_group: schemas.CreateGroup,
+                    user: db_models.User = Depends(auth_user),
+                    session: Session = Depends(get_session)):
     try:
         # Crear el grupo con el usuario creador
         group = db_models.Group(**new_group.model_dump())
@@ -83,7 +83,7 @@ def update_group(group_id: int,
                 session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_group(user, group_id, session)
+        is_admin_in_group(user=user, group_id=group_id, session=session)
 
         founded_group = get_group_or_404(group_id, session)
         
@@ -222,7 +222,8 @@ def update_user_group(group_id: int,
         raise exceptions.DatabaseError(error=e, func='update_user_group')
 
 @router.get('/{group_id}/users', description='Obtiene todos los usuarios de un grupo')
-def get_user_in_group(group_id: int,
+def get_user_in_group(
+                    group_id: int,
                     session:Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
 
     try:

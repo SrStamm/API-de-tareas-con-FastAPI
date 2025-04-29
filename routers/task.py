@@ -138,6 +138,7 @@ def create_task(new_task: schemas.CreateTask,
 def update_task(task_id: int,
                 project_id: int,
                 update_task: schemas.UpdateTask,
+                user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)): 
 
     try:
@@ -146,6 +147,8 @@ def update_task(task_id: int,
         
         # Busca la task seleccionada
         task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
+        
+        is_admin_in_project(user=user, project_id=project_id, session=session)
         
         if task.description != update_task.description and update_task.description:
             task.description = update_task.description
@@ -187,7 +190,6 @@ def update_task(task_id: int,
                     task_id=task.task_id,
                     user_id=user_id)
                 session.add(task_user)
-        
 
         # Verifica si hay usuarios para eliminar de la tarea 
         if update_task.exclude_user_ids:
@@ -206,7 +208,7 @@ def update_task(task_id: int,
         session.commit()
         
         return {'detail':'Se ha actualizado la tarea'}
-    
+
     except SQLAlchemyError as e:
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_task')

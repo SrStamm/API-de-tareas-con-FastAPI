@@ -14,7 +14,7 @@ router = APIRouter(tags=['Login'])
 ALGORITHM = os.environ.get('ALGORITHM')
 
 # Duracion de los tokens
-ACCESS_TOKEN_DURATION = 60
+ACCESS_TOKEN_DURATION = 600000
 
 # Definimos una llave secreta
 SECRET = os.environ.get('SECRET_KEY')
@@ -54,18 +54,21 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
     
 async def auth_user_ws(token: str, session: Session):
     try:
-        payload = jwt.decode(token, SECRET, algorithms=ALGORITHM)
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Token inválido")
-
-        user = session.get(db_models.User, user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
-
+        print(f"Validando token: {token}")
+        payload = jwt.decode(token, SECRET, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            print("Token inválido: sin 'sub'")
+            return None
+        user = session.get(db_models.User, int(user_id))
+        if user is None:
+            print(f"Usuario no encontrado: user_id={user_id}")
+            return None
+        print(f"Token válido para user_id={user_id}")
         return user
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token inválido")
+    except JWTError as e:
+        print(f"Error al decodificar JWT: {str(e)}")
+        return None
 
 @router.post("/login", description='Endpoint para logearse. Se necesita username y password.')
 async def login(form: OAuth2PasswordRequestForm = Depends(),
