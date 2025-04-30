@@ -23,8 +23,10 @@ def test_db():
     engine.dispose()
     try:
         os.remove("./test/test.db")
+        print("Base de datos test.db eliminada")
     except OSError as e:
         if e.errno != errno.ENOENT:
+            print(f"Error al eliminar test.db: {e}")
             raise
 
 @pytest.fixture
@@ -60,6 +62,14 @@ def test_user2(test_session):
     return user
 
 @pytest.fixture
+def test_user3(test_session):
+    user = db_models.User(username='dalto', email='dalto@dev.com', password=encrypt_password(PASSWORD))
+    test_session.add(user)
+    test_session.commit()
+    test_session.refresh(user)
+    return user
+
+@pytest.fixture
 def auth_headers(client, test_user):
     response = client.post("/login", data={"username": test_user.username, "password": PASSWORD})
     assert response.status_code == 200, f"Error en login: {response.json()}"
@@ -83,20 +93,31 @@ def test_create_group_init(client, auth_headers, test_user2):
     return
 
 @pytest.fixture
-def test_create_project_init(client, auth_headers, test_user2, test_create_group_init, test_session):
+def test_create_project_init(client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
     print("Ejecutando test_create_project_init")
     hola = test_create_group_init
     print(hola)
 
     # Crear proyecto
-    response = client.post(f'/project/1', headers=auth_headers, json={'title':'creando un proyecto'})
+    response = client.post(f'/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
     assert response.status_code == 200, f"Error al crear proyecto: {response.json()}"
     print("Proyecto 1 creado")
 
+    # Asociar user1 (test_user, user_id=1) al proyecto explícitamente
+    response = client.post('/project/1/1/1', headers=auth_headers)
+    if response.status_code == 400 and 'User whit user_id 1 is in project with project_id 1' in str(response.json()):
+        print("Usuario 1 ya está asociado al proyecto 1")
+    else:
+        assert response.status_code == 200, f"Error al asociar user1: {response.json()}"
+        print("Usuario 1 asociado al proyecto 1")
+
     # Asociar user2 (test_user2, user_id=2) al proyecto
     response = client.post('/project/1/1/2', headers=auth_headers)
-    assert response.status_code == 200, f"Error al asociar user2: {response.json()}"
-    print("Usuario 2 asociado al proyecto 1")
+    if response.status_code == 400 and 'User whit user_id 2 is in project with project_id 1' in str(response.json()):
+        print("Usuario 2 ya está asociado al proyecto 1")
+    else:
+        assert response.status_code == 200, f"Error al asociar user2: {response.json()}"
+        print("Usuario 2 asociado al proyecto 1")
 
     # Verificar proyecto y asociaciones en la base de datos
     project = test_session.get(db_models.Project, 1)

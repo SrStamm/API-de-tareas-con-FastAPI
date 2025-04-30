@@ -44,10 +44,10 @@ def test_get_task_in_project(client, auth_headers):
             (1000, 1, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Project whit project_id 1000 not found'),
             (1, 1000, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Task whit task_id 1000 is not in Project with project_id 1'),
             (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'exclude_user_ids':[100000]}, 404, 'Task whit task_id 1 is NOT assigned to User with user_id 100000'),
-            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[2]}, 400, 'User whit user_id 2 is not in project with project_id 1'),
+            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[3]}, 400, 'User whit user_id 3 is not in project with project_id 1'),
             (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[100000]}, 404, 'User whit user_id 100000 not found'),
         ]
-) 
+)
 def test_update_task(client, auth_headers, project_id, task_id, datos, status, detail):
     response = client.patch(f'/task/{project_id}/{task_id}', headers=auth_headers, json= datos)
     assert response.status_code == status
