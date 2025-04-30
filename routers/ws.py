@@ -2,7 +2,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPExce
 from typing import List, Dict
 from datetime import datetime
 from models import schemas, db_models, exceptions
-from db.database import get_session, Session, select
+from db.database import get_session, Session, select, SQLAlchemyError
 from .auth import auth_user_ws, auth_user
 
 router = APIRouter()
@@ -151,15 +151,18 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
 def get_chat(project_id: int,
             user: db_models.User = Depends(auth_user),
             session: Session = Depends(get_session)):
-    
-    stmt = (select(db_models.ProjectChat).where(
-        db_models.ProjectChat.project_id == project_id,
-        db_models.ProjectChat.user_id == user.user_id
-    ))
+    try:
+        stmt = (select(db_models.ProjectChat).where(
+            db_models.ProjectChat.project_id == project_id,
+            db_models.ProjectChat.user_id == user.user_id
+        ))
 
-    messages_chat = session.exec(stmt).all()
+        messages_chat = session.exec(stmt).all()
 
-    if not messages_chat:
-        raise exceptions.ChatNotFoundError(project_id)
+        if not messages_chat:
+            raise exceptions.ChatNotFoundError(project_id)
+        
+        return messages_chat
     
-    return messages_chat
+    except SQLAlchemyError as e:
+        raise exceptions.DatabaseError(error=e, func='get_chat')

@@ -8,6 +8,13 @@ class NotAuthorized(HTTPException):
             detail=f'User whit user_id {user_id} is Not Authorized'
         )
 
+class InvalidToken(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f'Token Not Authorized'
+        )
+
 class GroupNotFoundError(HTTPException):
     def __init__(self, group_id):
         self.group_id = group_id

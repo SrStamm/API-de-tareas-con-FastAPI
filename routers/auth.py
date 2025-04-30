@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from db.database import get_session, Session, select
 from passlib.context import CryptContext
 from sqlalchemy.exc import SQLAlchemyError
-from models import db_models, schemas
+from models import db_models, schemas, exceptions
 import os
 
 router = APIRouter(tags=['Login'])
@@ -39,13 +39,13 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
         user_id = payload.get("sub")
         
         if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            raise exceptions.InvalidToken()
     
         
         user = session.get(db_models.User, user_id)
 
         if not user:
-            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+            raise exceptions.UserNotFoundError(user_id)
             
         return user
     

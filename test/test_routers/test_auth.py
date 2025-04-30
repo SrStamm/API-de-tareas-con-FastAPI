@@ -1,4 +1,7 @@
 from conftest import client, test_user
+import pytest
+from models import exceptions, db_models
+from routers import auth
 
 def test_failed_login_not_found(client):
     response = client.post("/login", data= {"username":'a', "password":'0000'})
