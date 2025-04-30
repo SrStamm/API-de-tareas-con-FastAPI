@@ -85,21 +85,22 @@ def verify_user_in_project(user_id: int, project_id: int, session: Session = Dep
 manager = ConnectionManager()
 
 @router.websocket("/ws/{project_id}")
-async def websocket_endpoint(websocket: WebSocket, project_id: int):
-    session = get_session()  # Asegúrate de que get_session sea callable directamente
+async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Session = Depends(get_session)):
     user = await get_current_user_ws(session, websocket)
     print(f"Iniciando conexión WebSocket para project_id={project_id}, user_id={user.user_id}")
     try:
-        project_user = verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
-        print(f"Usuario {user.user_id} verificado en proyecto {project_id}")
+        verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
+
     except exceptions.ProjectNotFoundError as e:
         print(f"Error: Proyecto {project_id} no encontrado - {str(e)}")
         await websocket.close(code=1008, reason=f"Proyecto {project_id} no encontrado")
         return
+    
     except exceptions.NotAuthorized as e:
         print(f"Error: Usuario {user.user_id} no autorizado para proyecto {project_id} - {str(e)}")
         await websocket.close(code=1008, reason=f"Usuario no autorizado para proyecto {project_id}")
         return
+    
     except Exception as e:
         print(f"Error inesperado en WebSocket: {str(e)}")
         await websocket.close(code=1008, reason=f"Error interno: {str(e)}")
