@@ -15,6 +15,35 @@ class InvalidToken(HTTPException):
             detail=f'Token Not Authorized'
         )
 
+class UserNotFoundInLogin(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'User not found'
+        )
+
+class LoginError(HTTPException):
+    def __init__(self, user_id):
+        self.user_id = user_id
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Password incorrect'
+        )
+
+class UserWithUsernameExist(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
+            detail=f'Ya existe un usuario con este Username'
+        )
+
+class UserWithEmailExist(HTTPException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_406_NOT_ACCEPTABLE,
+            detail=f'Ya existe un usuario con este Email'
+        )
+
 class GroupNotFoundError(HTTPException):
     def __init__(self, group_id):
         self.group_id = group_id
@@ -105,7 +134,7 @@ class TaskIsAssignedError(HTTPException):
         self.task_id = task_id
         self.user_id = user_id
         super().__init__(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'Task whit task_id {task_id} is assigned to User with user_id {user_id}'
         )
 
@@ -114,7 +143,7 @@ class TaskIsNotAssignedError(HTTPException):
         self.task_id = task_id
         self.user_id = user_id
         super().__init__(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'Task whit task_id {task_id} is NOT assigned to User with user_id {user_id}'
         )
 

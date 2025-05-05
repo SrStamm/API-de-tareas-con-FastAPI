@@ -43,7 +43,7 @@ def test_get_task_in_project(client, auth_headers):
             (1, 1, {'description':'probando el testing... otra vez', 'date_exp':'2025-12-12', 'state':db_models.State.EN_PROCESO, 'exclude_user_ids': [1]}, 200, 'Se ha actualizado la tarea'),
             (1000, 1, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Project whit project_id 1000 not found'),
             (1, 1000, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Task whit task_id 1000 is not in Project with project_id 1'),
-            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'exclude_user_ids':[100000]}, 404, 'Task whit task_id 1 is NOT assigned to User with user_id 100000'),
+            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'exclude_user_ids':[100000]}, 400, 'Task whit task_id 1 is NOT assigned to User with user_id 100000'),
             (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[3]}, 400, 'User whit user_id 3 is not in project with project_id 1'),
             (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[100000]}, 404, 'User whit user_id 100000 not found'),
         ]
@@ -116,7 +116,7 @@ def test_create_task_error(mocker):
 
     session_mock.add.side_effect = SQLAlchemyError("Error en base de datos")
 
-    mocker.patch('routers.task.found_project_or_404')
+    mocker.patch('routers.task.found_project_for_task_or_404')
     mocker.patch('routers.task.is_admin_in_project')
 
     with pytest.raises(exceptions.DatabaseError):
@@ -134,7 +134,7 @@ def test_update_task_error(mocker):
 
     session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
-    mocker.patch('routers.task.found_project_or_404')
+    mocker.patch('routers.task.found_project_for_task_or_404')
     mocker.patch('routers.task.found_task_or_404')
     mocker.patch('routers.task.is_admin_in_project')
 

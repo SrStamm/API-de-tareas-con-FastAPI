@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, WebSocketException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, WebSocketException
 from typing import List, Dict
 from datetime import datetime
 from models import schemas, db_models, exceptions

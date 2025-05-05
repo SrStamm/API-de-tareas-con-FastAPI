@@ -1,5 +1,5 @@
 import pytest
-from conftest import auth_headers, client, auth_headers2, test_create_group_init, test_user2
+from conftest import auth_headers, client, auth_headers2, test_user2
 from models import db_models, exceptions, schemas
 from sqlalchemy.exc import SQLAlchemyError
 from routers import group
@@ -66,7 +66,7 @@ def test_failed_update_group(client, auth_headers2):
         'user_id, role, status, respuesta', [
             (2, db_models.Group_Role.ADMIN, 200, 'Se ha cambiado los permisos del usuario en el grupo'),
             (2, db_models.Group_Role.MEMBER, 200, 'Se ha cambiado los permisos del usuario en el grupo'),
-            (3, db_models.Group_Role.ADMIN, 404, 'No se encontro el usuario')
+            (3, db_models.Group_Role.ADMIN, 400, 'User whit user_id 3 is not in Group with group_id 1')
         ]
 )
 def test_update_user_group(client, auth_headers, user_id, role, status, respuesta):

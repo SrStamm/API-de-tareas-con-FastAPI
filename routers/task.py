@@ -1,55 +1,15 @@
-from fastapi import APIRouter, status, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from models import db_models, schemas, exceptions
 from .auth import auth_user
-from .project import is_admin_in_project
-from db.database import get_session, Session, select, SQLAlchemyError, or_, joinedload
+from db.database import get_session, Session, select, SQLAlchemyError, joinedload
 from typing import List
+from utils import is_admin_in_project, found_project_for_task_or_404, found_task_or_404, get_user_or_404, found_user_in_project_or_404
 
 router = APIRouter(prefix='/task', tags=['Task'])
 
-def found_project_or_404(project_id:int, session: Session):
-    stmt = (select(db_models.Project)
-            .where(db_models.Project.project_id == project_id))
-    
-    founded_project = session.exec(stmt).first()
-    
-    if not founded_project:
-        raise exceptions.ProjectNotFoundError(project_id)
-    
-    return founded_project
-
-def found_task_or_404(project_id:int, task_id: int, session: Session) -> db_models.Task:
-    stmt = (select(db_models.Task)
-            .where(db_models.Task.project_id == project_id, db_models.Task.task_id == task_id))
-    
-    task_found = session.exec(stmt).first()
-    
-    if not task_found:
-        raise exceptions.TaskNotFound(task_id=task_id, project_id=project_id)
-    
-    return task_found
-
-def found_user_or_404(user_id:int, session: Session) -> db_models.User:
-    user_found = session.get(db_models.User, user_id)
-    
-    if not user_found:
-        raise exceptions.UserNotFoundError(user_id=user_id)
-    
-    return user_found
-
-def found_user_in_project_or_404(user_id:int, project_id:int, session: Session) -> db_models.User:
-    stmt = (select(db_models.project_user).where(
-                    db_models.project_user.user_id == user_id,
-                    db_models.project_user.project_id == project_id))
-    
-    user = session.exec(stmt).first()
-    
-    if not user:
-        raise exceptions.UserNotInProjectError(user_id=user_id, project_id=project_id)
-    
-    return user
-
-@router.get('', description='Obtiene todas las tareas a las que esta asignada el usuario')
+@router.get('', description='Obtiene todas las tareas a las que esta asignada el usuario',
+            responses={ 200: {'description':'Tareas obtenidas', 'model':schemas.ReadTask},
+                        500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}})
 def get_task(user:db_models.User = Depends(auth_user), session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
     try:
         statement = select(db_models.Task).where(db_models.Task.task_id == db_models.tasks_user.task_id, db_models.tasks_user.user_id == user.user_id)
@@ -59,7 +19,9 @@ def get_task(user:db_models.User = Depends(auth_user), session:Session = Depends
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_task')
 
-@router.get('/{task_id}/users', description='Obtiene los usuarios asignados a una tarea')
+@router.get('/{task_id}/users', description='Obtiene los usuarios asignados a una tarea',
+            responses={ 200: {'description':'Usarios asignados a tareas obtenidos', 'model':schemas.ReadUser},
+                        500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}})
 def get_users_for_task(task_id: int,
                         session: Session = Depends(get_session)) -> List[schemas.ReadUser]:
     try:
@@ -74,7 +36,9 @@ def get_users_for_task(task_id: int,
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_users_for_task')
 
-@router.get('/{project_id}', description='Obtiene todas las tareas asignadas de un proyecto')
+@router.get('/{project_id}', description='Obtiene todas las tareas asignadas de un proyecto',
+            responses={ 200: {'description':'Tareas del projecto obtenidas', 'model':schemas.ReadTaskInProject},
+                        500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}})
 def get_task_in_project(project_id: int,
                         user: db_models.User = Depends(auth_user),
                         session: Session = Depends(get_session)) -> List[schemas.ReadTaskInProject]:
@@ -92,14 +56,17 @@ def get_task_in_project(project_id: int,
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_task_in_project')
     
-@router.post('/{project_id}', description='Crea una nueva tarea en un proyecto')
+@router.post('/{project_id}', description='Crea una nueva tarea en un proyecto',
+            responses={ 200: {'description':'Tarea creado', 'model':schemas.TaskCreateSucces},
+                        404: {'description':'Dato no encontrado', 'model':schemas.DataNotFound},
+                        500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}})
 def create_task(new_task: schemas.CreateTask,
                 project_id: int,
                 user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)):
     try:
         # Verifica que el projecto exista
-        project = found_project_or_404(project_id=project_id, session=session)
+        project = found_project_for_task_or_404(project_id=project_id, session=session)
                 
         # Verifica que el usuario este autorizado en el proyecto
         is_admin_in_project(user=user, project_id=project_id, session=session)
@@ -107,7 +74,7 @@ def create_task(new_task: schemas.CreateTask,
         # Busca el usuario al que va a asignarse la tarea, y si existe en el proyecto
         if new_task.user_ids:
             for user_id in new_task.user_ids:
-                found_user_or_404(user_id=user_id, session=session)
+                get_user_or_404(user_id=user_id, session=session)
                 
                 found_user_in_project_or_404(user_id=user_id, project_id=project_id, session=session)
 
@@ -134,7 +101,11 @@ def create_task(new_task: schemas.CreateTask,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='create_task')
 
-@router.patch('/{project_id}/{task_id}', description='Actualiza una tarea especifica de un proyecto')
+@router.patch('/{project_id}/{task_id}', description='Actualiza una tarea especifica de un proyecto',
+            responses={ 200: {'description':'Tarea actualizada', 'model':schemas.TaskUpdateSucces},
+                        400: {'description':'Error en request', 'model':schemas.ErrorInRequest},
+                        404: {'description':'Dato no encontrado', 'model':schemas.DataNotFound},
+                        500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}})
 def update_task(task_id: int,
                 project_id: int,
                 update_task: schemas.UpdateTask,
@@ -143,7 +114,7 @@ def update_task(task_id: int,
 
     try:
         # Verifica que exista el proyecto
-        project = found_project_or_404(project_id=project_id, session=session)
+        project = found_project_for_task_or_404(project_id=project_id, session=session)
         
         # Busca la task seleccionada
         task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
@@ -213,7 +184,10 @@ def update_task(task_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_task')
 
-@router.delete('/{project_id}/{task_id}', description='Elimina una tarea especifica de un proyecto')
+@router.delete('/{project_id}/{task_id}', description='Elimina una tarea especifica de un proyecto',
+            responses={ 200: {'description':'Tarea eliminada', 'model':schemas.TaskDeleteSucces},
+                        400: {'description':'Error en request', 'model':schemas.ErrorInRequest},
+                        500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}})
 def delete_task(task_id: int,
                 project_id: int,
                 user: db_models.User = Depends(auth_user),

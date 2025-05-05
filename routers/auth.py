@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
@@ -49,8 +49,8 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
             
         return user
     
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError: 
+        raise exceptions.InvalidToken()
     
 async def auth_user_ws(token: str, session: Session):
     try:
@@ -81,11 +81,10 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
         print(user_found)
 
         if not user_found:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                                detail="Usuario no encontrado o no existe")
+            raise exceptions.UserNotFoundInLogin()
         
         if not crypt.verify(form.password, user_found.password):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Contraseña incorrecta")
+            raise exceptions.LoginError(user_id=user_found.user_id)
 
         access_expires = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_DURATION)
 
@@ -100,4 +99,4 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
     
     except SQLAlchemyError as e:
         session.rollback()
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Error al ingresar: {e}")
+        raise exceptions.DatabaseError(error=e, func='login')

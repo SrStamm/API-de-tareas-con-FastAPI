@@ -1,13 +1,10 @@
 import pytest
-from conftest import auth_headers, client, auth_headers2, test_create_group_init, test_user2
+from conftest import auth_headers, client, auth_headers2, test_create_group_init
 from models import db_models, schemas, exceptions
 from routers import project
 from sqlalchemy.exc import SQLAlchemyError
 
-def test_get_projects(client, auth_headers, auth_headers2):
-    hola = auth_headers
-    hola = auth_headers2
-
+def test_get_projects(client, test_create_group_init):
     response = client.get('/project/1')
     assert response.status_code == 200
     projects = response.json()
@@ -74,14 +71,6 @@ def test_remove_user_from_project(client, auth_headers, user_id, status, detail,
     response = client.delete(f'/project/1/1/{user_id}', headers=auth_headers)
     assert response.status_code == status
     assert response.json() == {'detail': detail}
-
-def test_get_tasks_in_project(client, auth_headers):
-    response = client.get('/project/1/2/tasks', headers=auth_headers)
-    assert response.status_code == 200
-    tasks = response.json()
-    assert isinstance(tasks, list)
-    for task in tasks:
-        assert all(key in task for key in ['task_id', 'description','state', 'user_id', 'username'])
 
 def test_failed_delete_project(client, auth_headers2):
     response = client.delete(f'/project/1/1', headers=auth_headers2)
@@ -340,42 +329,6 @@ def test_get_user_in_project_not_results_error(mocker):
 
     with pytest.raises(exceptions.UsersNotFoundInProjectError):
         project.get_user_in_project(
-                group_id=1,
-                project_id = 1,
-                session=db_session_mock
-            )
-
-def test_get_tasks_in_project_error(mocker):
-    db_session_mock = mocker.Mock()
-
-    mock_group = mocker.Mock()
-    mock_group.id = 1
-    
-    mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
-    mock_project.id = 1
-
-    db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
-
-    with pytest.raises(exceptions.DatabaseError):
-        project.get_tasks_in_project(
-                group_id=1,
-                project_id = 1,
-                session=db_session_mock
-            )
-        
-def test_get_tasks_in_project_not_found_project_error(mocker):
-    db_session_mock = mocker.Mock()
-
-    mock_group = mocker.Mock()
-    mock_group.id = 1
-    
-    mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
-    mock_project.id = 1
-
-    db_session_mock.exec.return_value.all.return_value = None
-
-    with pytest.raises(exceptions.ProjectNotFoundError):
-        project.get_tasks_in_project(
                 group_id=1,
                 project_id = 1,
                 session=db_session_mock

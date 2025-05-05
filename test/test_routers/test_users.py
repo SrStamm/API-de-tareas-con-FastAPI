@@ -39,7 +39,7 @@ def auth_headers2(client):
 def test_update_user(client, auth_headers2):
     response = client.patch('/user/me', headers=auth_headers2, json={'username':'SrStamm', 'email':'srstamm@gmail.com', 'password':'cambiado'})
     assert response.status_code == 200
-    assert response.json() == {'detail':'Se ha actualizado el usuario'}
+    assert response.json() == {'detail':'Se ha actualizado el usuario con exito'}
 
 def test_delete_user(client, auth_headers):
     response = client.delete('/user/me', headers=auth_headers)

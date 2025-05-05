@@ -1,5 +1,5 @@
 import pytest, json
-from conftest import auth_headers, client, test_create_project_init, test_user, select, db_models
+from conftest import auth_headers, client, test_create_project_init, select, db_models
 from sqlalchemy.exc import SQLAlchemyError
 from routers import ws
 from models import exceptions
