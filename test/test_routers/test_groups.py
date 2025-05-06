@@ -59,7 +59,7 @@ def test_update_group(client, auth_headers):
 
 def test_failed_update_group(client, auth_headers2):
     response = client.patch('/group/1', headers=auth_headers2, json={'description':'probando otra vez'})
-    assert response.status_code == 401
+    assert response.status_code == 401 
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
 @pytest.mark.parametrize(

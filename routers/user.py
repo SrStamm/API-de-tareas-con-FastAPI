@@ -57,7 +57,7 @@ def create_user(new_user: schemas.CreateUser,
                         500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 def get_user_me(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
-        return user
+        return user 
     
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener el user {user.user_id} actual {e}')

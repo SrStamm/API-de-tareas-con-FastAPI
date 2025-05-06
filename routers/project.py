@@ -24,7 +24,7 @@ def get_projects_iam(
         
         found_projects = session.exec(statement).all()
         return found_projects
-    
+
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener los proyectos a los que pertenece el user {user.user_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_projects_iam')

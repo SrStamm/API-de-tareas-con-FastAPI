@@ -12,6 +12,14 @@ def test_get_projects(client, test_create_group_init):
     for project in projects:
         assert all(key in project for key in ['project_id', 'group_id', 'tittle', 'description', 'users'])
 
+def test_get_projects_iam(client, auth_headers):
+    response = client.get('/project/1', headers=auth_headers)
+    assert response.status_code == 200
+    projects = response.json()
+    assert isinstance(projects, list)
+    for project in projects:
+        assert all(key in project for key in ['project_id', 'group_id', 'tittle'])
+
 @pytest.mark.parametrize(
         'group_id, status, detail', [
             (1, 200, 'Se ha creado un nuevo proyecto de forma exitosa'),
@@ -55,7 +63,7 @@ def test_get_user_in_project(client, auth_headers):
             (1, 100000, db_models.Project_Permission.ADMIN, 400, 'User with user_id 100000 is not in project with project_id 1')
             ]
 )
-def test_update_user_permission_in_project(client, auth_headers, project_id, user_id, permission, status, detail, test_create_group_init):
+def test_update_user_permission_in_project(client, auth_headers, project_id, user_id, permission, status, detail):
     response = client.patch(f'/project/1/{project_id}/{user_id}', headers=auth_headers, json={'permission': permission})
     assert response.status_code == status
     assert response.json() == {'detail': detail}
@@ -67,7 +75,7 @@ def test_update_user_permission_in_project(client, auth_headers, project_id, use
             (3, 400, 'User with user_id 3 is not in Group with group_id 1')
         ]
 )
-def test_remove_user_from_project(client, auth_headers, user_id, status, detail, test_create_group_init):
+def test_remove_user_from_project(client, auth_headers, user_id, status, detail):
     response = client.delete(f'/project/1/1/{user_id}', headers=auth_headers)
     assert response.status_code == status
     assert response.json() == {'detail': detail}
@@ -123,6 +131,20 @@ def test_get_projects_error(mocker):
                 group_id=1,
                 session=db_session_mock
             )
+
+def test_get_projects_iam_error(mocker):
+    db_session_mock = mocker.Mock()
+
+    user_mock = mocker.Mock()
+    user_mock.user_id = 1
+
+    db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        project.get_projects_iam(
+                            user=user_mock,
+                            session=db_session_mock
+                )
 
 def test_create_project_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)

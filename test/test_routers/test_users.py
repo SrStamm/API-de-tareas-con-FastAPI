@@ -66,7 +66,7 @@ def test_create_user_error(mocker):
 
     db_session_mock.rollback.assert_called_once()
 
-def test_get_user_me_error(mocker):
+def test_update_user_me_error(mocker):
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
 

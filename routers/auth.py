@@ -40,13 +40,24 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
             logger.error('Token invalido')
             raise exceptions.InvalidToken()
     
-        
         user = session.get(db_models.User, user_id)
 
         if not user:
             logger.error(f'No se encontro el user {user_id}')
             raise exceptions.UserNotFoundError(user_id)
-            
+
+        exp = payload.get("exp")
+
+        if exp is None:
+            logger.error('No tiene expiracion')
+            raise exceptions.InvalidToken()
+
+        exp_datetime = datetime.fromtimestamp(exp, tz=timezone.utc)
+
+        if exp_datetime < datetime.now(timezone.utc):
+            logger.error('Token expirado')
+            raise exceptions.InvalidToken() 
+
         return user
     
     except JWTError:

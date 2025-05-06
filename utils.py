@@ -1,11 +1,13 @@
 from db.database import Session, select
 from models import db_models, exceptions
+from core.logger import logger
 
 def get_group_or_404(group_id: int, session: Session):
     statement = select(db_models.Group).where(db_models.Group.group_id == group_id)
     group = session.exec(statement).first()
         
     if not group:
+        logger.error(f'Group {group_id} no encontrado')
         raise exceptions.GroupNotFoundError(group_id)
     
     return group
@@ -17,6 +19,7 @@ def found_project_or_404(group_id:int, project_id:int, session: Session):
     founded_project = session.exec(stmt).first()
     
     if not founded_project:
+        logger.error(f'Project {project_id} no encontrado')
         raise exceptions.ProjectNotFoundError(project_id)
     
     return founded_project
@@ -28,6 +31,7 @@ def found_project_for_task_or_404(project_id:int, session: Session):
     founded_project = session.exec(stmt).first()
     
     if not founded_project:
+        logger.error(f'Project {project_id} no encontrado')
         raise exceptions.ProjectNotFoundError(project_id)
     
     return founded_project
@@ -38,6 +42,7 @@ def get_user_or_404(user_id: int, session: Session):
     user = session.exec(statement).first()
 
     if not user:
+        logger.error(f'User {user_id} no encontrado')
         raise exceptions.UserNotFoundError(user_id)
 
     return user
@@ -50,6 +55,7 @@ def found_user_in_project_or_404(user_id:int, project_id:int, session: Session) 
     user = session.exec(stmt).first()
     
     if not user:
+        logger.error(f'User {user_id} no encontrado en project {project_id}')
         raise exceptions.UserNotInProjectError(user_id=user_id, project_id=project_id)
     
     return user
@@ -61,6 +67,7 @@ def found_task_or_404(project_id:int, task_id: int, session: Session) -> db_mode
     task_found = session.exec(stmt).first()
     
     if not task_found:
+        logger.error(f'Task {task_id} no encontrado en Project {project_id}')
         raise exceptions.TaskNotFound(task_id=task_id, project_id=project_id)
     
     return task_found
@@ -72,9 +79,11 @@ def is_admin_in_group(user: db_models.User, group_id: int, session: Session):
     found_user = session.exec(stmt).first()
 
     if not found_user:
+        logger.error(f'User {user.user_id} no encontrado en Group {group_id}')
         raise exceptions.UserNotInGroupError(user_id=user.user_id, group_id=group_id)
 
     if found_user.role != db_models.Group_Role.ADMIN:
+        logger.error(f'User {user.user_id} no esta autorizado en Group {group_id}')
         raise exceptions.NotAuthorized(found_user.user_id)
 
 def is_admin_in_project(user: db_models.User, project_id, session: Session):
@@ -85,4 +94,5 @@ def is_admin_in_project(user: db_models.User, project_id, session: Session):
     resultado = session.exec(stmt).first()
 
     if not resultado or resultado.permission != db_models.Project_Permission.ADMIN:
+        logger.error(f'User {user.user_id} no esta autorizado en Project {project_id}')
         raise exceptions.NotAuthorized(user.user_id)
