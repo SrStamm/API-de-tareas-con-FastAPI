@@ -5,7 +5,7 @@ class NotAuthorized(HTTPException):
         self.user_id = user_id
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f'User whit user_id {user_id} is Not Authorized'
+            detail=f'User with user_id {user_id} is Not Authorized'
         )
 
 class InvalidToken(HTTPException):
@@ -49,7 +49,7 @@ class GroupNotFoundError(HTTPException):
         self.group_id = group_id
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Group whit group_id {group_id} not found'
+            detail=f'Group with group_id {group_id} not found'
         )
 
 class ProjectNotFoundError(HTTPException):
@@ -57,7 +57,7 @@ class ProjectNotFoundError(HTTPException):
         self.project_id = project_id
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Project whit project_id {project_id} not found'
+            detail=f'Project with project_id {project_id} not found'
         )
 
 class ChatNotFoundError(HTTPException):
@@ -65,7 +65,7 @@ class ChatNotFoundError(HTTPException):
         self.project_id = project_id
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Chat whit project_id {project_id} not found'
+            detail=f'Chat with project_id {project_id} not found'
         )
 
 class UserNotFoundError(HTTPException):
@@ -73,7 +73,7 @@ class UserNotFoundError(HTTPException):
         self.user_id = user_id
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'User whit user_id {user_id} not found'
+            detail=f'User with user_id {user_id} not found'
         )
 
 class UserInProjectError(HTTPException):
@@ -82,7 +82,7 @@ class UserInProjectError(HTTPException):
         self.project_id = project_id
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'User whit user_id {user_id} is in project with project_id {project_id}'
+            detail=f'User with user_id {user_id} is in project with project_id {project_id}'
         )
 
 class UserNotInProjectError(HTTPException):
@@ -91,7 +91,7 @@ class UserNotInProjectError(HTTPException):
         self.group_id = project_id
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'User whit user_id {user_id} is not in project with project_id {project_id}'
+            detail=f'User with user_id {user_id} is not in project with project_id {project_id}'
         )
 
 class UserInGroupError(HTTPException):
@@ -100,7 +100,7 @@ class UserInGroupError(HTTPException):
         self.group_id = group_id
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'User whit user_id {user_id} is in Group with group_id {group_id}'
+            detail=f'User with user_id {user_id} is in Group with group_id {group_id}'
         )
 
 class UserNotInGroupError(HTTPException):
@@ -109,7 +109,7 @@ class UserNotInGroupError(HTTPException):
         self.group_id = group_id
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'User whit user_id {user_id} is not in Group with group_id {group_id}'
+            detail=f'User with user_id {user_id} is not in Group with group_id {group_id}'
         )
 
 class UsersNotFoundInProjectError(HTTPException):
@@ -126,7 +126,7 @@ class TaskNotFound(HTTPException):
         self.project_id = project_id
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f'Task whit task_id {task_id} is not in Project with project_id {project_id}'
+            detail=f'Task with task_id {task_id} is not in Project with project_id {project_id}'
         )
 
 class TaskIsAssignedError(HTTPException):
@@ -135,7 +135,7 @@ class TaskIsAssignedError(HTTPException):
         self.user_id = user_id
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Task whit task_id {task_id} is assigned to User with user_id {user_id}'
+            detail=f'Task with task_id {task_id} is assigned to User with user_id {user_id}'
         )
 
 class TaskIsNotAssignedError(HTTPException):
@@ -144,7 +144,7 @@ class TaskIsNotAssignedError(HTTPException):
         self.user_id = user_id
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Task whit task_id {task_id} is NOT assigned to User with user_id {user_id}'
+            detail=f'Task with task_id {task_id} is NOT assigned to User with user_id {user_id}'
         )
 
 class DatabaseError(HTTPException):

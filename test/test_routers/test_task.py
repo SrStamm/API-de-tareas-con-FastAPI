@@ -7,9 +7,9 @@ from sqlalchemy.exc import SQLAlchemyError
 @pytest.mark.parametrize(
         'project_id, datos, status, detail', [
             (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1]}, 200, 'Se ha creado una nueva tarea y asignado los usuarios con exito'),
-            (1000000, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1, 2]}, 404, 'Project whit project_id 1000000 not found'),
-            (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[3]}, 400, 'User whit user_id 3 is not in project with project_id 1'),
-            (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1000]}, 404, 'User whit user_id 1000 not found'),
+            (1000000, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1, 2]}, 404, 'Project with project_id 1000000 not found'),
+            (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[3]}, 400, 'User with user_id 3 is not in project with project_id 1'),
+            (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1000]}, 404, 'User with user_id 1000 not found'),
         ]
 )
 def test_create_task(client, auth_headers, test_create_project_init, project_id, datos, status, detail):
@@ -20,7 +20,7 @@ def test_create_task(client, auth_headers, test_create_project_init, project_id,
 def test_failed_create_task(client, auth_headers2):
     response = client.post('/task/1', headers=auth_headers2, json= {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1]})
     assert response.status_code == 401
-    assert response.json() == {'detail': 'User whit user_id 2 is Not Authorized'}
+    assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
 def test_get_task(client, auth_headers):
     response = client.get('/task', headers=auth_headers)
@@ -41,11 +41,11 @@ def test_get_task_in_project(client, auth_headers):
 @pytest.mark.parametrize(
         'project_id, task_id, datos, status, detail', [
             (1, 1, {'description':'probando el testing... otra vez', 'date_exp':'2025-12-12', 'state':db_models.State.EN_PROCESO, 'exclude_user_ids': [1]}, 200, 'Se ha actualizado la tarea'),
-            (1000, 1, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Project whit project_id 1000 not found'),
-            (1, 1000, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Task whit task_id 1000 is not in Project with project_id 1'),
-            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'exclude_user_ids':[100000]}, 400, 'Task whit task_id 1 is NOT assigned to User with user_id 100000'),
-            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[3]}, 400, 'User whit user_id 3 is not in project with project_id 1'),
-            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[100000]}, 404, 'User whit user_id 100000 not found'),
+            (1000, 1, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Project with project_id 1000 not found'),
+            (1, 1000, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Task with task_id 1000 is not in Project with project_id 1'),
+            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'exclude_user_ids':[100000]}, 400, 'Task with task_id 1 is NOT assigned to User with user_id 100000'),
+            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[3]}, 400, 'User with user_id 3 is not in project with project_id 1'),
+            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[100000]}, 404, 'User with user_id 100000 not found'),
         ]
 )
 def test_update_task(client, auth_headers, project_id, task_id, datos, status, detail):
@@ -56,7 +56,7 @@ def test_update_task(client, auth_headers, project_id, task_id, datos, status, d
 @pytest.mark.parametrize(
         'task_id, status, detail', [
             (1, 200, 'Se ha eliminado la tarea'),
-            (1, 404, 'Task whit task_id 1 is not in Project with project_id 1')
+            (1, 404, 'Task with task_id 1 is not in Project with project_id 1')
         ]
 )
 def test_delete_task(client, auth_headers, task_id, status, detail):
@@ -67,7 +67,7 @@ def test_delete_task(client, auth_headers, task_id, status, detail):
 def test_failed_delete_task(client, auth_headers2):
     response = client.delete(f'/task/1/2', headers=auth_headers2)
     assert response.status_code == 401
-    assert response.json() == {'detail': 'User whit user_id 2 is Not Authorized'}
+    assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
 def test_get_users_for_task(client, auth_headers):
     response = client.get('/task/1/users', headers=auth_headers)

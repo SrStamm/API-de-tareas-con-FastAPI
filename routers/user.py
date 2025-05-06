@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends
-from models import db_models, schemas, exceptions
+from models import db_models, schemas, exceptions, responses
 from db.database import get_session, Session, select, SQLAlchemyError, or_
 from typing import List
 from .auth import encrypt_password, auth_user
+from core.logger import logger
 
 router = APIRouter(prefix='/user', tags=['User'])
 
 @router.get('', description='Obtiene los usuarios',
             responses={ 200: {'description':'Usuarios encontrados','model':schemas.ReadUser},
-                        500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}})
+                        500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     try:
         statement = select(db_models.User)
@@ -16,12 +17,13 @@ def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
         return found_users
     
     except SQLAlchemyError as e:
+        logger.error(f'Error al obtener los usuarios {e}')
         raise exceptions.DatabaseError(error=e, func='get_users')
 
 @router.post('', description='Crea un nuevo usuario',
-                responses={ 200: {'description':'Usuario creado', 'model':schemas.UserCreateSucces},
-                            406: {'description':'Conflicto de datos', 'model':schemas.UserConflictError},
-                            500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}}) 
+                responses={ 200: {'description':'Usuario creado', 'model':responses.UserCreateSucces},
+                            406: {'description':'Conflicto de datos', 'model':responses.UserConflictError},
+                            500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}}) 
 def create_user(new_user: schemas.CreateUser,
                 session:Session = Depends(get_session)):
     try:
@@ -30,8 +32,10 @@ def create_user(new_user: schemas.CreateUser,
 
         if found_user:
             if found_user.username == new_user.username:
+                logger.error('Ya existe un user con el mismo username')
                 raise exceptions.UserWithUsernameExist()
             elif found_user.email == new_user.email:
+                logger.error('Ya existe un user con el mismo email')
                 raise exceptions.UserWithEmailExist()
 
         new_user = db_models.User(**new_user.model_dump())
@@ -44,22 +48,25 @@ def create_user(new_user: schemas.CreateUser,
         return {'detail':'Se ha creado un nuevo usuario con exito'}
 
     except SQLAlchemyError as e:
+        logger.error(f'Error al crear el usuario {e}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='create_user')
 
 @router.get('/me', description='Obtiene informacion del usuario actual',
             responses={ 200: {'description':'Obtenido usuario actual','model':schemas.ReadUser},
-                        500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}})
+                        500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 def get_user_me(user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
         return user
     
     except SQLAlchemyError as e:
+        logger.error(f'Error al obtener el user {user.user_id} actual {e}')
         raise exceptions.DatabaseError(error=e, func='get_users')
 
 @router.patch('/me', description='Actualiza el usuario actual',
-                responses={ 200: {'description':'Usuario actualizado', 'model': schemas.UserUpdateSucces},
-                            500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}})
+                response_model= responses.UserUpdateSucces,
+                responses={ 200: {'description':'Usuario actualizado', 'model': responses.UserUpdateSucces},
+                            500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 def update_user_me(updated_user: schemas.UpdateUser,
                 user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)): 
@@ -76,12 +83,14 @@ def update_user_me(updated_user: schemas.UpdateUser,
         return {'detail':'Se ha actualizado el usuario con exito'}
     
     except SQLAlchemyError as e:
+        logger.error(f'Error al actualizar el user {user.user_id} actual {e}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_user')
 
 @router.delete('/me', description='Elimina el usuario actual',
-                responses= {200: {'description':'Usuario actual eliminado', 'model':schemas.UserDeleteSucces},
-                            500: {'description':'error interno', 'model':schemas.DatabaseErrorResponse}})
+                response_model=responses.UserDeleteSucces,
+                responses= {200: {'description':'Usuario actual eliminado', 'model':responses.UserDeleteSucces},
+                            500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 def delete_user_me(user: db_models.User = Depends(auth_user),
                 session: Session = Depends(get_session)):
 
@@ -92,5 +101,6 @@ def delete_user_me(user: db_models.User = Depends(auth_user),
         return {'detail':'Se ha eliminado el usuario'}
     
     except SQLAlchemyError as e:
+        logger.error(f'Error al eliminar el user {user.user_id} actual {e}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_user')

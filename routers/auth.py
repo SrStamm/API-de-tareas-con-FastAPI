@@ -7,19 +7,17 @@ from passlib.context import CryptContext
 from sqlalchemy.exc import SQLAlchemyError
 from models import db_models, schemas, exceptions
 import os
+from core.logger import logger
 
 router = APIRouter(tags=['Login'])
-
-# Definimos el algoritmo
-ALGORITHM = os.environ.get('ALGORITHM')
 
 # Duracion de los tokens
 ACCESS_TOKEN_DURATION = 600000
 
-# Definimos una llave secreta
+ALGORITHM = os.environ.get('ALGORITHM')
+
 SECRET = os.environ.get('SECRET_KEY')
 
-# Contexto de encriptacion 
 crypt = CryptContext(schemes=["bcrypt"])
 
 oauth2 = OAuth2PasswordBearer(tokenUrl='token', scheme_name='Bearer')
@@ -39,17 +37,20 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
         user_id = payload.get("sub")
         
         if not user_id:
+            logger.error('Token invalido')
             raise exceptions.InvalidToken()
     
         
         user = session.get(db_models.User, user_id)
 
         if not user:
+            logger.error(f'No se encontro el user {user_id}')
             raise exceptions.UserNotFoundError(user_id)
             
         return user
     
-    except JWTError: 
+    except JWTError:
+        logger.error('Token invalido')
         raise exceptions.InvalidToken()
     
 async def auth_user_ws(token: str, session: Session):
@@ -78,12 +79,12 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
         statement = select(db_models.User).where(db_models.User.username == form.username)
         user_found = session.exec(statement).first()
 
-        print(user_found)
-
         if not user_found:
+            logger.error('NO se encontro el usuario')
             raise exceptions.UserNotFoundInLogin()
         
         if not crypt.verify(form.password, user_found.password):
+            logger.error('Contraseña incorrecta')
             raise exceptions.LoginError(user_id=user_found.user_id)
 
         access_expires = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_DURATION)
@@ -98,5 +99,6 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
         return {"access_token" : encoded_access_token, "token_type" : "bearer"}
     
     except SQLAlchemyError as e:
+        logger.error('Error al iniciar sesion {e}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='login')

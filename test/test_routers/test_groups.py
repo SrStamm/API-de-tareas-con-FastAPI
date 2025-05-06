@@ -34,8 +34,8 @@ def test_get_groups_in_user(client, auth_headers):
 @pytest.mark.parametrize(
         'group_id, user_id, status, respuesta', [
             (1, 2, 200,  'El usuario ha sido agregado al grupo'),
-            (1, 100000, 404, 'User whit user_id 100000 not found'),
-            (1, 2, 400, 'User whit user_id 2 is in Group with group_id 1'),
+            (1, 100000, 404, 'User with user_id 100000 not found'),
+            (1, 2, 400, 'User with user_id 2 is in Group with group_id 1'),
             (2, 2, 200, 'El usuario ha sido agregado al grupo')
         ]
 )
@@ -60,13 +60,13 @@ def test_update_group(client, auth_headers):
 def test_failed_update_group(client, auth_headers2):
     response = client.patch('/group/1', headers=auth_headers2, json={'description':'probando otra vez'})
     assert response.status_code == 401
-    assert response.json() == {'detail': 'User whit user_id 2 is Not Authorized'}
+    assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
 @pytest.mark.parametrize(
         'user_id, role, status, respuesta', [
             (2, db_models.Group_Role.ADMIN, 200, 'Se ha cambiado los permisos del usuario en el grupo'),
             (2, db_models.Group_Role.MEMBER, 200, 'Se ha cambiado los permisos del usuario en el grupo'),
-            (3, db_models.Group_Role.ADMIN, 400, 'User whit user_id 3 is not in Group with group_id 1')
+            (3, db_models.Group_Role.ADMIN, 400, 'User with user_id 3 is not in Group with group_id 1')
         ]
 )
 def test_update_user_group(client, auth_headers, user_id, role, status, respuesta):
@@ -77,7 +77,7 @@ def test_update_user_group(client, auth_headers, user_id, role, status, respuest
 @pytest.mark.parametrize(
         'group_id, user_id, status, respuesta', [
             (1, 2, 200, 'El usuario ha sido eliminado al grupo'),
-            (1, 2, 404, 'User whit user_id 2 not found')
+            (1, 2, 404, 'User with user_id 2 not found')
         ]
 )
 def test_delete_user_group(client, auth_headers, group_id, user_id, status, respuesta):
@@ -88,7 +88,7 @@ def test_delete_user_group(client, auth_headers, group_id, user_id, status, resp
 @pytest.mark.parametrize(
         'group_id, status, respuesta', [
             (1, 200, 'Se ha eliminado el grupo'),
-            (100000, 404, 'Group whit group_id 100000 not found')
+            (100000, 404, 'Group with group_id 100000 not found')
         ]
 )
 def test_delete_group(client, auth_headers, group_id, status, respuesta):

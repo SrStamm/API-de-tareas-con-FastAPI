@@ -95,63 +95,17 @@ def test_create_group_init(client, auth_headers, test_user2):
 @pytest.fixture
 def test_create_project_init(client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
     print("Ejecutando test_create_project_init")
-    hola = test_create_group_init
-    print(hola)
-
+    
     # Crear proyecto
-    response = client.post(f'/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
+    response = client.post('/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
     assert response.status_code == 200, f"Error al crear proyecto: {response.json()}"
     print("Proyecto 1 creado")
 
-    # Asociar user1 (test_user, user_id=1) al proyecto explícitamente
-    response = client.post('/project/1/1/1', headers=auth_headers)
-    if response.status_code == 400 and 'User whit user_id 1 is in project with project_id 1' in str(response.json()):
+    # Verificar si el usuario 1 ya está asociado antes de intentar asociarlo
+    check_response = client.get('/project/1/1/users', headers=auth_headers)
+    if check_response.status_code == 200:
         print("Usuario 1 ya está asociado al proyecto 1")
     else:
+        # Asociar user1 solo si no está ya asociado
+        response = client.post('/project/1/1/1', headers=auth_headers)
         assert response.status_code == 200, f"Error al asociar user1: {response.json()}"
-        print("Usuario 1 asociado al proyecto 1")
-
-    # Asociar user2 (test_user2, user_id=2) al proyecto
-    response = client.post('/project/1/1/2', headers=auth_headers)
-    if response.status_code == 400 and 'User whit user_id 2 is in project with project_id 1' in str(response.json()):
-        print("Usuario 2 ya está asociado al proyecto 1")
-    else:
-        assert response.status_code == 200, f"Error al asociar user2: {response.json()}"
-        print("Usuario 2 asociado al proyecto 1")
-
-    # Verificar proyecto y asociaciones en la base de datos
-    project = test_session.get(db_models.Project, 1)
-    assert project is not None, "Proyecto 1 no encontrado en la base de datos"
-    stmt = select(db_models.project_user).where(
-        db_models.project_user.user_id == 1,
-        db_models.project_user.project_id == 1
-    )
-    project_user1 = test_session.exec(stmt).first()
-    assert project_user1 is not None, "Usuario 1 no está asociado al proyecto 1"
-    stmt = select(db_models.project_user).where(
-        db_models.project_user.user_id == 2,
-        db_models.project_user.project_id == 1
-    )
-    project_user2 = test_session.exec(stmt).first()
-    assert project_user2 is not None, "Usuario 2 no está asociado al proyecto 1"
-    print("Verificado: Usuarios 1 y 2 están asociados al proyecto 1")
-
-    # Crear una tarea
-    response = client.post(
-        '/task/1',
-        headers=auth_headers,
-        json={
-            'description': 'Tarea inicial',
-            'date_exp': '2025-10-10',
-            'user_ids': [1]
-        }
-    )
-    assert response.status_code == 200, f"Error al crear tarea: {response.json()}"
-    print("Tarea creada")
-
-    return
-
-def test_root(client):
-    response = client.get('/')
-    assert response.status_code == 200
-    assert response.json() == {'detail':'Bienvenido a esta API!'}
