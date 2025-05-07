@@ -13,7 +13,7 @@ def test_get_projects(client, test_create_group_init):
         assert all(key in project for key in ['project_id', 'group_id', 'tittle', 'description', 'users'])
 
 def test_get_projects_iam(client, auth_headers):
-    response = client.get('/project/1', headers=auth_headers)
+    response = client.get('/project/me', headers=auth_headers)
     assert response.status_code == 200
     projects = response.json()
     assert isinstance(projects, list)

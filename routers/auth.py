@@ -66,20 +66,22 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
     
 async def auth_user_ws(token: str, session: Session):
     try:
-        print(f"Validando token: {token}")
         payload = jwt.decode(token, SECRET, algorithms=[ALGORITHM])
+        
         user_id: str = payload.get("sub")
+        
         if user_id is None:
-            print("Token inválido: sin 'sub'")
             return None
+        
         user = session.get(db_models.User, int(user_id))
+        
         if user is None:
-            print(f"Usuario no encontrado: user_id={user_id}")
             return None
-        print(f"Token válido para user_id={user_id}")
+        
         return user
+    
     except JWTError as e:
-        print(f"Error al decodificar JWT: {str(e)}")
+        
         return None
 
 @router.post("/login", description='Endpoint para logearse. Se necesita username y password.')

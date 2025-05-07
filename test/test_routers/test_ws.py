@@ -1,16 +1,15 @@
 import pytest, json
 from conftest import auth_headers, client, test_create_project_init, select, db_models
 from sqlalchemy.exc import SQLAlchemyError
+from fastapi import WebSocketException, WebSocket
 from routers import ws
 from models import exceptions
+from unittest.mock import AsyncMock
 
 def test_websocket_connection(client, auth_headers, test_create_project_init, test_session):
-    print("Iniciando test_websocket_connection")
-    print("Token usado:", auth_headers["Authorization"])
-    
-    # Verificar proyecto y asociación
+    g = test_create_project_init
+
     project = test_session.get(db_models.Project, 1)
-    print(f"Proyecto 1 existe: {project is not None}")
 
     if project:
         stmt = select(db_models.project_user).where(
@@ -18,17 +17,14 @@ def test_websocket_connection(client, auth_headers, test_create_project_init, te
             db_models.project_user.project_id == 1
         )
         project_user = test_session.exec(stmt).first()
-        print(f"Usuario 1 en proyecto 1: {project_user is not None}")
     
     try:
         # Usar solo el header Authorization
         headers = {"Authorization": auth_headers["Authorization"]}
         with client.websocket_connect("/ws/1", headers=headers) as ws:
-            print("Conexión WebSocket establecida")
-            
+
             # Recibir el mensaje de conexión
             connect_msg = json.loads(ws.receive_text())
-            print(f"Mensaje de conexión recibido: {connect_msg}")
             assert "se ha conectado" in connect_msg["content"]
             
             # Enviar un mensaje
@@ -36,7 +32,7 @@ def test_websocket_connection(client, auth_headers, test_create_project_init, te
             
             # Recibir el mensaje transmitido
             received_msg = json.loads(ws.receive_text())
-            print(f"Mensaje recibido: {received_msg}")
+            
             assert received_msg["content"] == "Hola"
             assert received_msg["user_id"] == 1  # Verifica el user_id
             assert received_msg["project_id"] == 1  # Verifica el project_id
@@ -54,13 +50,15 @@ def test_websocket_connection(client, auth_headers, test_create_project_init, te
         print(f"WebSocketDisconnect: code={e.code}, reason={e.reason}")
         raise
 
-def test_get_chat(client, auth_headers):
+def test_get_chat(client, auth_headers, test_create_project_init):
+    g = test_create_project_init
+
     response = client.get('/chat/1', headers=auth_headers)
     assert response.status_code == 200
     messages = response.json()
     assert isinstance(messages, list)
     for message in messages:
-        assert all(key in message for key in ['chat_id', 'project_id', 'user_id', 'message', 'timestamp'])
+        assert all(key in message for key in ['chat_id', 'project_id', 'user_id', 'message', 'timestamp']) 
 
 def test_get_chat_error(mocker):
     session_mock = mocker.Mock()
@@ -104,3 +102,90 @@ def test_verify_user_in_project_error(mocker):
                     user_id=1,
                     project_id=1,
                     session=session_mock)
+
+@pytest.mark.asyncio
+async def test_get_current_user_ws_header_error(mocker):
+    session_mock = mocker.Mock()
+
+    ws_mock = mocker.Mock(spec=WebSocket)
+    ws_mock.headers = {}
+    ws_mock.close = AsyncMock()
+    
+    with pytest.raises(WebSocketException):
+        await ws.get_current_user_ws( session=session_mock, websocket=ws_mock)
+
+    ws_mock.close.assert_awaited_once_with(code=1008, reason='Error de autenticacion')
+
+@pytest.mark.asyncio
+async def test_get_current_user_ws_format_error(mocker):
+    session_mock = mocker.Mock()
+
+    ws_mock = mocker.Mock(spec=WebSocket)
+    ws_mock.headers = {'Authorization':'hola'}
+    ws_mock.close = AsyncMock()
+    
+    with pytest.raises(WebSocketException):
+        await ws.get_current_user_ws( session=session_mock, websocket=ws_mock)
+
+    ws_mock.close.assert_awaited_once_with(code=1008, reason='Formato de token invalido')
+
+@pytest.mark.asyncio
+async def test_get_current_user_ws_user_not_found_error(mocker):
+    session_mock = mocker.Mock()
+
+    ws_mock = mocker.Mock(spec=WebSocket)
+    ws_mock.headers = {'Authorization':'Bearer '}
+    ws_mock.close = AsyncMock()
+    
+    with pytest.raises(WebSocketException):
+        await ws.get_current_user_ws( session=session_mock, websocket=ws_mock)
+
+    ws_mock.close.assert_awaited_once_with(code=1008, reason='User no encontrado para token')
+
+@pytest.mark.asyncio
+async def test_websocket_endpoint_not_found_project_error(mocker):
+    # Session
+    session_mock = mocker.Mock()
+
+    # WebSocket simulado
+    ws_mock = mocker.Mock(spec=WebSocket)
+    ws_mock.headers = {'Authorization':'Bearer token'}
+    ws_mock.close = AsyncMock()
+    
+    # Usuario simulado
+    mock_user = mocker.Mock()
+    mock_user.user_id = 1
+    mocker.patch('routers.ws.get_current_user_ws', return_value=mock_user)
+
+    # Forzar que verify_user_in_project lance la excepción
+    mocker.patch('routers.ws.verify_user_in_project', side_effect=exceptions.ProjectNotFoundError(project_id=999))
+
+    # Ejecutar el endpoint
+    await ws.websocket_endpoint(websocket=ws_mock, project_id=999, session=session_mock)
+
+    # Verificar que se cerró con el mensaje correcto
+    ws_mock.close.assert_awaited_once_with(code=1008, reason="Proyecto 999 no encontrado")
+
+@pytest.mark.asyncio
+async def test_websocket_endpoint_not_authorized_error(mocker):
+    # Session
+    session_mock = mocker.Mock()
+
+    # WebSocket simulado
+    ws_mock = mocker.Mock(spec=WebSocket)
+    ws_mock.headers = {'Authorization':'Bearer token'}
+    ws_mock.close = AsyncMock()
+    
+    # Usuario simulado
+    mock_user = mocker.Mock()
+    mock_user.user_id = 1
+    mocker.patch('routers.ws.get_current_user_ws', return_value=mock_user)
+
+    # Forzar que verify_user_in_project lance la excepción
+    mocker.patch('routers.ws.verify_user_in_project', side_effect=exceptions.NotAuthorized(user_id=1))
+
+    # Ejecutar el endpoint
+    await ws.websocket_endpoint(websocket=ws_mock, project_id=999, session=session_mock)
+
+    # Verificar que se cerró con el mensaje correcto
+    ws_mock.close.assert_awaited_once_with(code=1008, reason="Usuario no autorizado para proyecto 999")

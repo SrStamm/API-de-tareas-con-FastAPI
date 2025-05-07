@@ -133,3 +133,10 @@ class Message(BaseModel):
     user_id: int = Field(examples=[1])
     project_id: int = Field(examples=[1])
     timestamp: dt = Field(examples=['2025-10-15 09:12:12'])
+
+class ChatMessage(BaseModel):
+    chat_id: int
+    project_id: int
+    user_id: int 
+    message: str
+    timestamp: dt 

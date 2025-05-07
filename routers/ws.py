@@ -1,11 +1,11 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, WebSocketException
 from typing import List, Dict
 from datetime import datetime
-from models import schemas, db_models, exceptions
+from models import schemas, db_models, exceptions, responses
 from db.database import get_session, Session, select, SQLAlchemyError
 from .auth import auth_user_ws, auth_user
 
-router = APIRouter()
+router = APIRouter(tags=['WebSocket'])
 
 class ConnectionManager:
     # Crea una lista de conexiones activas
@@ -39,28 +39,28 @@ class ConnectionManager:
 async def get_current_user_ws(session: Session, websocket: WebSocket):
     try:
         auth_header = websocket.headers.get("Authorization")
-        print(f"Header Authorization recibido: {auth_header}")
+        
         if not auth_header:
-            print("Falta header Authorization")
-            await websocket.close(code=1008)
+            await websocket.close(code=1008, reason='Error de autenticacion')
             raise WebSocketException(code=1008)
         
         if not auth_header.startswith("Bearer "):
-            print(f"Formato de Authorization inválido: {auth_header}")
-            await websocket.close(code=1008)
+            await websocket.close(code=1008, reason='Formato de token invalido')
             raise WebSocketException(code=1008)
         
         token = auth_header.replace("Bearer ", "")
-        print(f"Token extraído: {token}")
         user = await auth_user_ws(token, session)
+
         if not user:
-            print(f"Usuario no encontrado para token: {token}")
-            await websocket.close(code=1008)
+            await websocket.close(code=1008, reason=f'User no encontrado para token')
             raise WebSocketException(code=1008)
-        print(f"Usuario autenticado: user_id={user.user_id}, username={user.username}")
+        
         return user
+
+    except WebSocketException:
+        raise
+
     except Exception as e:
-        print(f"Error en get_current_user_ws: {str(e)}")
         await websocket.close(code=1008, reason=f"Error de autenticación: {str(e)}")
         raise
 
@@ -87,26 +87,22 @@ manager = ConnectionManager()
 @router.websocket("/ws/{project_id}")
 async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Session = Depends(get_session)):
     user = await get_current_user_ws(session, websocket)
-    print(f"Iniciando conexión WebSocket para project_id={project_id}, user_id={user.user_id}")
+    
     try:
         verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
 
     except exceptions.ProjectNotFoundError as e:
-        print(f"Error: Proyecto {project_id} no encontrado - {str(e)}")
         await websocket.close(code=1008, reason=f"Proyecto {project_id} no encontrado")
         return
     
     except exceptions.NotAuthorized as e:
-        print(f"Error: Usuario {user.user_id} no autorizado para proyecto {project_id} - {str(e)}")
         await websocket.close(code=1008, reason=f"Usuario no autorizado para proyecto {project_id}")
         return
     
     except Exception as e:
-        print(f"Error inesperado en WebSocket: {str(e)}")
         await websocket.close(code=1008, reason=f"Error interno: {str(e)}")
         return
 
-    print(f"Conexión establecida para usuario {user.user_id} en proyecto {project_id}")
     await manager.connect(websocket, project_id)
     
     msg_connect = schemas.Message(
@@ -137,8 +133,10 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
             session.add(message)
             session.commit()            
             await manager.broadcast(msg.model_dump_json(), project_id)
+    
     except WebSocketDisconnect:
         manager.disconnect(websocket, project_id)
+
         msg_disconnect = schemas.Message(
             user_id=user.user_id,
             project_id=project_id,
@@ -147,10 +145,15 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
         )
         await manager.broadcast(msg_disconnect.model_dump_json(), project_id)
 
-@router.get('/chat/{project_id}')
+@router.get('/chat/{project_id}',
+            description="""Obtiene el chat de un proyecto""",
+            responses={
+                200:{'description':'Chat del proyecto obtenido', 'model':schemas.ChatMessage},
+                500:{'description':'Error interno', 'model':responses.DatabaseErrorResponse}
+            })
 def get_chat(project_id: int,
             user: db_models.User = Depends(auth_user),
-            session: Session = Depends(get_session)):
+            session: Session = Depends(get_session)) -> List[schemas.ChatMessage]:
     try:
         stmt = (select(db_models.ProjectChat).where(
             db_models.ProjectChat.project_id == project_id,
