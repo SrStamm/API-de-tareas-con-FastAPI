@@ -3,6 +3,7 @@ from conftest import auth_headers, client
 from models import schemas, db_models, exceptions
 from routers import user
 from sqlalchemy.exc import SQLAlchemyError
+from fastapi import Request
 
 def test_get_user_me(client, auth_headers):
     response = client.get('/user/me', headers=auth_headers)
@@ -47,22 +48,23 @@ def test_delete_user(client, auth_headers):
     assert response.json() == {'detail':'Se ha eliminado el usuario'}
 
 def test_get_users_error(mocker):
-    db_session_mock = mocker.Mock()
-
+    db_session_mock = mocker.Mock() 
+    mock_request = mocker.Mock(spec=Request)
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        user.get_users(session=db_session_mock)
+        user.get_users(request=mock_request, session=db_session_mock)
 
     # db_session_mock.rollback.assert_called_once()
 
 def test_create_user_error(mocker):
     db_session_mock = mocker.Mock()
+    mock_request = mocker.Mock(spec=Request)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        user.create_user(session=db_session_mock, new_user=schemas.CreateUser(username='Falso', email='falso@gmail.com', password='5555'))
+        user.create_user(request=mock_request, session=db_session_mock, new_user=schemas.CreateUser(username='Falso', email='falso@gmail.com', password='5555'))
 
     db_session_mock.rollback.assert_called_once()
 
@@ -70,10 +72,13 @@ def test_update_user_me_error(mocker):
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
 
+    mock_request = mocker.Mock(spec=Request)
+
     session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         user.update_user_me(
+                request=mock_request,
                 updated_user=schemas.UpdateUser(username='Falso', email='falso@gmail.com', password='5555'),
                 user=mock_user,
                 session=session_mock)
@@ -84,10 +89,13 @@ def test_delete_user_me_error(mocker):
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
 
+    mock_request = mocker.Mock(spec=Request)
+
     session_mock.delete.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         user.delete_user_me(
+                request=mock_request,
                 user=mock_user,
                 session=session_mock)
 

@@ -3,6 +3,7 @@ from conftest import auth_headers, client, auth_headers2, test_create_group_init
 from models import db_models, schemas, exceptions
 from routers import project
 from sqlalchemy.exc import SQLAlchemyError
+from fastapi import Request
 
 def test_get_projects(client, test_create_group_init):
     response = client.get('/project/1')
@@ -100,6 +101,8 @@ def test_found_project_or_404_error(mocker):
     mock_user.user_id = 1
     db_session_mock = mocker.Mock()
 
+    mock_request = mocker.Mock(spec=Request)
+
     mock_group = mocker.Mock()
     mock_group.id = 1
 
@@ -109,6 +112,7 @@ def test_found_project_or_404_error(mocker):
 
     with pytest.raises(exceptions.ProjectNotFoundError) as exc_info:
         project.update_project(
+                request=mock_request,
                 group_id=1,
                 project_id=1,
                 updated_project=schemas.UpdateProject(title='error'),
@@ -121,6 +125,8 @@ def test_found_project_or_404_error(mocker):
 def test_get_projects_error(mocker):
     db_session_mock = mocker.Mock()
 
+    mock_request = mocker.Mock(spec=Request)
+
     mock_group = mocker.Mock()
     mock_group.id = 1
 
@@ -128,6 +134,7 @@ def test_get_projects_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         project.get_projects(
+                request=mock_request,
                 group_id=1,
                 session=db_session_mock
             )
@@ -138,13 +145,16 @@ def test_get_projects_iam_error(mocker):
     user_mock = mocker.Mock()
     user_mock.user_id = 1
 
+    mock_request = mocker.Mock(spec=Request)
+
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         project.get_projects_iam(
-                            user=user_mock,
-                            session=db_session_mock
-                )
+            request=mock_request,
+            user=user_mock,
+            session=db_session_mock
+            )
 
 def test_create_project_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
@@ -153,10 +163,13 @@ def test_create_project_error(mocker):
     mock_group = mocker.Mock()
     mock_group.id = 1
 
+    mock_request = mocker.Mock(spec=Request)
+
     db_session_mock.add.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         project.create_project(
+                request=mock_request,
                 new_project=schemas.CreateProject(title='hello world'),
                 group_id=1,
                 user=mock_user,
@@ -168,6 +181,8 @@ def test_create_project_error(mocker):
 def test_update_project_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     db_session_mock = mocker.Mock()
+
+    mock_request = mocker.Mock(spec=Request)
 
     mock_group = mocker.Mock()
     mock_group.id = 1
@@ -182,6 +197,7 @@ def test_update_project_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         project.update_project(
+                request=mock_request,
                 group_id=1,
                 project_id = mock_project.id,
                 updated_project=schemas.UpdateProject(title='GoodBye world'),
@@ -198,6 +214,8 @@ def test_delete_project_error(mocker):
     mock_group = mocker.Mock()
     mock_group.id = 1
 
+    mock_request = mocker.Mock(spec=Request)
+
     mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
     mock_project.id = 1
 
@@ -208,6 +226,7 @@ def test_delete_project_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         project.delete_project(
+                request=mock_request,
                 group_id=1,
                 project_id = mock_project.id,
                 user=mock_user,
@@ -221,6 +240,8 @@ def test_add_user_to_project_error(mocker):
     mock_append_user = mocker.Mock(spec=db_models.User)
     mock_append_user.id = 2
     db_session_mock = mocker.Mock()
+
+    mock_request = mocker.Mock(spec=Request)
 
     mock_group = mocker.Mock()
     mock_group.id = 1
@@ -240,6 +261,7 @@ def test_add_user_to_project_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         project.add_user_to_project(
+                request=mock_request,
                 group_id=1,
                 user_id=2,
                 project_id = 1,
@@ -259,6 +281,8 @@ def test_remove_user_from_project_error(mocker):
     mock_group.id = 1
     mock_group.users = [mock_append_user, mock_user]
 
+    mock_request = mocker.Mock(spec=Request)
+
     mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
     mock_project.id = 1
     mock_project.users = [mock_append_user, mock_user]
@@ -273,6 +297,7 @@ def test_remove_user_from_project_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         project.remove_user_from_project(
+                request=mock_request,
                 group_id=1,
                 project_id = 1,
                 user_id=2,
@@ -292,6 +317,8 @@ def test_update_user_permission_in_project_error(mocker):
     mock_group.id = 1
     mock_group.users = [mock_append_user, mock_user]
 
+    mock_request = mocker.Mock(spec=Request)
+
     mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
     mock_project.id = 1
     mock_project.users = [mock_append_user, mock_user]
@@ -306,6 +333,7 @@ def test_update_user_permission_in_project_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         project.update_user_permission_in_project(
+                request=mock_request,
                 group_id=1,
                 user_id=2,
                 project_id = 1,
@@ -321,6 +349,8 @@ def test_get_user_in_project_error(mocker):
 
     mock_group = mocker.Mock()
     mock_group.id = 1
+
+    mock_request = mocker.Mock(spec=Request)
     
     mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
     mock_project.id = 1
@@ -331,6 +361,7 @@ def test_get_user_in_project_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         project.get_user_in_project(
+                request=mock_request,
                 group_id=1,
                 project_id = 1,
                 session=db_session_mock
@@ -341,6 +372,8 @@ def test_get_user_in_project_not_results_error(mocker):
 
     mock_group = mocker.Mock()
     mock_group.id = 1
+
+    mock_request = mocker.Mock(spec=Request)
     
     mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
     mock_project.id = 1
@@ -351,6 +384,7 @@ def test_get_user_in_project_not_results_error(mocker):
 
     with pytest.raises(exceptions.UsersNotFoundInProjectError):
         project.get_user_in_project(
+                request=mock_request,
                 group_id=1,
                 project_id = 1,
                 session=db_session_mock

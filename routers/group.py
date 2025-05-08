@@ -1,23 +1,25 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
 from db.database import get_session, Session, select, selectinload, SQLAlchemyError
 from typing import List
 from .auth import auth_user
 from utils import get_group_or_404, get_user_or_404, is_admin_in_group
 from core.logger import logger
+from core.limiter import limiter
 
 router = APIRouter(prefix='/group', tags=['Group'])
 
-@router.get('', description=
-            """ Obtiene todos los grupos con informacion limitada.
-                'skip' recibe un int que saltea el resultado obtenido.
-                'limit' recibe un int para limitar los resultados obtenidos.
-            """,
-            responses={
-                200:{'description':'Grupos obtenidos', 'model':schemas.ReadBasicDataGroup},
-                500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
-            })
+@router.get(
+        '',
+        description=""" Obtiene todos los grupos con informacion limitada.
+                        'skip' recibe un int que saltea el resultado obtenido.
+                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        responses={
+            200:{'description':'Grupos obtenidos', 'model':schemas.ReadBasicDataGroup},
+            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("60/minute")
 def get_groups(
+        request: Request,
         limit:int = 10,
         skip: int = 0,
         session:Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]:
@@ -34,17 +36,19 @@ def get_groups(
         logger.error(f'Error al obtener los grupos {e}')
         raise exceptions.DatabaseError(error=e, func='get_groups')
 
-@router.post('',
-            description="""El usuario autenticado crea un nuevo grupo, necesita un 'name', y opcional 'description'.
-                El usuario se agrega de forma automatica como Administrador""",
-            
-            responses={
-                200:{'description':'Grupo creado', 'model':responses.GroupCreateSucces},
-                500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
-            })
-def create_group(   new_group: schemas.CreateGroup,
-                    user: db_models.User = Depends(auth_user),
-                    session: Session = Depends(get_session)):
+@router.post(
+        '',
+        description=""" El usuario autenticado crea un nuevo grupo, necesita un 'name', y opcional 'description'.
+                        El usuario se agrega de forma automatica como Administrador""",
+        responses={
+            200:{'description':'Grupo creado', 'model':responses.GroupCreateSucces},
+            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("15/minute")
+def create_group(  
+        request: Request,
+        new_group: schemas.CreateGroup,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
     try:
         # Crear el grupo con el usuario creador
         group = db_models.Group(**new_group.model_dump())
@@ -68,19 +72,22 @@ def create_group(   new_group: schemas.CreateGroup,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='create_group')
 
-@router.patch('/{group_id}',
-            description="""Permite al usuario autenticado con rol Administrador el cambiar informacion del grupo,
-                            puede ser el 'name' o 'description'.""",
-            responses={
-                200:{'description':'Grupo actualizado', 'model':responses.GroupUpdateSucces},
-                401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
-                404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
-                500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
-            })
-def update_group(group_id: int,
-                updated_group: schemas.UpdateGroup,
-                user: db_models.User = Depends(auth_user),
-                session: Session = Depends(get_session)):
+@router.patch(
+        '/{group_id}',
+        description=""" Permite al usuario autenticado con rol Administrador el cambiar informacion del grupo,
+                        puede ser el 'name' o 'description'.""",
+        responses={
+            200:{'description':'Grupo actualizado', 'model':responses.GroupUpdateSucces},
+            401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
+            404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
+            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("15/minute")
+def update_group(
+        request: Request,
+        group_id: int,
+        updated_group: schemas.UpdateGroup,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
 
     try:
         is_admin_in_group(user=user, group_id=group_id, session=session)
@@ -102,16 +109,20 @@ def update_group(group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_group')
 
-@router.delete('/{group_id}', description='Permite al usuario autenticado con rol Administrador el eliminar al grupo.',
-                responses={
-                    200:{'description':'Grupo actualizado', 'model':responses.GroupDeleteSucces},
-                    401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
-                    404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
-                    500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
-            })
-def delete_group(group_id: int,
-                user: db_models.User = Depends(auth_user),
-                session: Session = Depends(get_session)):
+@router.delete(
+        '/{group_id}',
+        description='Permite al usuario autenticado con rol Administrador el eliminar al grupo.',
+        responses={
+            200:{'description':'Grupo actualizado', 'model':responses.GroupDeleteSucces},
+            401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
+            404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
+            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("5/minute")
+def delete_group(
+        request: Request,
+        group_id: int,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
 
     try:
         found_group = get_group_or_404(group_id, session)
@@ -128,21 +139,21 @@ def delete_group(group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_group')
     
-@router.get('/me',
-            description=
-            """ Obtiene todos los grupos a los que pertenece el usuario con informacion limitada.
-                'skip' recibe un int que saltea el resultado obtenido.
-                'limit' recibe un int para limitar los resultados obtenidos.
-            """,
-            responses={
-                200:{'description':'Grupo donde esta el usuario obtenidos', 'model':schemas.ReadGroup},
-                500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
-            })
-def get_groups_in_user( 
-                        limit:int = 10,
-                        skip: int = 0,
-                        user:db_models.User = Depends(auth_user),
-                        session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:
+@router.get(
+        '/me',
+        description=""" Obtiene todos los grupos a los que pertenece el usuario con informacion limitada.
+                        'skip' recibe un int que saltea el resultado obtenido.
+                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        responses={
+            200:{'description':'Grupo donde esta el usuario obtenidos', 'model':schemas.ReadGroup},
+            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("60/minute")
+def get_groups_in_user(
+        request: Request,
+        limit:int = 10,
+        skip: int = 0,
+        user:db_models.User = Depends(auth_user),
+        session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:
 
     try:
         statement = (select(db_models.Group)
@@ -159,19 +170,21 @@ def get_groups_in_user(
         raise exceptions.DatabaseError(error=e, func='get_groups_in_user')
 
 @router.post(
-            '/{group_id}/{user_id}',
-            description='Permite al usuario autenticado con rol Administrador el agregar un nuevo usuario al grupo',
-            responses={
-                    200:{'description':'Usuario agregado al grupo', 'model':responses.GroupAppendUserSucces},
-                    400:{'description':'request error', 'model':responses.ErrorInRequest},
-                    401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
-                    404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
-                    500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
-            })
-def append_user_group(  group_id: int,
-                        user_id: int,
-                        user: db_models.User = Depends(auth_user),
-                        session: Session = Depends(get_session)):
+        '/{group_id}/{user_id}',
+        description='Permite al usuario autenticado con rol Administrador el agregar un nuevo usuario al grupo',
+        responses={
+                200:{'description':'Usuario agregado al grupo', 'model':responses.GroupAppendUserSucces},
+                400:{'description':'request error', 'model':responses.ErrorInRequest},
+                401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
+                404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
+                500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("20/minute")
+def append_user_group( 
+        request: Request,
+        group_id: int,
+        user_id: int,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
 
     try:
         is_admin_in_group(user, group_id, session)
@@ -196,19 +209,21 @@ def append_user_group(  group_id: int,
         raise exceptions.DatabaseError(error=e, func='append_user_group')
 
 @router.delete(
-            '/{group_id}/{user_id}',
-            description='Permite al usuario autenticado con rol Administrador el eliminar un usuario del grupo',
-            responses={
-                    200:{'description':'Usuario eliminado del Grupo', 'model':responses.GroupDeleteUserSucces},
-                    400:{'description':'request error', 'model':responses.ErrorInRequest},
-                    401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
-                    404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
-                    500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
-            })
-def delete_user_group(  group_id: int,
-                        user_id: int,
-                        user: db_models.User = Depends(auth_user),
-                        session: Session = Depends(get_session)):
+        '/{group_id}/{user_id}',
+        description='Permite al usuario autenticado con rol Administrador el eliminar un usuario del grupo',
+        responses={
+                200:{'description':'Usuario eliminado del Grupo', 'model':responses.GroupDeleteUserSucces},
+                400:{'description':'request error', 'model':responses.ErrorInRequest},
+                401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
+                404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
+                500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("5/minute")
+def delete_user_group(  
+        request: Request,
+        group_id: int,
+        user_id: int,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
 
     try:
         is_admin_in_group(user, group_id, session)
@@ -234,20 +249,23 @@ def delete_user_group(  group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_user_group')
 
-@router.patch(  '/{group_id}/{user_id}',
-                description='Permite al usuario autenticado con rol Administrador el modificar el rol de un usuario en el grupo',
-                responses={
-                    200:{'description':'Usuario actualizado en el Grupo', 'model':responses.GroupUPdateUserSucces},
-                    400:{'description':'request error', 'model':responses.ErrorInRequest},
-                    401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
-                    404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
-                    500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
-            })
-def update_user_group(  group_id: int,
-                        user_id: int,
-                        update_role: schemas.UpdateRoleUser,
-                        user: db_models.User = Depends(auth_user),
-                        session: Session = Depends(get_session)):
+@router.patch(
+        '/{group_id}/{user_id}',
+        description='Permite al usuario autenticado con rol Administrador el modificar el rol de un usuario en el grupo',
+        responses={
+            200:{'description':'Usuario actualizado en el Grupo', 'model':responses.GroupUPdateUserSucces},
+            400:{'description':'request error', 'model':responses.ErrorInRequest},
+            401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
+            404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
+            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("10/minute")
+def update_user_group(
+        request: Request,
+        group_id: int,
+        user_id: int,
+        update_role: schemas.UpdateRoleUser,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
 
     try:
         is_admin_in_group(user, group_id, session)
@@ -276,21 +294,22 @@ def update_user_group(  group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_user_group')
 
-@router.get('/{group_id}/users',
-            description=
-            """ Obtiene todos los usuarios de un grupo.
-                'skip' recibe un int que saltea el resultado obtenido.
-                'limit' recibe un int para limitar los resultados obtenidos.""",
-            responses={
-                    200:{'description':'Usuarios del Grupo obtenidos', 'model':schemas.ReadGroupUser},
-                    404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
-                    500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
-            })
+@router.get(
+        '/{group_id}/users',
+        description=""" Obtiene todos los usuarios de un grupo.
+                        'skip' recibe un int que saltea el resultado obtenido.
+                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        responses={
+                200:{'description':'Usuarios del Grupo obtenidos', 'model':schemas.ReadGroupUser},
+                404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
+                500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("60/minute")
 def get_user_in_group(
-                    group_id: int,
-                    limit:int = 10,
-                    skip: int = 0,
-                    session:Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
+        request: Request, 
+        group_id: int,
+        limit:int = 10,
+        skip: int = 0,
+        session:Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
 
     try:
         get_group_or_404(group_id, session)

@@ -3,6 +3,7 @@ from conftest import auth_headers, client, auth_headers2, test_create_project_in
 from models import schemas, db_models, exceptions
 from routers import task
 from sqlalchemy.exc import SQLAlchemyError
+from fastapi import Request
 
 @pytest.mark.parametrize(
         'project_id, datos, status, detail', [
@@ -80,39 +81,47 @@ def test_get_users_for_task(client, auth_headers):
 def test_get_task_error(mocker):
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
+    mock_request = mocker.Mock(spec=Request)
 
     session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         task.get_task(
-                user=mock_user,
-                session=session_mock)
+            request=mock_request,
+            user=mock_user,
+            session=session_mock)
 
 def test_get_users_for_task_error(mocker):
     session_mock = mocker.Mock()
+    mock_request = mocker.Mock(spec=Request)
 
     session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         task.get_users_for_task(
-                task_id=1,
-                session=session_mock)
+            request=mock_request,
+            task_id=1,
+            session=session_mock)
 
 def test_get_task_in_project_error(mocker):
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
+    mock_request = mocker.Mock(spec=Request)
 
     session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         task.get_task_in_project(
-                project_id=1,
-                user=mock_user,
-                session=session_mock)
+            request=mock_request,
+            project_id=1,
+            user=mock_user,
+            session=session_mock)
 
 def test_create_task_error(mocker):
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
+
+    mock_request = mocker.Mock(spec=Request)
 
     session_mock.add.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -121,16 +130,19 @@ def test_create_task_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         task.create_task(
-                new_task=schemas.CreateTask(description='crear', date_exp='2025-10-10', user_ids=[1]),
-                project_id=1,
-                user=mock_user,
-                session=session_mock)
+            request=mock_request,
+            new_task=schemas.CreateTask(description='crear', date_exp='2025-10-10', user_ids=[1]),
+            project_id=1,
+            user=mock_user,
+            session=session_mock)
         
     session_mock.rollback.assert_called_once()
 
 def test_update_task_error(mocker):
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
+
+    mock_request = mocker.Mock(spec=Request)
 
     session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -140,11 +152,12 @@ def test_update_task_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         task.update_task(
-                task_id=1,
-                project_id=1,
-                update_task=schemas.UpdateTask(description='crear'),
-                user=mock_user,
-                session=session_mock)
+            request=mock_request,
+            task_id=1,
+            project_id=1,
+            update_task=schemas.UpdateTask(description='crear'),
+            user=mock_user,
+            session=session_mock)
         
     session_mock.rollback.assert_called_once()
 
@@ -159,9 +172,9 @@ def test_delete_task_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         task.delete_task(
-                task_id=1,
-                project_id=1,
-                user=mock_user,
-                session=session_mock)
+            task_id=1,
+            project_id=1,
+            user=mock_user,
+            session=session_mock)
         
     session_mock.rollback.assert_called_once()

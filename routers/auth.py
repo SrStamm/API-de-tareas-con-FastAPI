@@ -8,6 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from models import db_models, schemas, exceptions
 import os
 from core.logger import logger
+from core.limiter import limiter
 
 router = APIRouter(tags=['Login'])
 
@@ -85,6 +86,7 @@ async def auth_user_ws(token: str, session: Session):
         return None
 
 @router.post("/login", description='Endpoint para logearse. Se necesita username y password.')
+
 async def login(form: OAuth2PasswordRequestForm = Depends(),
                 session : Session = Depends(get_session)) -> schemas.Token:
     

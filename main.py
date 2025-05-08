@@ -1,7 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from routers import group, project, task, user, auth, ws
 from db.database import create_db_and_tables
 from contextlib import asynccontextmanager
+
+from core.limiter import limiter, _rate_limit_exceeded_handler, RateLimitExceeded
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -10,6 +12,9 @@ async def lifespan(app: FastAPI):
     print({'Atencion':'La base de datos se encuentra desactivada'})
 
 app = FastAPI(lifespan=lifespan)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(group.router)
 app.include_router(project.router)
@@ -21,3 +26,8 @@ app.include_router(ws.router)
 @app.get('/')
 def root():
     return {'detail':'Bienvenido a esta API!'}
+
+@app.get("/ping")
+@limiter.limit("5/minute")
+async def ping(request: Request):
+    return {"message": "pong"}

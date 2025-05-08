@@ -1,24 +1,28 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
 from .auth import auth_user
 from db.database import get_session, Session, select, SQLAlchemyError, joinedload
 from typing import List
 from utils import is_admin_in_project, found_project_for_task_or_404, found_task_or_404, get_user_or_404, found_user_in_project_or_404
 from core.logger import logger
+from core.limiter import limiter
 
 router = APIRouter(prefix='/task', tags=['Task'])
 
-@router.get('', description=
-            """ Obtiene todas las tareas a las que esta asignada el usuario.
-                'skip' recibe un int que saltea el resultado obtenido.
-                'limit' recibe un int para limitar los resultados obtenidos.""",
-            responses={ 200: {'description':'Tareas obtenidas', 'model':schemas.ReadTask},
-                        500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@router.get(
+        '',
+        description=""" Obtiene todas las tareas a las que esta asignada el usuario.
+                    'skip' recibe un int que saltea el resultado obtenido.
+                    'limit' recibe un int para limitar los resultados obtenidos.""",
+        responses={ 200: {'description':'Tareas obtenidas', 'model':schemas.ReadTask},
+                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("30/minute")
 def get_task(
-            limit:int = 10,
-            skip: int = 0,
-            user:db_models.User = Depends(auth_user),
-            session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
+        request:Request,
+        limit:int = 10,
+        skip: int = 0,
+        user:db_models.User = Depends(auth_user),
+        session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
     
     try:
         statement = (select(db_models.Task)
@@ -33,17 +37,20 @@ def get_task(
         logger.error(f'Error al obtener las tareas asignadas al user {user.user_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_task')
 
-@router.get('/{task_id}/users', description=
-            """ Obtiene los usuarios asignados a una tarea.
-                'skip' recibe un int que saltea el resultado obtenido.
-                'limit' recibe un int para limitar los resultados obtenidos.""",
-            responses={ 200: {'description':'Usarios asignados a tareas obtenidos', 'model':schemas.ReadUser},
-                        500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@router.get(
+        '/{task_id}/users',
+        description= """ Obtiene los usuarios asignados a una tarea.
+                        'skip' recibe un int que saltea el resultado obtenido.
+                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        responses={ 200: {'description':'Usarios asignados a tareas obtenidos', 'model':schemas.ReadUser},
+                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("20/minute")
 def get_users_for_task(
-                        task_id: int,
-                        limit:int = 10,
-                        skip: int = 0,
-                        session: Session = Depends(get_session)) -> List[schemas.ReadUser]:
+        request:Request,
+        task_id: int,
+        limit:int = 10,
+        skip: int = 0,
+        session: Session = Depends(get_session)) -> List[schemas.ReadUser]:
 
     try:
         statement = (select(db_models.User.user_id, db_models.User.username)
@@ -59,18 +66,21 @@ def get_users_for_task(
         logger.error(f'Error al obtener los usuarios asignados a task {task_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_users_for_task')
 
-@router.get('/{project_id}', description=
-            """ Obtiene todas las tareas asignadas de un proyecto.
-                'skip' recibe un int que saltea el resultado obtenido.
-                'limit' recibe un int para limitar los resultados obtenidos.""",
-            responses={ 200: {'description':'Tareas del projecto obtenidas', 'model':schemas.ReadTaskInProject},
-                        500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@router.get(
+        '/{project_id}',
+        description= """ Obtiene todas las tareas asignadas de un proyecto.
+                        'skip' recibe un int que saltea el resultado obtenido.
+                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        responses={ 200: {'description':'Tareas del projecto obtenidas', 'model':schemas.ReadTaskInProject},
+                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("15/minute")
 def get_task_in_project(
-                        project_id: int,
-                        limit:int = 10,
-                        skip: int = 0,
-                        user: db_models.User = Depends(auth_user),
-                        session: Session = Depends(get_session)) -> List[schemas.ReadTaskInProject]:
+        request:Request,
+        project_id: int,
+        limit:int = 10,
+        skip: int = 0,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)) -> List[schemas.ReadTaskInProject]:
 
     try:
         # Selecciona las tareas asignadas a los usuarios en el proyecto
@@ -88,14 +98,19 @@ def get_task_in_project(
         logger.error(f'Error al obtener las tareas del proyecto {project_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_task_in_project')
     
-@router.post('/{project_id}', description='Crea una nueva tarea en un proyecto',
-            responses={ 200: {'description':'Tarea creado', 'model':responses.TaskCreateSucces},
-                        404: {'description':'Dato no encontrado', 'model':responses.DataNotFound},
-                        500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
-def create_task(new_task: schemas.CreateTask,
-                project_id: int,
-                user: db_models.User = Depends(auth_user),
-                session: Session = Depends(get_session)):
+@router.post(
+        '/{project_id}',
+        description='Crea una nueva tarea en un proyecto',
+        responses={ 200: {'description':'Tarea creado', 'model':responses.TaskCreateSucces},
+                    404: {'description':'Dato no encontrado', 'model':responses.DataNotFound},
+                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("10/minute")
+def create_task(
+        request:Request,
+        new_task: schemas.CreateTask,
+        project_id: int,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
     try:
         # Verifica que el projecto exista
         found_project_for_task_or_404(project_id=project_id, session=session)
@@ -134,17 +149,20 @@ def create_task(new_task: schemas.CreateTask,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='create_task')
 
-@router.patch('/{project_id}/{task_id}', description='Actualiza una tarea especifica de un proyecto',
-            response_model=responses.TaskUpdateSucces,
-            responses={ 200: {'description':'Tarea actualizada', 'model':responses.TaskUpdateSucces},
-                        400: {'description':'Error en request', 'model':responses.ErrorInRequest},
-                        404: {'description':'Dato no encontrado', 'model':responses.DataNotFound},
-                        500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
-def update_task(task_id: int,
-                project_id: int,
-                update_task: schemas.UpdateTask,
-                user: db_models.User = Depends(auth_user),
-                session: Session = Depends(get_session)): 
+@router.patch(
+        '/{project_id}/{task_id}', description='Actualiza una tarea especifica de un proyecto',
+        responses={ 200: {'description':'Tarea actualizada', 'model':responses.TaskUpdateSucces},
+                    400: {'description':'Error en request', 'model':responses.ErrorInRequest},
+                    404: {'description':'Dato no encontrado', 'model':responses.DataNotFound},
+                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+@limiter.limit("10/minute")
+def update_task(
+        request:Request,
+        task_id: int,
+        project_id: int,
+        update_task: schemas.UpdateTask,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)): 
 
     try:
         # Verifica que exista el proyecto
@@ -223,15 +241,17 @@ def update_task(task_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_task')
 
-@router.delete('/{project_id}/{task_id}', description='Elimina una tarea especifica de un proyecto',
-            response_model=responses.TaskDeleteSucces,
-            responses={ 200: {'description':'Tarea eliminada', 'model':responses.TaskDeleteSucces},
-                        400: {'description':'Error en request', 'model':responses.ErrorInRequest},
-                        500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
-def delete_task(task_id: int,
-                project_id: int,
-                user: db_models.User = Depends(auth_user),
-                session: Session = Depends(get_session)):
+@router.delete(
+        '/{project_id}/{task_id}',
+        description='Elimina una tarea especifica de un proyecto',
+        responses={ 200: {'description':'Tarea eliminada', 'model':responses.TaskDeleteSucces},
+                    400: {'description':'Error en request', 'model':responses.ErrorInRequest},
+                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+def delete_task(
+        task_id: int,
+        project_id: int,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
 
     try:
         is_admin_in_project(user=user, project_id=project_id, session=session)

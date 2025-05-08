@@ -5,6 +5,7 @@ from fastapi import WebSocketException, WebSocket
 from routers import ws
 from models import exceptions
 from unittest.mock import AsyncMock
+from starlette.requests import Request
 
 def test_websocket_connection(client, auth_headers, test_create_project_init, test_session):
     g = test_create_project_init
@@ -63,12 +64,14 @@ def test_get_chat(client, auth_headers, test_create_project_init):
 def test_get_chat_error(mocker):
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
+    mock_request = mocker.Mock(spec=Request)
 
     # Excepcion chat no encontrado
     session_mock.exec.return_value.all.return_value = []
 
     with pytest.raises(exceptions.ChatNotFoundError):
         ws.get_chat(
+                request=mock_request,
                 project_id=1,
                 user=mock_user,
                 session=session_mock)
@@ -78,6 +81,7 @@ def test_get_chat_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         ws.get_chat(
+                request=mock_request,
                 project_id=1,
                 user=mock_user,
                 session=session_mock)

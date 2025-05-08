@@ -1,10 +1,11 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, WebSocketException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, WebSocketException, Request
 from typing import List, Dict
 from datetime import datetime
 from models import schemas, db_models, exceptions, responses
 from db.database import get_session, Session, select, SQLAlchemyError
 from .auth import auth_user_ws, auth_user
 from core.logger import logger
+from core.limiter import limiter
 
 router = APIRouter(tags=['WebSocket'])
 
@@ -171,7 +172,9 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
             200:{'description':'Chat del proyecto obtenido', 'model':schemas.ChatMessage},
             500:{'description':'Error interno', 'model':responses.DatabaseErrorResponse}
         })
-def get_chat(project_id: int,
+@limiter.limit("20/minute")
+def get_chat(request: Request,
+            project_id: int,
             limit:int = 100,
             skip: int = 0,
             user: db_models.User = Depends(auth_user),

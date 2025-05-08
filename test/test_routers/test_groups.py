@@ -3,6 +3,7 @@ from conftest import auth_headers, client, auth_headers2, test_user2
 from models import db_models, exceptions, schemas
 from sqlalchemy.exc import SQLAlchemyError
 from routers import group
+from fastapi import Request
 
 def test_create_group(client, auth_headers, test_user2):
     response = client.post('/group', headers=auth_headers, json={'name':'probando'})
@@ -98,19 +99,24 @@ def test_delete_group(client, auth_headers, group_id, status, respuesta):
 
 def test_get_groups_error(mocker):
     db_session_mock = mocker.Mock()
+    mock_request = mocker.Mock(spec=Request)
 
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        group.get_groups(session=db_session_mock)
+        group.get_groups(request=mock_request, session=db_session_mock)
 
 def test_create_group_error(mocker):
     db_session_mock = mocker.Mock()
+    mock_request = mocker.Mock(spec=Request)
 
     db_session_mock.add.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        group.create_group(session=db_session_mock, new_group=schemas.CreateGroup(name='holaaa'))
+        group.create_group(
+            request=mock_request,
+            session=db_session_mock,
+            new_group=schemas.CreateGroup(name='holaaa'))
 
     db_session_mock.rollback.assert_called_once()
 
@@ -118,6 +124,8 @@ def test_update_group_error(mocker):
     # Simula un usuario y una session
     mock_user = mocker.Mock(spec=db_models.User)
     db_session_mock = mocker.Mock()
+
+    mock_request = mocker.Mock(spec=Request)
 
     #Simula el grupo obtenido
     mock_group = mocker.Mock()
@@ -133,6 +141,7 @@ def test_update_group_error(mocker):
     # Llama al endpoint
     with pytest.raises(exceptions.DatabaseError):
         group.update_group(
+                request=mock_request,
                 group_id=1,
                 updated_group=schemas.UpdateGroup(name='adioss'),
                 user=mock_user,
@@ -146,6 +155,8 @@ def test_delete_group_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     db_session_mock = mocker.Mock()
 
+    mock_request = mocker.Mock(spec=Request)
+
     mock_group = mocker.Mock()
     mock_group.id = 1
 
@@ -156,16 +167,19 @@ def test_delete_group_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         group.delete_group(
-                group_id=1,
-                user=mock_user,
-                session=db_session_mock
-            )
+            request=mock_request,
+            group_id=1,
+            user=mock_user,
+            session=db_session_mock
+        )
     
     db_session_mock.rollback.assert_called_once()
 
 def test_get_groups_in_user_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     db_session_mock = mocker.Mock()
+
+    mock_request = mocker.Mock(spec=Request)
 
     mock_group = mocker.Mock()
     mock_group.id = 1
@@ -174,15 +188,18 @@ def test_get_groups_in_user_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         group.get_groups_in_user(
-                user=mock_user,
-                session=db_session_mock
-            )
+            request=mock_request,
+            user=mock_user,
+            session=db_session_mock
+        )
 
 def test_append_user_group_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_append_user = mocker.Mock(spec=db_models.User)
     mock_append_user.id = 2
     db_session_mock = mocker.Mock()
+
+    mock_request = mocker.Mock(spec=Request)
 
     mock_group = mocker.Mock()
     mock_group.id = 1
@@ -195,11 +212,12 @@ def test_append_user_group_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         group.append_user_group(
-                group_id=1,
-                user_id=mock_append_user.id,
-                user=mock_user,
-                session=db_session_mock
-            )
+            request=mock_request,
+            group_id=1,
+            user_id=mock_append_user.id,
+            user=mock_user,
+            session=db_session_mock
+        )
     
     db_session_mock.rollback.assert_called_once()
 
@@ -208,6 +226,8 @@ def test_delete_user_group_error(mocker):
     mock_delete_user = mocker.Mock(spec=db_models.User)
     mock_delete_user.id = 2
     db_session_mock = mocker.Mock()
+
+    mock_request = mocker.Mock(spec=Request)
 
     mock_group = mocker.Mock()
     mock_group.id = 1
@@ -221,11 +241,12 @@ def test_delete_user_group_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         group.delete_user_group(
-                group_id=1,
-                user_id=mock_delete_user.id,
-                user=mock_user,
-                session=db_session_mock
-            )
+            request=mock_request,
+            group_id=1,
+            user_id=mock_delete_user.id,
+            user=mock_user,
+            session=db_session_mock
+        )
     
     db_session_mock.rollback.assert_called_once()
 
@@ -234,6 +255,8 @@ def test_update_user_group_error(mocker):
     mock_delete_user = mocker.Mock(spec=db_models.User)
     mock_delete_user.id = 2
     db_session_mock = mocker.Mock()
+
+    mock_request = mocker.Mock(spec=Request)
 
     mock_group = mocker.Mock()
     mock_group.id = 1
@@ -246,12 +269,13 @@ def test_update_user_group_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         group.update_user_group(
-                group_id=1,
-                user_id=mock_delete_user.id,
-                update_role=schemas.UpdateRoleUser(role=db_models.Group_Role.ADMIN),
-                user=mock_user,
-                session=db_session_mock
-            )
+            request=mock_request,
+            group_id=1,
+            user_id=mock_delete_user.id,
+            update_role=schemas.UpdateRoleUser(role=db_models.Group_Role.ADMIN),
+            user=mock_user,
+            session=db_session_mock
+        )
     
     db_session_mock.rollback.assert_called_once()
 
@@ -260,6 +284,8 @@ def test_get_user_in_group_error(mocker):
     mock_delete_user = mocker.Mock(spec=db_models.User)
     mock_delete_user.id = 2
     db_session_mock = mocker.Mock()
+
+    mock_request = mocker.Mock(spec=Request)
 
     mock_group = mocker.Mock()
     mock_group.id = 1
@@ -271,9 +297,10 @@ def test_get_user_in_group_error(mocker):
 
     with pytest.raises(exceptions.DatabaseError):
         group.get_user_in_group(
-                group_id=1,
-                session=db_session_mock
-            )
+            request=mock_request,
+            group_id=1,
+            session=db_session_mock
+        )
     
     db_session_mock.rollback.assert_called_once()
 
@@ -282,6 +309,8 @@ def test_is_admin_in_group_error(mocker):
     mock_user.user_id = 1
     db_session_mock = mocker.Mock()
 
+    mock_request = mocker.Mock(spec=Request)
+
     mock_group = mocker.Mock()
     mock_group.id = 1
 
@@ -289,11 +318,12 @@ def test_is_admin_in_group_error(mocker):
 
     with pytest.raises(exceptions.UserNotInGroupError) as exc_info:
         group.update_group(
-                group_id=1,
-                updated_group=schemas.UpdateGroup(name='error'),
-                user=mock_user,
-                session=db_session_mock
-                )
+            request=mock_request,
+            group_id=1,
+            updated_group=schemas.UpdateGroup(name='error'),
+            user=mock_user,
+            session=db_session_mock
+            )
         
     assert exc_info.value.user_id == mock_user.user_id
     assert exc_info.value.group_id == 1

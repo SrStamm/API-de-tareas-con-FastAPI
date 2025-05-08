@@ -1,26 +1,29 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
 from db.database import get_session, Session, select, selectinload, SQLAlchemyError
 from typing import List
 from .auth import auth_user
 from utils import get_group_or_404, get_user_or_404, is_admin_in_project, found_project_or_404
 from core.logger import logger
+from core.limiter import limiter
 
 router = APIRouter(prefix='/project', tags=['Project'])
 
-@router.get('/me', description=
-            """  Obtiene todos los proyectos existentes donde el usuario es miembro de este.
-                'skip' recibe un int que saltea el resultado obtenido.
-                'limit' recibe un int para limitar los resultados obtenidos.""",
-            responses={
-                200:{'description':'Projectos donde esta el usuario obtenidos', 'model':schemas.ReadBasicProject},
-                500:{'description':'error interno','model':responses.DatabaseErrorResponse}
-            })
+@router.get(
+        '/me',
+        description="""  Obtiene todos los proyectos existentes donde el usuario es miembro de este.
+                    'skip' recibe un int que saltea el resultado obtenido.
+                    'limit' recibe un int para limitar los resultados obtenidos.""",
+        responses={
+            200:{'description':'Projectos donde esta el usuario obtenidos', 'model':schemas.ReadBasicProject},
+            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+@limiter.limit("10/minute")
 def get_projects_iam(
-                    limit:int = 10,
-                    skip: int = 0,
-                    user: db_models.User = Depends(auth_user),
-                    session: Session = Depends(get_session)) -> List[schemas.ReadBasicProject]:
+        request:Request,
+        limit:int = 10,
+        skip: int = 0,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)) -> List[schemas.ReadBasicProject]:
 
     try:
         statement = (select(db_models.Project.project_id, db_models.Project.group_id, db_models.Project.title)
@@ -35,20 +38,22 @@ def get_projects_iam(
         logger.error(f'Error al obtener los proyectos a los que pertenece el user {user.user_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_projects_iam')
 
-@router.get('/{group_id}', description=
-            """ Obtiene todos los proyectos existentes de un grupo.
-                'skip' recibe un int que saltea el resultado obtenido.
-                'limit' recibe un int para limitar los resultados obtenidos.""",
-            responses={
-                200:{'description':'Projectos de un grupo obtenidos', 'model':schemas.ReadProject},
-                404:{'description':'Grupo o proyectos no encontrados','model':responses.NotFound},
-                500:{'description':'error interno','model':responses.DatabaseErrorResponse}
-            })
+@router.get(
+        '/{group_id}',
+        description=""" Obtiene todos los proyectos existentes de un grupo.
+                        'skip' recibe un int que saltea el resultado obtenido.
+                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        responses={
+            200:{'description':'Projectos de un grupo obtenidos', 'model':schemas.ReadProject},
+            404:{'description':'Grupo o proyectos no encontrados','model':responses.NotFound},
+            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+@limiter.limit("20/minute")
 def get_projects(
-            group_id: int,
-            limit:int = 10,
-            skip: int = 0,
-            session: Session = Depends(get_session)) -> List[schemas.ReadProject]:
+        request:Request,
+        group_id: int,
+        limit:int = 10,
+        skip: int = 0,
+        session: Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
     try:
         get_group_or_404(group_id=group_id, session=session)
@@ -65,17 +70,21 @@ def get_projects(
         logger.error(f'Error al obtener todos los proyectos del grupo {group_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_projects')
 
-@router.post('/{group_id}', description= """Permite crear un nuevo proyecto en un grupo al usuario autenticado.
-                                            Para crearlo se necesita un 'title', opcional 'description'""",
-            responses={
-                200:{'description':'Projecto creado', 'model':responses.ProjectCreateSucces},
-                404:{'description':'Grupo no encontrado','model':responses.NotFound},
-                500:{'description':'error interno','model':responses.DatabaseErrorResponse}
-            })
-def create_project( new_project: schemas.CreateProject,
-                    group_id: int,
-                    user: db_models.User = Depends(auth_user),
-                    session:Session = Depends(get_session)):
+@router.post(
+        '/{group_id}',
+        description= """Permite crear un nuevo proyecto en un grupo al usuario autenticado.
+                        Para crearlo se necesita un 'title', opcional 'description'""",
+        responses={
+            200:{'description':'Projecto creado', 'model':responses.ProjectCreateSucces},
+            404:{'description':'Grupo no encontrado','model':responses.NotFound},
+            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+@limiter.limit("10/minute")
+def create_project(
+        request:Request,
+        new_project: schemas.CreateProject,
+        group_id: int,
+        user: db_models.User = Depends(auth_user),
+        session:Session = Depends(get_session)):
     try:
         found_group = get_group_or_404(group_id, session)
 
@@ -116,19 +125,23 @@ def create_project( new_project: schemas.CreateProject,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='create_project')
 
-@router.patch('/{group_id}/{project_id}', description=  """ Permite modificar un proyecto de un grupo si tiene permiso de Administrador en el proyecto.
-                                                            Se puede modificar 'title' y 'description' """,
-            responses={
-                200:{'description':'Projecto actualizado', 'model':responses.ProjectUpdateSucces},
-                401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
-                404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-                500:{'description':'error interno','model':responses.DatabaseErrorResponse}
-            })
-def update_project( group_id: int,
-                    project_id: int,
-                    updated_project: schemas.UpdateProject,
-                    user: db_models.User = Depends(auth_user),
-                    session: Session = Depends(get_session)): 
+@router.patch(
+        '/{group_id}/{project_id}',
+        description= """ Permite modificar un proyecto de un grupo si tiene permiso de Administrador en el proyecto.
+                        Se puede modificar 'title' y 'description' """,
+        responses={
+            200:{'description':'Projecto actualizado', 'model':responses.ProjectUpdateSucces},
+            401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
+            404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
+            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+@limiter.limit("15/minute")
+def update_project(
+        request:Request,
+        group_id: int,
+        project_id: int,
+        updated_project: schemas.UpdateProject,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)): 
 
     try:
         is_admin_in_project(user=user, project_id=project_id, session=session)
@@ -150,19 +163,21 @@ def update_project( group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_project')
 
-@router.delete('/{group_id}/{project_id}',
-                description="""Permite eliminar un proyecto de un grupo si el usuario autenticado tiene permiso de Administrador en el proyecto""",
-                responses={
-                200:{'description':'Projecto eliminado', 'model':responses.ProjectDeleteSucces},
-                401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
-                404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-                500:{'description':'error interno','model':responses.DatabaseErrorResponse}
-            })
+@router.delete(
+        '/{group_id}/{project_id}',
+        description="""Permite eliminar un proyecto de un grupo si el usuario autenticado tiene permiso de Administrador en el proyecto""",
+        responses={
+            200:{'description':'Projecto eliminado', 'model':responses.ProjectDeleteSucces},
+            401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
+            404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
+            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+@limiter.limit("5/minute")
 def delete_project(
-                    group_id: int,
-                    project_id: int,
-                    user: db_models.User = Depends(auth_user),
-                    session: Session = Depends(get_session)):
+        request:Request,
+        group_id: int,
+        project_id: int,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
 
     try:
         is_admin_in_project(user, project_id, session)
@@ -179,21 +194,24 @@ def delete_project(
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_project')
 
-@router.post('/{group_id}/{project_id}/{user_id}',
-                description= """ Permite al usuario autenticado con permiso de Administrador
-                                el agregar un usuario al proyecto si este existe en el grupo.""",
-                responses={
-                    200:{'description':'Usuario agregado al projecto', 'model':responses.ProjectAppendUserSucces},
-                    400:{'description':'Error en request', 'model':responses.ErrorInRequest},
-                    401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
-                    404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-                    500:{'description':'error interno','model':responses.DatabaseErrorResponse}
-            })
-def add_user_to_project(group_id: int,
-                        user_id: int,
-                        project_id: int,
-                        user: db_models.User = Depends(auth_user),
-                        session: Session = Depends(get_session)):
+@router.post(
+        '/{group_id}/{project_id}/{user_id}',
+        description= """ Permite al usuario autenticado con permiso de Administrador
+                        el agregar un usuario al proyecto si este existe en el grupo.""",
+        responses={
+            200:{'description':'Usuario agregado al projecto', 'model':responses.ProjectAppendUserSucces},
+            400:{'description':'Error en request', 'model':responses.ErrorInRequest},
+            401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
+            404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
+            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+@limiter.limit("10/minute")
+def add_user_to_project(
+        request:Request,
+        group_id: int,
+        user_id: int,
+        project_id: int,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
 
     try:
         is_admin_in_project(user, project_id, session)
@@ -226,21 +244,24 @@ def add_user_to_project(group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='add_user_to_project')
 
-@router.delete('/{group_id}/{project_id}/{user_id}',
-                description="""Permite al usuario autenticado con permiso de Administrador
-                                el eliminar un usuario del proyecto""",
-                responses={
-                    200:{'description':'Usuario eliminado del projecto', 'model':responses.ProjectDeleteUserSucces},
-                    400:{'description':'Error en request', 'model':responses.ErrorInRequest},
-                    401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
-                    404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-                    500:{'description':'error interno','model':responses.DatabaseErrorResponse}
-            })
-def remove_user_from_project(group_id: int,
-                            project_id: int,
-                            user_id: int,
-                            user: db_models.User = Depends(auth_user),
-                            session: Session = Depends(get_session)):
+@router.delete(
+        '/{group_id}/{project_id}/{user_id}',
+        description="""Permite al usuario autenticado con permiso de Administrador
+                        el eliminar un usuario del proyecto""",
+        responses={
+            200:{'description':'Usuario eliminado del projecto', 'model':responses.ProjectDeleteUserSucces},
+            400:{'description':'Error en request', 'model':responses.ErrorInRequest},
+            401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
+            404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
+            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+@limiter.limit("10/minute")
+def remove_user_from_project(
+        request:Request,
+        group_id: int,
+        project_id: int,
+        user_id: int,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
 
     try:
         is_admin_in_project(user, project_id, session)
@@ -272,23 +293,25 @@ def remove_user_from_project(group_id: int,
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='remove_user_from_project')
 
-@router.patch('/{group_id}/{project_id}/{user_id}',
-                description= """Permite al usuario autenticado con permiso de Administrador
-                                el modificar el rol de un usuario en un proyecto""",
-                responses={
-                    200:{'description':'Permisos del usuario sobre el projecto actualizado', 'model':responses.ProjectUPdateUserSucces},
-                    400:{'description':'Error en request', 'model':responses.ErrorInRequest},
-                    401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
-                    404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-                    500:{'description':'error interno','model':responses.DatabaseErrorResponse}
-            })
+@router.patch(
+        '/{group_id}/{project_id}/{user_id}',
+        description= """Permite al usuario autenticado con permiso de Administrador
+                        el modificar el rol de un usuario en un proyecto""",
+        responses={
+            200:{'description':'Permisos del usuario sobre el projecto actualizado', 'model':responses.ProjectUPdateUserSucces},
+            400:{'description':'Error en request', 'model':responses.ErrorInRequest},
+            401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
+            404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
+            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+@limiter.limit("15/minute")
 def update_user_permission_in_project(
-                                group_id: int,
-                                user_id: int,
-                                project_id: int,
-                                update_role: schemas.UpdatePermissionUser,
-                                user: db_models.User = Depends(auth_user),
-                                session: Session = Depends(get_session)):
+        request:Request,
+        group_id: int,
+        user_id: int,
+        project_id: int,
+        update_role: schemas.UpdatePermissionUser,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
 
     try:
         is_admin_in_project(user, project_id, session)
@@ -316,24 +339,25 @@ def update_user_permission_in_project(
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_user_permission_in_project')
 
-@router.get('/{group_id}/{project_id}/users',
-            description=
-            """ Obtiene todos los usuarios de un proyecto.
-                'skip' recibe un int que saltea el resultado obtenido.
-                'limit' recibe un int para limitar los resultados obtenidos.""",
-            responses={
-                    200:{'description':'Usuarios del proyecto obtenidos', 'model':schemas.ReadProjectUser},
-                    400:{'description':'Error en request', 'model':responses.ErrorInRequest},
-                    404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-                    500:{'description':'error interno','model':responses.DatabaseErrorResponse}
-            })
-def get_user_in_project(group_id: int,
-                        project_id: int,
-                        limit:int = 10,
-                        skip: int = 0,
-                        session:Session = Depends(get_session),
-                        user: db_models.User = Depends(auth_user)
-                        ) -> List[schemas.ReadProjectUser]:
+@router.get(
+        '/{group_id}/{project_id}/users',
+        description=""" Obtiene todos los usuarios de un proyecto.
+                    'skip' recibe un int que saltea el resultado obtenido.
+                    'limit' recibe un int para limitar los resultados obtenidos.""",
+        responses={
+                200:{'description':'Usuarios del proyecto obtenidos', 'model':schemas.ReadProjectUser},
+                400:{'description':'Error en request', 'model':responses.ErrorInRequest},
+                404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
+                500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+@limiter.limit("20/minute")
+def get_user_in_project(
+        request:Request,
+        group_id: int,
+        project_id: int,
+        limit:int = 10,
+        skip: int = 0,
+        session:Session = Depends(get_session),
+        user: db_models.User = Depends(auth_user)) -> List[schemas.ReadProjectUser]:
     try:
         found_project_or_404(group_id, project_id, session)
 
