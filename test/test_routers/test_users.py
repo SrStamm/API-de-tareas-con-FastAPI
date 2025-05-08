@@ -52,7 +52,7 @@ def test_get_users_error(mocker):
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        user.get_users(db_session_mock)
+        user.get_users(session=db_session_mock)
 
     # db_session_mock.rollback.assert_called_once()
 

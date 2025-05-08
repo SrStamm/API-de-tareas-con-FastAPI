@@ -21,7 +21,7 @@ def test_get_groups(client, auth_headers):
     groups = response.json()
     assert isinstance(groups, list)
     for group in groups:
-        assert all(key in group for key in ['group_id', 'name', 'description', 'users'])
+        assert all(key in group for key in ['group_id', 'name', 'users'])
 
 def test_get_groups_in_user(client, auth_headers):
     response = client.get('/group/me', headers=auth_headers)
@@ -29,7 +29,7 @@ def test_get_groups_in_user(client, auth_headers):
     groups = response.json()
     assert isinstance(groups, list)
     for group in groups:
-        assert all(key in group for key in ['group_id', 'name', 'users'])
+        assert all(key in group for key in ['group_id', 'name', 'description', 'users'])
 
 @pytest.mark.parametrize(
         'group_id, user_id, status, respuesta', [
@@ -102,9 +102,7 @@ def test_get_groups_error(mocker):
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        group.get_groups(db_session_mock)
-
-    # db_session_mock.rollback.assert_called_once()
+        group.get_groups(session=db_session_mock)
 
 def test_create_group_error(mocker):
     db_session_mock = mocker.Mock()

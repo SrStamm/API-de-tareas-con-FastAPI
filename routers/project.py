@@ -8,19 +8,25 @@ from core.logger import logger
 
 router = APIRouter(prefix='/project', tags=['Project'])
 
-@router.get('/me', description="""Obtiene todos los proyectos existentes donde el usuario es miembro de este""",
+@router.get('/me', description=
+            """  Obtiene todos los proyectos existentes donde el usuario es miembro de este.
+                'skip' recibe un int que saltea el resultado obtenido.
+                'limit' recibe un int para limitar los resultados obtenidos.""",
             responses={
                 200:{'description':'Projectos donde esta el usuario obtenidos', 'model':schemas.ReadBasicProject},
                 500:{'description':'error interno','model':responses.DatabaseErrorResponse}
             })
 def get_projects_iam(
+                    limit:int = 10,
+                    skip: int = 0,
                     user: db_models.User = Depends(auth_user),
                     session: Session = Depends(get_session)) -> List[schemas.ReadBasicProject]:
 
     try:
-        statement = (select(db_models.Project)
+        statement = (select(db_models.Project.project_id, db_models.Project.group_id, db_models.Project.title)
                     .where( db_models.Project.project_id == db_models.project_user.project_id,
-                            db_models.project_user.user_id == user.user_id))
+                            db_models.project_user.user_id == user.user_id)
+                    .limit(limit).offset(skip))
         
         found_projects = session.exec(statement).all()
         return found_projects
@@ -29,20 +35,28 @@ def get_projects_iam(
         logger.error(f'Error al obtener los proyectos a los que pertenece el user {user.user_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_projects_iam')
 
-@router.get('/{group_id}', description="""Obtiene todos los proyectos existentes de un grupo""",
+@router.get('/{group_id}', description=
+            """ Obtiene todos los proyectos existentes de un grupo.
+                'skip' recibe un int que saltea el resultado obtenido.
+                'limit' recibe un int para limitar los resultados obtenidos.""",
             responses={
                 200:{'description':'Projectos de un grupo obtenidos', 'model':schemas.ReadProject},
                 404:{'description':'Grupo o proyectos no encontrados','model':responses.NotFound},
                 500:{'description':'error interno','model':responses.DatabaseErrorResponse}
             })
-def get_projects(group_id: int, session: Session = Depends(get_session)) -> List[schemas.ReadProject]:
+def get_projects(
+            group_id: int,
+            limit:int = 10,
+            skip: int = 0,
+            session: Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
     try:
         get_group_or_404(group_id=group_id, session=session)
 
         statement = (select(db_models.Project)
                     .options(selectinload(db_models.Project.users))
-                    .where(db_models.Project.group_id == group_id))
+                    .where(db_models.Project.group_id == group_id)
+                    .limit(limit).offset(skip))
         
         found_projects = session.exec(statement).all()
         return found_projects
@@ -303,7 +317,10 @@ def update_user_permission_in_project(
         raise exceptions.DatabaseError(error=e, func='update_user_permission_in_project')
 
 @router.get('/{group_id}/{project_id}/users',
-            description='Obtiene todos los usuarios de un proyecto',
+            description=
+            """ Obtiene todos los usuarios de un proyecto.
+                'skip' recibe un int que saltea el resultado obtenido.
+                'limit' recibe un int para limitar los resultados obtenidos.""",
             responses={
                     200:{'description':'Usuarios del proyecto obtenidos', 'model':schemas.ReadProjectUser},
                     400:{'description':'Error en request', 'model':responses.ErrorInRequest},
@@ -312,15 +329,18 @@ def update_user_permission_in_project(
             })
 def get_user_in_project(group_id: int,
                         project_id: int,
+                        limit:int = 10,
+                        skip: int = 0,
                         session:Session = Depends(get_session),
                         user: db_models.User = Depends(auth_user)
                         ) -> List[schemas.ReadProjectUser]:
     try:
         found_project_or_404(group_id, project_id, session)
 
-        statement = (select(db_models.User, db_models.project_user.permission)
+        statement = (select(db_models.User.user_id, db_models.User.username, db_models.project_user.permission)
                     .join(db_models.project_user, db_models.project_user.user_id == db_models.User.user_id)
-                    .where(db_models.project_user.project_id == project_id))
+                    .where(db_models.project_user.project_id == project_id)
+                    .limit(limit).offset(skip))
         
         results = session.exec(statement).all()
 
@@ -330,8 +350,8 @@ def get_user_in_project(group_id: int,
         
         # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
         return [
-            schemas.ReadProjectUser(user_id=user.user_id, username=user.username, permission=permission)
-            for user, permission in results
+            schemas.ReadProjectUser(user_id=user_id, username=username, permission=permission)
+            for user_id, username, permission in results
         ]
 
     except SQLAlchemyError as e:

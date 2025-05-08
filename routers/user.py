@@ -7,12 +7,18 @@ from core.logger import logger
 
 router = APIRouter(prefix='/user', tags=['User'])
 
-@router.get('', description='Obtiene los usuarios',
+@router.get('', description=
+            """ Obtiene los usuarios.
+                'skip' recibe un int que saltea el resultado obtenido.
+                'limit' recibe un int para limitar los resultados obtenidos.""",
             responses={ 200: {'description':'Usuarios encontrados','model':schemas.ReadUser},
                         500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
-def get_users(session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
+def get_users(
+            limit:int = 10,
+            skip: int = 0,
+            session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     try:
-        statement = select(db_models.User)
+        statement = select(db_models.User.user_id, db_models.User.username).limit(limit).offset(skip)
         found_users = session.exec(statement).all()
         return found_users
     

@@ -4,6 +4,7 @@ from datetime import datetime
 from models import schemas, db_models, exceptions, responses
 from db.database import get_session, Session, select, SQLAlchemyError
 from .auth import auth_user_ws, auth_user
+from core.logger import logger
 
 router = APIRouter(tags=['WebSocket'])
 
@@ -30,7 +31,7 @@ class ConnectionManager:
 
     async def broadcast(self, message: str, project_id: int):
         if project_id in self.active_connections:
-            for connection in self.active_connections[project_id]:
+            for connection in list(self.active_connections[project_id]):
                 try:
                     await connection.send_text(message)
                 except Exception:
@@ -116,7 +117,8 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
     
     try:
         while True:
-            data = await websocket.receive_text()
+            data = await websocket.receive_text()        
+
             msg = schemas.Message(
                 content=data,
                 user_id=user.user_id,
@@ -133,7 +135,7 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
             session.add(message)
             session.commit()            
             await manager.broadcast(msg.model_dump_json(), project_id)
-    
+
     except WebSocketDisconnect:
         manager.disconnect(websocket, project_id)
 
@@ -144,21 +146,42 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
             content=f'El usuario {user.user_id} se ha desconectado del projecto {project_id}'
         )
         await manager.broadcast(msg_disconnect.model_dump_json(), project_id)
+    
+    except RuntimeError as e:
+        logger.error(f'Error de ejecución: {e}')
+        manager.disconnect(websocket, project_id)
+    
+    except ValueError:
+        logger.error(f'Se esperaba un mensaje de texto valido')
+        manager.disconnect(websocket, project_id)
+
+    except SQLAlchemyError as e:
+        logger.error(f'Error interno en WebSocket: {e}')
+        manager.disconnect(websocket, project_id)
+    
+    except Exception as e:
+        logger.error(f'Error inesperado: {e}')
+        manager.disconnect(websocket, project_id)
 
 @router.get('/chat/{project_id}',
-            description="""Obtiene el chat de un proyecto""",
-            responses={
-                200:{'description':'Chat del proyecto obtenido', 'model':schemas.ChatMessage},
-                500:{'description':'Error interno', 'model':responses.DatabaseErrorResponse}
-            })
+        description=""" Obtiene el chat de un proyecto.
+                        'skip' recibe un int que saltea el resultado obtenido.
+                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        responses={
+            200:{'description':'Chat del proyecto obtenido', 'model':schemas.ChatMessage},
+            500:{'description':'Error interno', 'model':responses.DatabaseErrorResponse}
+        })
 def get_chat(project_id: int,
+            limit:int = 100,
+            skip: int = 0,
             user: db_models.User = Depends(auth_user),
             session: Session = Depends(get_session)) -> List[schemas.ChatMessage]:
+
     try:
-        stmt = (select(db_models.ProjectChat).where(
-            db_models.ProjectChat.project_id == project_id,
-            db_models.ProjectChat.user_id == user.user_id
-        ))
+        stmt = (select(db_models.ProjectChat)
+                .where( db_models.ProjectChat.project_id == project_id,
+                        db_models.ProjectChat.user_id == user.user_id)
+                .limit(limit).offset(skip))
 
         messages_chat = session.exec(stmt).all()
 

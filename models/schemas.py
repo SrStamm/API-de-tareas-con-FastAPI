@@ -56,10 +56,10 @@ class AsignUser(BaseModel):
 
 class ReadTask(BaseModel):
     task_id: int = Field(examples=[1])
+    project_id: int = Field(examples=[1])
     description: str = Field(examples=['Actualizar los datos'])
     date_exp: dt = Field(examples=['2025-10-24'])
     state: State = Field(examples=[State.EN_PROCESO])
-    project_id: int = Field(examples=[1])
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -79,6 +79,12 @@ class UpdateTask(BaseModel):
     append_user_ids: Optional[List[int]] = Field(default=None, examples=[1])
     exclude_user_ids: Optional[List[int]] = Field(default=None, examples=[1])
 
+    @field_validator("date_exp")
+    def date_exp_must_be_future(cls, value):
+        if value <= dt.now():
+            raise ValueError('La fechad expiración debe ser en el futuro.')
+        return value
+
 class CreateGroup(BaseModel):
     name: str = Field(examples=['Google'])
     description: str | None = Field(default=None, examples=['Somos un navegador Web'])
@@ -93,7 +99,7 @@ class ReadGroup(BaseModel):
 
 class ReadBasicDataGroup(BaseModel):
     group_id: int = Field(examples=[1])
-    name: str = Field(examples=['Amazon'])
+    name: str = Field(examples=['Amazon']) 
     users: List[ReadUser] = Field(examples=[[{'username':'user89', 'user_id':1},{'username':'user_falso', 'user_id':5}]])
 
 class UpdateGroup(BaseModel):

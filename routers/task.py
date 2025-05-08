@@ -8,12 +8,24 @@ from core.logger import logger
 
 router = APIRouter(prefix='/task', tags=['Task'])
 
-@router.get('', description='Obtiene todas las tareas a las que esta asignada el usuario',
+@router.get('', description=
+            """ Obtiene todas las tareas a las que esta asignada el usuario.
+                'skip' recibe un int que saltea el resultado obtenido.
+                'limit' recibe un int para limitar los resultados obtenidos.""",
             responses={ 200: {'description':'Tareas obtenidas', 'model':schemas.ReadTask},
                         500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
-def get_task(user:db_models.User = Depends(auth_user), session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
+def get_task(
+            limit:int = 10,
+            skip: int = 0,
+            user:db_models.User = Depends(auth_user),
+            session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
+    
     try:
-        statement = select(db_models.Task).where(db_models.Task.task_id == db_models.tasks_user.task_id, db_models.tasks_user.user_id == user.user_id)
+        statement = (select(db_models.Task)
+                    .where( db_models.Task.task_id == db_models.tasks_user.task_id,
+                            db_models.tasks_user.user_id == user.user_id)
+                    .limit(limit).offset(skip))
+        
         found_tasks = session.exec(statement).all()
         return found_tasks
     
@@ -21,15 +33,23 @@ def get_task(user:db_models.User = Depends(auth_user), session:Session = Depends
         logger.error(f'Error al obtener las tareas asignadas al user {user.user_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_task')
 
-@router.get('/{task_id}/users', description='Obtiene los usuarios asignados a una tarea',
+@router.get('/{task_id}/users', description=
+            """ Obtiene los usuarios asignados a una tarea.
+                'skip' recibe un int que saltea el resultado obtenido.
+                'limit' recibe un int para limitar los resultados obtenidos.""",
             responses={ 200: {'description':'Usarios asignados a tareas obtenidos', 'model':schemas.ReadUser},
                         500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
-def get_users_for_task(task_id: int,
+def get_users_for_task(
+                        task_id: int,
+                        limit:int = 10,
+                        skip: int = 0,
                         session: Session = Depends(get_session)) -> List[schemas.ReadUser]:
+
     try:
         statement = (select(db_models.User.user_id, db_models.User.username)
                     .join(db_models.tasks_user, db_models.tasks_user.user_id == db_models.User.user_id)
-                    .where(db_models.tasks_user.task_id == task_id))
+                    .where(db_models.tasks_user.task_id == task_id)
+                    .limit(limit).offset(skip))
 
         resultados = session.exec(statement).all()
 
@@ -39,19 +59,27 @@ def get_users_for_task(task_id: int,
         logger.error(f'Error al obtener los usuarios asignados a task {task_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_users_for_task')
 
-@router.get('/{project_id}', description='Obtiene todas las tareas asignadas de un proyecto',
+@router.get('/{project_id}', description=
+            """ Obtiene todas las tareas asignadas de un proyecto.
+                'skip' recibe un int que saltea el resultado obtenido.
+                'limit' recibe un int para limitar los resultados obtenidos.""",
             responses={ 200: {'description':'Tareas del projecto obtenidas', 'model':schemas.ReadTaskInProject},
                         500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
-def get_task_in_project(project_id: int,
+def get_task_in_project(
+                        project_id: int,
+                        limit:int = 10,
+                        skip: int = 0,
                         user: db_models.User = Depends(auth_user),
                         session: Session = Depends(get_session)) -> List[schemas.ReadTaskInProject]:
+
     try:
         # Selecciona las tareas asignadas a los usuarios en el proyecto
         statement = (select(db_models.Task)
                     .join(db_models.tasks_user, db_models.tasks_user.task_id == db_models.Task.task_id)
                     .join(db_models.project_user, db_models.project_user.user_id == db_models.tasks_user.user_id)
                     .where(db_models.project_user.project_id == project_id, db_models.project_user.user_id == user.user_id)
-                    .options(joinedload(db_models.Task.asigned)))
+                    .options(joinedload(db_models.Task.asigned))
+                    .limit(limit).offset(skip))
         
         found_tasks = session.exec(statement).unique().all()
         return found_tasks

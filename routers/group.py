@@ -8,16 +8,24 @@ from core.logger import logger
 
 router = APIRouter(prefix='/group', tags=['Group'])
 
-@router.get('', description='Obtiene todos los grupos',
+@router.get('', description=
+            """ Obtiene todos los grupos con informacion limitada.
+                'skip' recibe un int que saltea el resultado obtenido.
+                'limit' recibe un int para limitar los resultados obtenidos.
+            """,
             responses={
-                200:{'description':'Grupos obtenidos', 'model':schemas.ReadGroup},
+                200:{'description':'Grupos obtenidos', 'model':schemas.ReadBasicDataGroup},
                 500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
             })
-def get_groups(session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:
-    try:
+def get_groups(
+        limit:int = 10,
+        skip: int = 0,
+        session:Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]:
+
+    try: 
         statement = (select(db_models.Group)
                     .options(selectinload(db_models.Group.users))
-                    .order_by(db_models.Group.group_id))
+                    .order_by(db_models.Group.group_id).limit(limit).offset(skip))
         
         found_group = session.exec(statement).all()
         return found_group
@@ -121,18 +129,27 @@ def delete_group(group_id: int,
         raise exceptions.DatabaseError(error=e, func='delete_group')
     
 @router.get('/me',
-            description='Obtiene todos los grupos a los que pertenece el usuario autenticado',
+            description=
+            """ Obtiene todos los grupos a los que pertenece el usuario con informacion limitada.
+                'skip' recibe un int que saltea el resultado obtenido.
+                'limit' recibe un int para limitar los resultados obtenidos.
+            """,
             responses={
-                200:{'description':'Grupo donde esta el usuario obtenidos', 'model':schemas.ReadBasicDataGroup},
+                200:{'description':'Grupo donde esta el usuario obtenidos', 'model':schemas.ReadGroup},
                 500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}
             })
-def get_groups_in_user( user:db_models.User = Depends(auth_user),
-                        session:Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]:
+def get_groups_in_user( 
+                        limit:int = 10,
+                        skip: int = 0,
+                        user:db_models.User = Depends(auth_user),
+                        session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:
+
     try:
         statement = (select(db_models.Group)
                     .join(db_models.group_user, db_models.group_user.group_id == db_models.Group.group_id)
                     .where(db_models.group_user.user_id == user.user_id)
-                    .order_by(db_models.Group.group_id))
+                    .order_by(db_models.Group.group_id)
+                    .limit(limit).offset(skip))
         
         found_group = session.exec(statement).all()
         return found_group
@@ -260,7 +277,10 @@ def update_user_group(  group_id: int,
         raise exceptions.DatabaseError(error=e, func='update_user_group')
 
 @router.get('/{group_id}/users',
-            description='Obtiene todos los usuarios de un grupo',
+            description=
+            """ Obtiene todos los usuarios de un grupo.
+                'skip' recibe un int que saltea el resultado obtenido.
+                'limit' recibe un int para limitar los resultados obtenidos.""",
             responses={
                     200:{'description':'Usuarios del Grupo obtenidos', 'model':schemas.ReadGroupUser},
                     404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
@@ -268,6 +288,8 @@ def update_user_group(  group_id: int,
             })
 def get_user_in_group(
                     group_id: int,
+                    limit:int = 10,
+                    skip: int = 0,
                     session:Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
 
     try:
@@ -275,7 +297,8 @@ def get_user_in_group(
         
         statement = (select(db_models.User, db_models.group_user.role)
                     .join(db_models.group_user, db_models.group_user.user_id == db_models.User.user_id)
-                    .where(db_models.group_user.group_id == group_id))
+                    .where(db_models.group_user.group_id == group_id)
+                    .limit(limit).offset(skip))
         
         results = session.exec(statement).all()
         
