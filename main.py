@@ -1,15 +1,17 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from routers import group, project, task, user, auth, ws
 from db.database import create_db_and_tables
 from contextlib import asynccontextmanager
-
+from core.logger import logger
 from core.limiter import limiter, _rate_limit_exceeded_handler, RateLimitExceeded
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     yield
-    print({'Atencion':'La base de datos se encuentra desactivada'})
+    logger.info({'Atencion':'La base de datos se encuentra desactivada'})
+    logger.info({'Atencion':'El servidor no se encuentra disponible'})
+    
 
 app = FastAPI(lifespan=lifespan)
 
@@ -26,8 +28,3 @@ app.include_router(ws.router)
 @app.get('/')
 def root():
     return {'detail':'Bienvenido a esta API!'}
-
-@app.get("/ping")
-@limiter.limit("5/minute")
-async def ping(request: Request):
-    return {"message": "pong"}

@@ -3,7 +3,7 @@ from models import db_models, schemas, exceptions, responses
 from .auth import auth_user
 from db.database import get_session, Session, select, SQLAlchemyError, joinedload
 from typing import List
-from utils import is_admin_in_project, found_project_for_task_or_404, found_task_or_404, get_user_or_404, found_user_in_project_or_404
+from utils import found_project_for_task_or_404, found_task_or_404, get_user_or_404, found_user_in_project_or_404, require_permission
 from core.logger import logger
 from core.limiter import limiter
 
@@ -50,6 +50,7 @@ def get_users_for_task(
         task_id: int,
         limit:int = 10,
         skip: int = 0,
+        user: db_models.User = Depends(auth_user),
         session: Session = Depends(get_session)) -> List[schemas.ReadUser]:
 
     try:
@@ -97,7 +98,7 @@ def get_task_in_project(
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener las tareas del proyecto {project_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_task_in_project')
-    
+
 @router.post(
         '/{project_id}',
         description='Crea una nueva tarea en un proyecto',
@@ -109,15 +110,9 @@ def create_task(
         request:Request,
         new_task: schemas.CreateTask,
         project_id: int,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_permission(permissions=['admin'])),
         session: Session = Depends(get_session)):
     try:
-        # Verifica que el projecto exista
-        found_project_for_task_or_404(project_id=project_id, session=session)
-                
-        # Verifica que el usuario este autorizado en el proyecto
-        is_admin_in_project(user=user, project_id=project_id, session=session)
-
         # Busca el usuario al que va a asignarse la tarea, y si existe en el proyecto
         if new_task.user_ids:
             for user_id in new_task.user_ids:
@@ -161,17 +156,12 @@ def update_task(
         task_id: int,
         project_id: int,
         update_task: schemas.UpdateTask,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_permission(permissions=['admin'])),
         session: Session = Depends(get_session)): 
 
     try:
-        # Verifica que exista el proyecto
-        project = found_project_for_task_or_404(project_id=project_id, session=session)
-        
         # Busca la task seleccionada
         task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
-        
-        is_admin_in_project(user=user, project_id=project_id, session=session)
         
         if task.description != update_task.description and update_task.description:
             task.description = update_task.description
@@ -194,7 +184,7 @@ def update_task(
                 # Verifica que el usuario exista en el projecto
                 statement = (select(db_models.project_user).where(
                     db_models.project_user.user_id == user_exists.user_id,
-                    db_models.project_user.project_id == project.project_id))
+                    db_models.project_user.project_id == project_id))
                 
                 user_in_project = session.exec(statement).first()
                 if not user_in_project:
@@ -250,12 +240,10 @@ def update_task(
 def delete_task(
         task_id: int,
         project_id: int,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_permission(permissions=['admin'])),
         session: Session = Depends(get_session)):
 
-    try:
-        is_admin_in_project(user=user, project_id=project_id, session=session)
-        
+    try:        
         # Verifica que exista la task
         task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
                 

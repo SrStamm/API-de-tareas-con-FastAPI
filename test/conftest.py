@@ -109,3 +109,25 @@ def test_create_project_init(client, auth_headers, test_user2, test_user3, test_
         # Asociar user1 solo si no está ya asociado
         response = client.post('/project/1/1/1', headers=auth_headers)
         assert response.status_code == 200, f"Error al asociar user1: {response.json()}"
+
+    client.post('/group/1/2', headers=auth_headers)
+
+@pytest.fixture
+def test_create_project_init_for_tasks(client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
+    print("Ejecutando test_create_project_init")
+    
+    # Crear proyecto
+    response = client.post('/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
+    assert response.status_code == 200, f"Error al crear proyecto: {response.json()}"
+    print("Proyecto 1 creado")
+
+    # Verificar si el usuario 1 ya está asociado antes de intentar asociarlo
+    check_response = client.get('/project/1/1/users', headers=auth_headers)
+    if check_response.status_code == 200:
+        print("Usuario 1 ya está asociado al proyecto 1")
+    else:
+        # Asociar user1 solo si no está ya asociado
+        response = client.post('/project/1/1/1', headers=auth_headers)
+        assert response.status_code == 200, f"Error al asociar user1: {response.json()}"
+    
+    client.post('/project/1/1/2', headers=auth_headers)

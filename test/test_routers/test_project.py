@@ -4,9 +4,10 @@ from models import db_models, schemas, exceptions
 from routers import project
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
+from utils import require_permission
 
-def test_get_projects(client, test_create_group_init):
-    response = client.get('/project/1')
+def test_get_projects(client, test_create_group_init, auth_headers):
+    response = client.get('/project/1', headers=auth_headers)
     assert response.status_code == 200
     projects = response.json()
     assert isinstance(projects, list)
@@ -69,6 +70,16 @@ def test_update_user_permission_in_project(client, auth_headers, project_id, use
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
+def test_update_project_error(client, auth_headers2):
+    response = client.patch('/project/1/1', headers=auth_headers2, json={'description':'probando otra vez', 'name':'probando el update'})
+    assert response.status_code == 401
+    assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
+
+def test_failed_delete_project(client, auth_headers2):
+    response = client.delete(f'/project/1/1', headers=auth_headers2)
+    assert response.status_code == 401
+    assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
+
 @pytest.mark.parametrize(
         'user_id, status, detail', [
             (2, 200, 'El usuario ha sido eliminado del proyecto'),
@@ -81,11 +92,6 @@ def test_remove_user_from_project(client, auth_headers, user_id, status, detail)
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
-def test_failed_delete_project(client, auth_headers2):
-    response = client.delete(f'/project/1/1', headers=auth_headers2)
-    assert response.status_code == 401
-    assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
-
 @pytest.mark.parametrize(
         'project_id, status, detail', [
             (2, 200, 'Se ha eliminado el proyecto')
@@ -96,31 +102,24 @@ def test_delete_project(client, auth_headers, project_id, status, detail):
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
-def test_found_project_or_404_error(mocker):
+def test_require_permission(mocker):
+    # Usuario ficticio
     mock_user = mocker.Mock(spec=db_models.User)
     mock_user.user_id = 1
+
+    # Simulación de sesión de DB
     db_session_mock = mocker.Mock()
+    db_session_mock.exec.return_value.first.return_value = None  # Simula que no está en el grupo
 
-    mock_request = mocker.Mock(spec=Request)
+    # Ejecutás la función real que queremos testear
+    dependency = require_permission(permissions=['admin'])  # obtenés la dependencia real
 
-    mock_group = mocker.Mock()
-    mock_group.id = 1
+    # Verificás que lanza el error esperado
+    with pytest.raises(exceptions.UserNotInProjectError) as exc_info:
+        dependency(project_id=10000, user=mock_user, session=db_session_mock)
 
-    db_session_mock.exec.return_value.first.return_value = None
-
-    mocker.patch('routers.project.is_admin_in_project')
-
-    with pytest.raises(exceptions.ProjectNotFoundError) as exc_info:
-        project.update_project(
-                request=mock_request,
-                group_id=1,
-                project_id=1,
-                updated_project=schemas.UpdateProject(title='error'),
-                user=mock_user,
-                session=db_session_mock
-                )
-    
-    assert exc_info.value.project_id == 1
+    assert exc_info.value.user_id == mock_user.user_id
+    assert exc_info.value.project_id == 10000
 
 def test_get_projects_error(mocker):
     db_session_mock = mocker.Mock()
@@ -178,37 +177,7 @@ def test_create_project_error(mocker):
     
     db_session_mock.rollback.assert_called_once()
 
-def test_update_project_error(mocker):
-    mock_user = mocker.Mock(spec=db_models.User)
-    db_session_mock = mocker.Mock()
-
-    mock_request = mocker.Mock(spec=Request)
-
-    mock_group = mocker.Mock()
-    mock_group.id = 1
-
-    mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
-    mock_project.id = 1
-
-    mocker.patch('routers.project.is_admin_in_project')
-    mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
-
-    db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
-
-    with pytest.raises(exceptions.DatabaseError):
-        project.update_project(
-                request=mock_request,
-                group_id=1,
-                project_id = mock_project.id,
-                updated_project=schemas.UpdateProject(title='GoodBye world'),
-                user=mock_user,
-                session=db_session_mock
-            )
-    
-    db_session_mock.rollback.assert_called_once()
-
 def test_delete_project_error(mocker):
-    mock_user = mocker.Mock(spec=db_models.User)
     db_session_mock = mocker.Mock()
 
     mock_group = mocker.Mock()
@@ -219,7 +188,6 @@ def test_delete_project_error(mocker):
     mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
     mock_project.id = 1
 
-    mocker.patch('routers.project.is_admin_in_project')
     mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
 
     db_session_mock.delete.side_effect = SQLAlchemyError("Error en base de datos")
@@ -229,7 +197,6 @@ def test_delete_project_error(mocker):
                 request=mock_request,
                 group_id=1,
                 project_id = mock_project.id,
-                user=mock_user,
                 session=db_session_mock
             )
     
@@ -251,7 +218,6 @@ def test_add_user_to_project_error(mocker):
     mock_project.id = 1
     mock_project.users = []
 
-    mocker.patch('routers.project.is_admin_in_project')
     mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
     mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
     mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
@@ -265,7 +231,6 @@ def test_add_user_to_project_error(mocker):
                 group_id=1,
                 user_id=2,
                 project_id = 1,
-                user=mock_user,
                 session=db_session_mock
             )
     
@@ -287,7 +252,6 @@ def test_remove_user_from_project_error(mocker):
     mock_project.id = 1
     mock_project.users = [mock_append_user, mock_user]
 
-    mocker.patch('routers.project.is_admin_in_project')
     mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
     mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
     mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
@@ -301,7 +265,6 @@ def test_remove_user_from_project_error(mocker):
                 group_id=1,
                 project_id = 1,
                 user_id=2,
-                user=mock_user,
                 session=db_session_mock
             )
     
@@ -323,7 +286,6 @@ def test_update_user_permission_in_project_error(mocker):
     mock_project.id = 1
     mock_project.users = [mock_append_user, mock_user]
 
-    mocker.patch('routers.project.is_admin_in_project')
     mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
     mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
     mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
@@ -338,7 +300,6 @@ def test_update_user_permission_in_project_error(mocker):
                 user_id=2,
                 project_id = 1,
                 update_role=schemas.UpdatePermissionUser(permission=db_models.Project_Permission.ADMIN),
-                user=mock_user,
                 session=db_session_mock
             )
     

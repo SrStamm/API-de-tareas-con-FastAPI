@@ -88,7 +88,7 @@ class UserInProjectError(HTTPException):
 class UserNotInProjectError(HTTPException):
     def __init__(self, user_id, project_id):
         self.user_id = user_id
-        self.group_id = project_id
+        self.project_id = project_id
         super().__init__(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f'User with user_id {user_id} is not in project with project_id {project_id}'

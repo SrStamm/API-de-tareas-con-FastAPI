@@ -4,6 +4,7 @@ from models import db_models, exceptions, schemas
 from sqlalchemy.exc import SQLAlchemyError
 from routers import group
 from fastapi import Request
+from utils import require_role
 
 def test_create_group(client, auth_headers, test_user2):
     response = client.post('/group', headers=auth_headers, json={'name':'probando'})
@@ -123,6 +124,8 @@ def test_create_group_error(mocker):
 def test_update_group_error(mocker):
     # Simula un usuario y una session
     mock_user = mocker.Mock(spec=db_models.User)
+    mock_user.user_id = 1
+
     db_session_mock = mocker.Mock()
 
     mock_request = mocker.Mock(spec=Request)
@@ -132,7 +135,8 @@ def test_update_group_error(mocker):
     mock_group.id = 1
 
     # Configura los mocks para las funciones auxiliares
-    mocker.patch('routers.group.is_admin_in_group') # No lanza la excepcion
+    mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
+
     mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
 
     # Simula un error al hacer commit
@@ -144,7 +148,6 @@ def test_update_group_error(mocker):
                 request=mock_request,
                 group_id=1,
                 updated_group=schemas.UpdateGroup(name='adioss'),
-                user=mock_user,
                 session=db_session_mock
             )
     
@@ -160,7 +163,8 @@ def test_delete_group_error(mocker):
     mock_group = mocker.Mock()
     mock_group.id = 1
 
-    mocker.patch('routers.group.is_admin_in_group') # No lanza la excepcion
+    mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
+
     mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
 
     db_session_mock.delete.side_effect = SQLAlchemyError("Error en base de datos")
@@ -169,7 +173,6 @@ def test_delete_group_error(mocker):
         group.delete_group(
             request=mock_request,
             group_id=1,
-            user=mock_user,
             session=db_session_mock
         )
     
@@ -205,7 +208,8 @@ def test_append_user_group_error(mocker):
     mock_group.id = 1
     mock_group.users = []
 
-    mocker.patch('routers.group.is_admin_in_group')
+    mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
+
     mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
@@ -215,7 +219,6 @@ def test_append_user_group_error(mocker):
             request=mock_request,
             group_id=1,
             user_id=mock_append_user.id,
-            user=mock_user,
             session=db_session_mock
         )
     
@@ -233,7 +236,8 @@ def test_delete_user_group_error(mocker):
     mock_group.id = 1
     mock_group.users = [mock_delete_user, mock_user]
 
-    mocker.patch('routers.group.is_admin_in_group')
+    mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
+
     mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
     mocker.patch('routers.group.get_user_or_404', return_value=mock_delete_user)
 
@@ -244,7 +248,6 @@ def test_delete_user_group_error(mocker):
             request=mock_request,
             group_id=1,
             user_id=mock_delete_user.id,
-            user=mock_user,
             session=db_session_mock
         )
     
@@ -262,7 +265,8 @@ def test_update_user_group_error(mocker):
     mock_group.id = 1
     mock_group.users = [mock_delete_user, mock_user]
 
-    mocker.patch('routers.group.is_admin_in_group')
+    mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
+
     mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
@@ -273,7 +277,6 @@ def test_update_user_group_error(mocker):
             group_id=1,
             user_id=mock_delete_user.id,
             update_role=schemas.UpdateRoleUser(role=db_models.Group_Role.ADMIN),
-            user=mock_user,
             session=db_session_mock
         )
     
@@ -304,26 +307,26 @@ def test_get_user_in_group_error(mocker):
     
     db_session_mock.rollback.assert_called_once()
 
-def test_is_admin_in_group_error(mocker):
+def test_require_role_error(mocker):
+    # Usuario ficticio
     mock_user = mocker.Mock(spec=db_models.User)
     mock_user.user_id = 1
+
+    # Simulación de sesión de DB
     db_session_mock = mocker.Mock()
+    db_session_mock.exec.return_value.first.return_value = None  # Simula que no está en el grupo
 
-    mock_request = mocker.Mock(spec=Request)
+    # Ejecutás la función real que queremos testear
+    dependency = require_role(roles=['admin'])  # obtenés la dependencia real
 
-    mock_group = mocker.Mock()
-    mock_group.id = 1
-
-    db_session_mock.exec.return_value.first.return_value = None
-
+    # Verificás que lanza el error esperado
     with pytest.raises(exceptions.UserNotInGroupError) as exc_info:
-        group.update_group(
-            request=mock_request,
-            group_id=1,
-            updated_group=schemas.UpdateGroup(name='error'),
-            user=mock_user,
-            session=db_session_mock
-            )
-        
+        dependency(group_id=10000, user=mock_user, session=db_session_mock)
+
     assert exc_info.value.user_id == mock_user.user_id
-    assert exc_info.value.group_id == 1
+    assert exc_info.value.group_id == 10000
+
+def test_update_group(client, auth_headers2):
+    response = client.patch('/group/1', headers=auth_headers2, json={'description':'probando otra vez', 'name':'probando el update'})
+    assert response.status_code == 401
+    assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}

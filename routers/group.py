@@ -3,7 +3,7 @@ from models import db_models, schemas, exceptions, responses
 from db.database import get_session, Session, select, selectinload, SQLAlchemyError
 from typing import List
 from .auth import auth_user
-from utils import get_group_or_404, get_user_or_404, is_admin_in_group
+from utils import get_group_or_404, get_user_or_404, require_role, role_of_user_in_group
 from core.logger import logger
 from core.limiter import limiter
 
@@ -86,12 +86,10 @@ def update_group(
         request: Request,
         group_id: int,
         updated_group: schemas.UpdateGroup,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_role(roles=['admin'])),
         session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_group(user=user, group_id=group_id, session=session)
-
         found_group = get_group_or_404(group_id, session)
         
         if updated_group.name is not None:
@@ -121,13 +119,13 @@ def update_group(
 def delete_group(
         request: Request,
         group_id: int,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_role(roles=['admin'])),
         session: Session = Depends(get_session)):
 
     try:
-        found_group = get_group_or_404(group_id, session)
-        
-        is_admin_in_group(user, group_id, session)
+        # found_group = get_group_or_404(group_id, session)
+
+        found_group = session.get(db_models.Group, group_id)
         
         session.delete(found_group)
         session.commit()
@@ -183,12 +181,10 @@ def append_user_group(
         request: Request,
         group_id: int,
         user_id: int,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_role(roles=['admin'])),
         session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_group(user, group_id, session)
-
         found_group = get_group_or_404(group_id, session)
         
         # Busca el usuario
@@ -200,7 +196,7 @@ def append_user_group(
         
         # Lo agrega al grupo
         found_group.users.append(new_user)
-        session.commit()        
+        session.commit()
         return {'detail':'El usuario ha sido agregado al grupo'}
     
     except SQLAlchemyError as e:
@@ -222,11 +218,12 @@ def delete_user_group(
         request: Request,
         group_id: int,
         user_id: int,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_role(roles=['admin'])),
         session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_group(user, group_id, session)
+        actual_role = auth_data['role']
+        actual_user = auth_data['user']
 
         found_group = get_group_or_404(group_id, session)
         
@@ -235,10 +232,18 @@ def delete_user_group(
 
         if found_user in found_group.users:
             # Lo elimina del grupo
-            found_group.users.remove(found_user)
-            session.commit()
+
+            role = role_of_user_in_group(user_id=found_user.user_id, group_id=group_id, session=session)
             
-            return {'detail':'El usuario ha sido eliminado al grupo'}
+            
+            if role in ['editor', 'member'] and actual_role == 'admin' or role == 'member' and actual_role == 'editor':            
+                found_group.users.remove(found_user)
+                session.commit()
+                
+                logger.info(f'User {user_id} eliminado del Group {group_id} por {actual_user.user_id}')
+                return {'detail':'El usuario ha sido eliminado al grupo'}
+            
+            raise exceptions.NotAuthorized(actual_user.user_id)
         
         else:
             logger.error(f'El user {user_id} no se encontro en el grupo {group_id}')
@@ -264,12 +269,10 @@ def update_user_group(
         group_id: int,
         user_id: int,
         update_role: schemas.UpdateRoleUser,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_role(roles=['admin'])),
         session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_group(user, group_id, session)
-
         get_group_or_404(group_id, session)
 
         # Busca el usuario
@@ -309,6 +312,7 @@ def get_user_in_group(
         group_id: int,
         limit:int = 10,
         skip: int = 0,
+        user: db_models.User = Depends(auth_user),
         session:Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
 
     try:

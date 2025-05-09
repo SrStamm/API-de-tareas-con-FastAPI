@@ -3,7 +3,7 @@ from models import db_models, schemas, exceptions, responses
 from db.database import get_session, Session, select, selectinload, SQLAlchemyError
 from typing import List
 from .auth import auth_user
-from utils import get_group_or_404, get_user_or_404, is_admin_in_project, found_project_or_404
+from utils import get_group_or_404, get_user_or_404, found_project_or_404, require_permission
 from core.logger import logger
 from core.limiter import limiter
 
@@ -53,10 +53,12 @@ def get_projects(
         group_id: int,
         limit:int = 10,
         skip: int = 0,
+        user: db_models.User = Depends(auth_user),
         session: Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
     try:
         get_group_or_404(group_id=group_id, session=session)
+        
 
         statement = (select(db_models.Project)
                     .options(selectinload(db_models.Project.users))
@@ -140,12 +142,10 @@ def update_project(
         group_id: int,
         project_id: int,
         updated_project: schemas.UpdateProject,
-        user: db_models.User = Depends(auth_user),
-        session: Session = Depends(get_session)): 
+        auth_data: dict = Depends(require_permission(permissions=['admin'])),
+        session: Session = Depends(get_session)):  
 
     try:
-        is_admin_in_project(user=user, project_id=project_id, session=session)
-
         found_project = found_project_or_404(group_id=group_id, project_id=project_id, session=session)
                 
         if found_project.title != updated_project.title and updated_project.title is not None:
@@ -176,12 +176,10 @@ def delete_project(
         request:Request,
         group_id: int,
         project_id: int,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_permission(permissions=['admin'])),
         session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_project(user, project_id, session)
-        
         found_project = found_project_or_404(group_id=group_id, project_id=project_id, session=session)
         
         session.delete(found_project)
@@ -210,12 +208,10 @@ def add_user_to_project(
         group_id: int,
         user_id: int,
         project_id: int,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_permission(permissions=['admin'])),
         session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_project(user, project_id, session)
-        
         found_project = found_project_or_404(group_id, project_id, session)
         
         # Busca el usuario
@@ -260,12 +256,10 @@ def remove_user_from_project(
         group_id: int,
         project_id: int,
         user_id: int,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_permission(permissions=['admin'])),
         session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_project(user, project_id, session)
-        
         found_project = found_project_or_404(group_id, project_id, session)
         
         # Busca el usuario
@@ -310,12 +304,10 @@ def update_user_permission_in_project(
         user_id: int,
         project_id: int,
         update_role: schemas.UpdatePermissionUser,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_permission(permissions=['admin'])),
         session: Session = Depends(get_session)):
 
     try:
-        is_admin_in_project(user, project_id, session)
-        
         project = found_project_or_404(group_id, project_id, session)
 
         # Busca el usuario
