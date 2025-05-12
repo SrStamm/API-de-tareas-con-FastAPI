@@ -86,16 +86,16 @@ def update_group(
         request: Request,
         group_id: int,
         updated_group: schemas.UpdateGroup,
-        auth_data: dict = Depends(require_role(roles=['admin'])),
+        auth_data: dict = Depends(require_role(roles=['admin', 'editor'])),
         session: Session = Depends(get_session)):
 
     try:
         found_group = get_group_or_404(group_id, session)
         
-        if updated_group.name is not None:
+        if updated_group.name and found_group.name != updated_group.name:
             found_group.name = updated_group.name
             
-        if updated_group.description is not None:
+        if updated_group.description and found_group.description != updated_group.description:
             found_group.description = updated_group.description
         
         session.commit()
@@ -181,10 +181,11 @@ def append_user_group(
         request: Request,
         group_id: int,
         user_id: int,
-        auth_data: dict = Depends(require_role(roles=['admin'])),
+        auth_data: dict = Depends(require_role(roles=['admin', 'editor'])),
         session: Session = Depends(get_session)):
 
     try:
+        actual_role = auth_data['role']
         found_group = get_group_or_404(group_id, session)
         
         # Busca el usuario
@@ -218,7 +219,7 @@ def delete_user_group(
         request: Request,
         group_id: int,
         user_id: int,
-        auth_data: dict = Depends(require_role(roles=['admin'])),
+        auth_data: dict = Depends(require_role(roles=['admin', 'editor'])),
         session: Session = Depends(get_session)):
 
     try:
@@ -226,29 +227,28 @@ def delete_user_group(
         actual_user = auth_data['user']
 
         found_group = get_group_or_404(group_id, session)
-        
+
         # Busca el usuario
         found_user = get_user_or_404(user_id, session)
 
         if found_user in found_group.users:
             # Lo elimina del grupo
 
-            role = role_of_user_in_group(user_id=found_user.user_id, group_id=group_id, session=session)
-            
-            
-            if role in ['editor', 'member'] and actual_role == 'admin' or role == 'member' and actual_role == 'editor':            
+            role_user = role_of_user_in_group(user_id=found_user.user_id, group_id=group_id, session=session)
+
+            if role_user in ['editor', 'member'] and actual_role == 'admin' or role_user == 'member' and actual_role == 'editor':            
                 found_group.users.remove(found_user)
                 session.commit()
-                
+
                 logger.info(f'User {user_id} eliminado del Group {group_id} por {actual_user.user_id}')
                 return {'detail':'El usuario ha sido eliminado al grupo'}
-            
+
             raise exceptions.NotAuthorized(actual_user.user_id)
-        
+
         else:
             logger.error(f'El user {user_id} no se encontro en el grupo {group_id}')
             raise exceptions.UserNotFoundError(user_id)
-    
+
     except SQLAlchemyError as e:
         logger.error(f'Error al eliminar un usuario del grupo {e}')
         session.rollback()
@@ -287,11 +287,11 @@ def update_user_group(
             raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
 
         found_user.role = update_role.role
-        
+
         session.commit()
 
         return {'detail':'Se ha cambiado los permisos del usuario en el grupo'}
-    
+
     except SQLAlchemyError as e:
         logger.error(f'Error al actualizar el usuario en el grupo')
         session.rollback()

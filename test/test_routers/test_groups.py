@@ -55,7 +55,12 @@ def test_get_user_in_group(client, auth_headers):
         assert all(key in group for key in ['user_id', 'username', 'role'])
 
 def test_update_group(client, auth_headers):
-    response = client.patch('/group/1', headers=auth_headers, json={'description':'probando otra vez', 'name':'probando el update'})
+    response = client.patch('/group/1', headers=auth_headers, json={'name':'probando el update'})
+    assert response.status_code == 200
+    assert response.json() == {'detail': 'Se ha actualizado la informacion del grupo'}
+
+def test_update_group2(client, auth_headers):
+    response = client.patch('/group/1', headers=auth_headers, json={'description':'probando otra vez'})
     assert response.status_code == 200
     assert response.json() == {'detail': 'Se ha actualizado la informacion del grupo'}
 
@@ -198,8 +203,7 @@ def test_get_groups_in_user_error(mocker):
 
 def test_append_user_group_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
-    mock_append_user = mocker.Mock(spec=db_models.User)
-    mock_append_user.id = 2
+
     db_session_mock = mocker.Mock()
 
     mock_request = mocker.Mock(spec=Request)
@@ -208,7 +212,7 @@ def test_append_user_group_error(mocker):
     mock_group.id = 1
     mock_group.users = []
 
-    mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
+    mock_auth_data = {'user': mock_user, 'role': 'admin'}
 
     mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
 
@@ -218,28 +222,30 @@ def test_append_user_group_error(mocker):
         group.append_user_group(
             request=mock_request,
             group_id=1,
-            user_id=mock_append_user.id,
-            session=db_session_mock
+            user_id=2,
+            session=db_session_mock,
+            auth_data=mock_auth_data
         )
     
     db_session_mock.rollback.assert_called_once()
 
-def test_delete_user_group_error(mocker):
+def test_delete_user_group_database_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_delete_user = mocker.Mock(spec=db_models.User)
-    mock_delete_user.id = 2
+    mock_delete_user.user_id = 2
     db_session_mock = mocker.Mock()
 
     mock_request = mocker.Mock(spec=Request)
 
     mock_group = mocker.Mock()
-    mock_group.id = 1
+    mock_group.group_id = 1
     mock_group.users = [mock_delete_user, mock_user]
 
-    mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
+    mock_auth_data = {'user': mock_user, 'role': 'admin'}
 
     mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
     mocker.patch('routers.group.get_user_or_404', return_value=mock_delete_user)
+    mocker.patch('routers.group.role_of_user_in_group', return_value='editor')
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -247,11 +253,42 @@ def test_delete_user_group_error(mocker):
         group.delete_user_group(
             request=mock_request,
             group_id=1,
-            user_id=mock_delete_user.id,
-            session=db_session_mock
+            user_id=2,
+            session=db_session_mock,
+            auth_data=mock_auth_data
         )
-    
+
     db_session_mock.rollback.assert_called_once()
+
+def test_delete_user_group_NotAuthorized_error(mocker):
+    mock_user = mocker.Mock(spec=db_models.User)
+
+    mock_delete_user = mocker.Mock(spec=db_models.User)
+    mock_delete_user.user_id = 2
+
+    db_session_mock = mocker.Mock()
+
+    mock_request = mocker.Mock(spec=Request)
+
+    mock_group = mocker.Mock()
+    mock_group.group_id = 1
+    mock_group.users = [mock_delete_user, mock_user]
+
+    mock_auth_data = {'user': mock_user, 'role': 'editor'}
+
+    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+    mocker.patch('routers.group.get_user_or_404', return_value=mock_delete_user)
+    mocker.patch('routers.group.role_of_user_in_group', return_value='editor')
+
+
+    with pytest.raises(exceptions.NotAuthorized):
+        group.delete_user_group(
+            request=mock_request,
+            group_id=1,
+            user_id=2,
+            session=db_session_mock,
+            auth_data=mock_auth_data
+        )
 
 def test_update_user_group_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)

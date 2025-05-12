@@ -1,0 +1,63 @@
+import pytest
+from models import schemas, db_models, exceptions
+from routers import group, project
+from fastapi import Request
+
+def test_get_group_or_404_error(mocker):
+    request_mocker = mocker.Mock(spec=Request)
+    
+    session_mock = mocker.Mock()
+
+    session_mock.exec.return_value.first.return_value = None
+
+    with pytest.raises(exceptions.GroupNotFoundError):
+        group.update_group(
+            request=request_mocker,
+            group_id=1,
+            updated_group=schemas.UpdateGroup(),
+            session=session_mock
+        )
+
+def test_get_project_or_404_error(mocker):
+    request_mocker = mocker.Mock(spec=Request)
+    
+    session_mock = mocker.Mock()
+
+    session_mock.exec.return_value.first.return_value = None
+
+    with pytest.raises(exceptions.ProjectNotFoundError):
+        project.update_project(
+            request=request_mocker,
+            group_id=1,
+            project_id=1,
+            updated_project=schemas.UpdateProject(),
+            session=session_mock
+        )
+
+def test_role_of_user_in_group(mocker):
+    request_mocker = mocker.Mock(spec=Request)
+    
+    session_mock = mocker.Mock()
+
+    session_mock.exec.return_value.first.return_value = None
+
+    mock_user = mocker.Mock(spec=db_models.User)
+    mock_user.user_id = 1
+    
+    mock_group = mocker.Mock(spec=db_models.Group)
+    mock_group.group_id = 1
+    mock_group.users = [mock_user]
+
+    mock_auth_data = {'user': mock_user, 'role': 'editor'}
+
+    mocker.patch("routers.group.get_group_or_404", return_value=mock_group)
+    mocker.patch("routers.group.get_user_or_404", return_value=mock_user)
+
+    with pytest.raises(exceptions.UserNotInGroupError):
+        group.delete_user_group(
+            request=request_mocker,
+            group_id=1,
+            user_id=1,
+            auth_data=mock_auth_data,
+            session=session_mock
+        )

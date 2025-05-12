@@ -61,7 +61,7 @@ def test_get_user_in_project(client, auth_headers):
 
 @pytest.mark.parametrize(
         'project_id, user_id, permission, status, detail', [
-            (1, 1, db_models.Project_Permission.ADMIN, 200, 'Se ha cambiado los permisos del usuario en el proyecto'),
+            (1, 2, db_models.Project_Permission.READ, 200, 'Se ha cambiado los permisos del usuario en el proyecto'),
             (1, 100000, db_models.Project_Permission.ADMIN, 400, 'User with user_id 100000 is not in project with project_id 1')
             ]
 )
@@ -74,6 +74,37 @@ def test_update_project_error(client, auth_headers2):
     response = client.patch('/project/1/1', headers=auth_headers2, json={'description':'probando otra vez', 'name':'probando el update'})
     assert response.status_code == 401
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
+
+def test_update_project_error_database(mocker):
+    mock_user = mocker.Mock(spec=db_models.User)
+
+    db_session_mock = mocker.Mock()
+
+    mock_group = mocker.Mock()
+    mock_group.id = 1
+
+    mock_request = mocker.Mock(spec=Request)
+
+    mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
+    mock_project.id = 1
+
+    mock_auth_data = {'user': mock_user, 'permission': 'write'}
+
+    mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
+
+    db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        project.update_project(
+                request=mock_request,
+                group_id=1,
+                project_id = 1,
+                updated_project=schemas.UpdateProject(title='Hola'),
+                auth_data=mock_auth_data,
+                session=db_session_mock
+            )
+    
+    db_session_mock.rollback.assert_called_once()
 
 def test_failed_delete_project(client, auth_headers2):
     response = client.delete(f'/project/1/1', headers=auth_headers2)
@@ -163,6 +194,7 @@ def test_create_project_error(mocker):
     mock_group.id = 1
 
     mock_request = mocker.Mock(spec=Request)
+    mock_auth_data = {'user': mock_user, 'permission': 'admin'}
 
     db_session_mock.add.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -171,8 +203,8 @@ def test_create_project_error(mocker):
                 request=mock_request,
                 new_project=schemas.CreateProject(title='hello world'),
                 group_id=1,
-                user=mock_user,
-                session=db_session_mock
+                session=db_session_mock,
+                auth_data=mock_auth_data
             )
     
     db_session_mock.rollback.assert_called_once()
@@ -220,7 +252,6 @@ def test_add_user_to_project_error(mocker):
 
     mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
     mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
-    mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
     mocker.patch('routers.project.get_user_or_404', return_value=mock_append_user)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
@@ -254,7 +285,6 @@ def test_remove_user_from_project_error(mocker):
 
     mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
     mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
-    mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
     mocker.patch('routers.project.get_user_or_404', return_value=mock_append_user)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
@@ -287,7 +317,6 @@ def test_update_user_permission_in_project_error(mocker):
     mock_project.users = [mock_append_user, mock_user]
 
     mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
-    mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
     mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
     mocker.patch('routers.project.get_user_or_404', return_value=mock_append_user)
 

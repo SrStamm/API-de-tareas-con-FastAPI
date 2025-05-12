@@ -9,7 +9,7 @@ from typing import List
 
 def get_group_or_404(group_id: int, session: Session):
     statement = select(db_models.Group).where(db_models.Group.group_id == group_id)
-    group = session.exec(statement).first()
+    group = session.exec(statement).first() 
         
     if not group:
         logger.error(f'Group {group_id} no encontrado')
@@ -53,8 +53,8 @@ def get_user_or_404(user_id: int, session: Session):
     return user
 
 def found_user_in_project_or_404(user_id:int, project_id:int, session: Session) -> db_models.User:
-    stmt = (select(db_models.project_user).where(
-                    db_models.project_user.user_id == user_id,
+    stmt = (select(db_models.project_user)
+            .where( db_models.project_user.user_id == user_id,
                     db_models.project_user.project_id == project_id))
     
     user = session.exec(stmt).first()
@@ -67,7 +67,8 @@ def found_user_in_project_or_404(user_id:int, project_id:int, session: Session) 
 
 def found_task_or_404(project_id:int, task_id: int, session: Session) -> db_models.Task:
     stmt = (select(db_models.Task)
-            .where(db_models.Task.project_id == project_id, db_models.Task.task_id == task_id))
+            .where( db_models.Task.project_id == project_id,
+                    db_models.Task.task_id == task_id))
     
     task_found = session.exec(stmt).first()
     

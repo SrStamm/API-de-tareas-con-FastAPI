@@ -40,11 +40,12 @@ def test_get_task_in_project(client, auth_headers):
 
 @pytest.mark.parametrize(
         'project_id, task_id, datos, status, detail', [
-            (1, 1, {'description':'probando el testing... otra vez', 'date_exp':'2025-12-12', 'state':db_models.State.EN_PROCESO, 'exclude_user_ids': [1]}, 200, 'Se ha actualizado la tarea'),
+            (1, 1, {'description':'probando el testing... otra vez', 'date_exp':'2025-12-12', 'state':db_models.State.EN_PROCESO, 'exclude_user_ids': [1], 'append_user_ids':[2]}, 200, 'Se ha actualizado la tarea'),
             (1000, 1, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Project with project_id 1000 not found'),
             (1, 1000, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Task with task_id 1000 is not in Project with project_id 1'),
             (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'exclude_user_ids':[100000]}, 400, 'Task with task_id 1 is NOT assigned to User with user_id 100000'),
             (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[3]}, 400, 'User with user_id 3 is not in project with project_id 1'),
+            (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[2]}, 400, 'Task with task_id 1 is assigned to User with user_id 2'),
             (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[100000]}, 404, 'User with user_id 100000 not found'),
         ]
 )
@@ -78,15 +79,18 @@ def test_get_users_for_task(client, auth_headers):
         assert all(key in user for key in ['user_id', 'username'])
 
 def test_get_task_error(mocker):
-    session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
+    mock_user.user_id = 1
+
     mock_request = mocker.Mock(spec=Request)
 
+    session_mock = mocker.Mock()
     session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         task.get_task(
             request=mock_request,
+            user=mock_user,
             session=session_mock)
 
 def test_get_users_for_task_error(mocker):
@@ -102,28 +106,28 @@ def test_get_users_for_task_error(mocker):
             session=session_mock)
 
 def test_get_task_in_project_error(mocker):
-    session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
-    mock_user.user_id
+    mock_user.user_id = 1
+
     mock_request = mocker.Mock(spec=Request)
 
+    session_mock = mocker.Mock()
     session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         task.get_task_in_project(
             request=mock_request,
-            project_id=1, 
+            project_id=1,
+            user= mock_user,
             session=session_mock)
 
-def test_create_task_error(mocker):
+def test_create_task_error(mocker): 
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
 
     mock_request = mocker.Mock(spec=Request)
 
     session_mock.add.side_effect = SQLAlchemyError("Error en base de datos")
-
-    mocker.patch('routers.task.found_project_for_task_or_404')
 
     with pytest.raises(exceptions.DatabaseError):
         task.create_task(
@@ -134,16 +138,35 @@ def test_create_task_error(mocker):
         
     session_mock.rollback.assert_called_once()
 
-def test_update_task_error(mocker):
+def test_create_task_Value_error(mocker): 
     session_mock = mocker.Mock()
-    mock_user = mocker.Mock(spec=db_models.User)
 
     mock_request = mocker.Mock(spec=Request)
 
+    with pytest.raises(ValueError):
+        task.create_task(
+            request=mock_request,
+            new_task=schemas.CreateTask(description='crear', date_exp='2022-10-10'),
+            project_id=1,
+            session=session_mock)
+
+def test_update_task_error(mocker):
+    session_mock = mocker.Mock()
+
+    mock_user = mocker.Mock(spec=db_models.User)
+    mock_user.user_id = 123
+
+    mock_request = mocker.Mock(spec=Request)
+
+    # Configura el error de commit
     session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
-    mocker.patch('routers.task.found_project_for_task_or_404')
-    mocker.patch('routers.task.found_task_or_404')
+    # Patches necesarios
+    mock_db_task = mocker.Mock(spec=db_models.Task)
+    
+    mocker.patch('routers.task.found_task_or_404', return_value=mock_db_task)
+
+    mock_auth_data = {'user': mock_user, 'permission': 'write'}
 
     with pytest.raises(exceptions.DatabaseError):
         task.update_task(
@@ -151,9 +174,59 @@ def test_update_task_error(mocker):
             task_id=1,
             project_id=1,
             update_task=schemas.UpdateTask(description='crear'),
+            session=session_mock,
+            auth_data=mock_auth_data
+        )
+
+    session_mock.commit.assert_called_once()
+
+def test_update_task_error_NotAuthorized(mocker):
+    session_mock = mocker.Mock()
+
+    mock_user = mocker.Mock(spec=db_models.User)
+    mock_user.user_id = 123
+
+    mock_request = mocker.Mock(spec=Request)
+
+    # Patches necesarios
+    mock_db_task = mocker.Mock(spec=db_models.Task)
+    
+    mocker.patch('routers.task.found_task_or_404', return_value=mock_db_task)
+
+    mock_auth_data = {'user': mock_user, 'permission': 'write'}
+
+    with pytest.raises(exceptions.NotAuthorized):
+        task.update_task(
+            request=mock_request,
+            task_id=1,
+            project_id=1,
+            update_task=schemas.UpdateTask(description='crear', exclude_user_ids=[3]),
+            session=session_mock,
+            auth_data=mock_auth_data
+        )
+    
+    with pytest.raises(exceptions.NotAuthorized):
+        task.update_task(
+            request=mock_request,
+            task_id=1,
+            project_id=1,
+            update_task=schemas.UpdateTask(description='crear', append_user_ids=[3]),
+            session=session_mock,
+            auth_data=mock_auth_data
+        )
+
+def test_update_task_Value_error(mocker): 
+    session_mock = mocker.Mock()
+
+    mock_request = mocker.Mock(spec=Request)
+
+    with pytest.raises(ValueError):
+        task.update_task(
+            request=mock_request,
+            task_id=1,
+            project_id=1,
+            update_task=schemas.UpdateTask(description='crear', date_exp='2022-10-10'),
             session=session_mock)
-        
-    session_mock.rollback.assert_called_once()
 
 def test_delete_task_error(mocker):
     session_mock = mocker.Mock()

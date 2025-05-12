@@ -3,7 +3,7 @@ from models import db_models, schemas, exceptions, responses
 from db.database import get_session, Session, select, selectinload, SQLAlchemyError
 from typing import List
 from .auth import auth_user
-from utils import get_group_or_404, get_user_or_404, found_project_or_404, require_permission
+from utils import get_group_or_404, get_user_or_404, found_project_or_404, require_permission, require_role
 from core.logger import logger
 from core.limiter import limiter
 
@@ -30,7 +30,7 @@ def get_projects_iam(
                     .where( db_models.Project.project_id == db_models.project_user.project_id,
                             db_models.project_user.user_id == user.user_id)
                     .limit(limit).offset(skip))
-        
+
         found_projects = session.exec(statement).all()
         return found_projects
 
@@ -53,18 +53,17 @@ def get_projects(
         group_id: int,
         limit:int = 10,
         skip: int = 0,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_role(roles=['admin'])),
         session: Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
     try:
         get_group_or_404(group_id=group_id, session=session)
-        
 
         statement = (select(db_models.Project)
                     .options(selectinload(db_models.Project.users))
                     .where(db_models.Project.group_id == group_id)
                     .limit(limit).offset(skip))
-        
+
         found_projects = session.exec(statement).all()
         return found_projects
     
@@ -85,9 +84,11 @@ def create_project(
         request:Request,
         new_project: schemas.CreateProject,
         group_id: int,
-        user: db_models.User = Depends(auth_user),
+        auth_data: dict = Depends(require_role(roles=['admin'])),
         session:Session = Depends(get_session)):
     try:
+        user = auth_data['user']
+
         found_group = get_group_or_404(group_id, session)
 
         project = db_models.Project(**new_project.model_dump(), group_id=found_group.group_id)
@@ -142,7 +143,7 @@ def update_project(
         group_id: int,
         project_id: int,
         updated_project: schemas.UpdateProject,
-        auth_data: dict = Depends(require_permission(permissions=['admin'])),
+        auth_data: dict = Depends(require_permission(permissions=['admin', 'write'])),
         session: Session = Depends(get_session)):  
 
     try:
@@ -213,7 +214,7 @@ def add_user_to_project(
 
     try:
         found_project = found_project_or_404(group_id, project_id, session)
-        
+
         # Busca el usuario
         user = get_user_or_404(user_id=user_id, session=session) 
 
@@ -227,12 +228,12 @@ def add_user_to_project(
         if user in found_project.users:
             logger.error(f'El user {user_id} ya existe en el proyecto {project_id}')
             raise exceptions.UserInProjectError(user_id=user_id, project_id=project_id)
-        
+
         # Lo agrega al grupo
         found_project.users.append(user)
-        
+
         session.commit()
-        
+
         return {'detail':'El usuario ha sido agregado al proyecto'}
     
     except SQLAlchemyError as e:
@@ -321,11 +322,11 @@ def update_user_permission_in_project(
             raise exceptions.UserNotInProjectError(project_id=project_id, user_id=user_id)
 
         user.permission = update_role.permission
-        
+
         session.commit()
 
         return {'detail':'Se ha cambiado los permisos del usuario en el proyecto'}
-    
+
     except SQLAlchemyError as e:
         logger.error(f'Error al actualizar permisos del user {user_id} del proyecto {project_id}: {e}')
         session.rollback()

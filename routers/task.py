@@ -3,7 +3,7 @@ from models import db_models, schemas, exceptions, responses
 from .auth import auth_user
 from db.database import get_session, Session, select, SQLAlchemyError, joinedload
 from typing import List
-from utils import found_project_for_task_or_404, found_task_or_404, get_user_or_404, found_user_in_project_or_404, require_permission
+from utils import found_task_or_404, get_user_or_404, found_user_in_project_or_404, require_permission
 from core.logger import logger
 from core.limiter import limiter
 
@@ -112,6 +112,7 @@ def create_task(
         project_id: int,
         auth_data: dict = Depends(require_permission(permissions=['admin'])),
         session: Session = Depends(get_session)):
+
     try:
         # Busca el usuario al que va a asignarse la tarea, y si existe en el proyecto
         if new_task.user_ids:
@@ -156,71 +157,80 @@ def update_task(
         task_id: int,
         project_id: int,
         update_task: schemas.UpdateTask,
-        auth_data: dict = Depends(require_permission(permissions=['admin'])),
-        session: Session = Depends(get_session)): 
+        auth_data: dict = Depends(require_permission(permissions=['admin', 'write'])),
+        session: Session = Depends(get_session)):
 
     try:
+        actual_permission = auth_data['permission']
+        user = auth_data['user']
+
         # Busca la task seleccionada
         task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
-        
+
         if task.description != update_task.description and update_task.description:
             task.description = update_task.description
 
         if task.date_exp != update_task.date_exp and update_task.date_exp:
             task.date_exp = update_task.date_exp
-            
+
         if task.state != update_task.state and update_task.state:
             task.state = update_task.state
-        
+
         # Verifica si hay nuevos usuarios a agregar 
         if update_task.append_user_ids:
-            for user_id in update_task.append_user_ids:
-                # Verifica que el usuario exista
-                user_exists = session.get(db_models.User, user_id)
-                if not user_exists:
-                    logger.error(f'User {user_id} no encontrado')
-                    raise exceptions.UserNotFoundError(user_id)
+            if actual_permission == 'admin':
+                for user_id in update_task.append_user_ids:
+                    # Verifica que el usuario exista
+                    user_exists = session.get(db_models.User, user_id)
+                    if not user_exists:
+                        logger.error(f'User {user_id} no encontrado')
+                        raise exceptions.UserNotFoundError(user_id)
 
-                # Verifica que el usuario exista en el projecto
-                statement = (select(db_models.project_user).where(
-                    db_models.project_user.user_id == user_exists.user_id,
-                    db_models.project_user.project_id == project_id))
-                
-                user_in_project = session.exec(statement).first()
-                if not user_in_project:
-                    logger.error(f'User {user_id} no encontrado en el project {project_id}')
-                    raise exceptions.UserNotInProjectError(project_id=project_id, user_id=user_id)
+                    # Verifica que el usuario exista en el projecto
+                    statement = (select(db_models.project_user).where(
+                        db_models.project_user.user_id == user_exists.user_id,
+                        db_models.project_user.project_id == project_id))
+                    
+                    user_in_project = session.exec(statement).first()
+                    if not user_in_project:
+                        logger.error(f'User {user_id} no encontrado en el project {project_id}')
+                        raise exceptions.UserNotInProjectError(project_id=project_id, user_id=user_id)
 
-                # Verifica que el usuario este asignado al task
-                statement = (select(db_models.tasks_user).where(
-                    db_models.tasks_user.user_id == user_exists.user_id,
-                    db_models.tasks_user.task_id == task_id))
-                
-                user_in_task = session.exec(statement).first()
-                if user_in_task:
-                    logger.error(f'User {user_id} ya esta asignado a task {task_id}: {e}')
-                    raise exceptions.TaskIsAssignedError(user_id=user_id, task_id=task_id)
+                    # Verifica que el usuario este asignado al task
+                    statement = (select(db_models.tasks_user).where(
+                        db_models.tasks_user.user_id == user_exists.user_id,
+                        db_models.tasks_user.task_id == task_id))
+                    
+                    user_in_task = session.exec(statement).first()
+                    if user_in_task:
+                        logger.error(f'User {user_id} ya esta asignado a task {task_id}')
+                        raise exceptions.TaskIsAssignedError(user_id=user_id, task_id=task_id)
 
-                # Agrega el usuario al task
-                task_user = db_models.tasks_user(
-                    task_id=task.task_id,
-                    user_id=user_id)
-                session.add(task_user)
+                    # Agrega el usuario al task
+                    task_user = db_models.tasks_user(
+                        task_id=task.task_id,
+                        user_id=user_id)
+                    session.add(task_user)
+            else:
+                raise exceptions.NotAuthorized(user.user_id)
 
         # Verifica si hay usuarios para eliminar de la tarea 
         if update_task.exclude_user_ids:
-            for user_id in update_task.exclude_user_ids:
-                # Verifica que el usuario este asignado al task
-                statement = (select(db_models.tasks_user).where(
-                    db_models.tasks_user.user_id == user_id,
-                    db_models.tasks_user.task_id == task_id))
-                
-                user_in_task = session.exec(statement).first()
-                if not user_in_task:
-                    logger.error(f'User {user_id} no esta asignado a task {task_id}')
-                    raise exceptions.TaskIsNotAssignedError(user_id=user_id, task_id=task_id)
+            if actual_permission == 'admin':
+                for user_id in update_task.exclude_user_ids:
+                    # Verifica que el usuario este asignado al task
+                    statement = (select(db_models.tasks_user).where(
+                        db_models.tasks_user.user_id == user_id,
+                        db_models.tasks_user.task_id == task_id))
+                    
+                    user_in_task = session.exec(statement).first()
+                    if not user_in_task:
+                        logger.error(f'User {user_id} no esta asignado a task {task_id}')
+                        raise exceptions.TaskIsNotAssignedError(user_id=user_id, task_id=task_id)
 
-                session.delete(user_in_task)
+                    session.delete(user_in_task)
+            else:
+                raise exceptions.NotAuthorized(user.user_id)
         
         session.commit()
         
