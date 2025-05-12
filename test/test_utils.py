@@ -2,6 +2,7 @@ import pytest
 from models import schemas, db_models, exceptions
 from routers import group, project
 from fastapi import Request
+import utils
 
 def test_get_group_or_404_error(mocker):
     request_mocker = mocker.Mock(spec=Request)
@@ -59,5 +60,26 @@ def test_role_of_user_in_group(mocker):
             group_id=1,
             user_id=1,
             auth_data=mock_auth_data,
+            session=session_mock
+        )
+
+def test_found_project_for_task_or_404(mocker):
+    session_mock = mocker.Mock()
+    session_mock.exec.return_value.first.return_value = None
+
+    with pytest.raises(exceptions.ProjectNotFoundError):
+        utils.found_project_for_task_or_404(
+            project_id=1,
+            session=session_mock
+        )
+
+def test_permission_of_user_in_project(mocker):
+    session_mock = mocker.Mock()
+    session_mock.exec.return_value.first.return_value = None
+
+    with pytest.raises(exceptions.UserNotInProjectError):
+        utils.permission_of_user_in_project(
+            user_id=1,
+            project_id=1,
             session=session_mock
         )

@@ -89,7 +89,7 @@ manager = ConnectionManager()
 @router.websocket("/ws/{project_id}")
 async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Session = Depends(get_session)):
     user = await get_current_user_ws(session, websocket)
-    
+
     try:
         verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
 
@@ -113,7 +113,7 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
         timestamp=datetime.now(),
         content=f'El usuario {user.user_id} se ha conectado al projecto {project_id}'
     )
-    
+
     await manager.broadcast(msg_connect.model_dump_json(), project_id)
     
     try:

@@ -9,15 +9,6 @@ from starlette.requests import Request
 
 def test_websocket_connection(client, auth_headers, test_create_project_init, test_session):
     g = test_create_project_init
-
-    project = test_session.get(db_models.Project, 1)
-
-    if project:
-        stmt = select(db_models.project_user).where(
-            db_models.project_user.user_id == 1,
-            db_models.project_user.project_id == 1
-        )
-        project_user = test_session.exec(stmt).first()
     
     try:
         # Usar solo el header Authorization

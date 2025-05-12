@@ -64,7 +64,7 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
     except JWTError:
         logger.error('Token invalido')
         raise exceptions.InvalidToken()
-    
+# @limiter.limit("5/minute")
 async def auth_user_ws(token: str, session: Session):
     try:
         payload = jwt.decode(token, SECRET, algorithms=[ALGORITHM])
@@ -86,7 +86,7 @@ async def auth_user_ws(token: str, session: Session):
         return None
 
 @router.post("/login", description='Endpoint para logearse. Se necesita username y password.')
-
+# @limiter.limit("5/minute")
 async def login(form: OAuth2PasswordRequestForm = Depends(),
                 session : Session = Depends(get_session)) -> schemas.Token:
     
