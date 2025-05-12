@@ -145,4 +145,24 @@ class ChatMessage(BaseModel):
     project_id: int
     user_id: int 
     message: str
-    timestamp: dt 
+    timestamp: dt
+
+class WebSocketEvent(BaseModel):
+    type: str
+    payload: dict
+
+class GroupMessagePayload(BaseModel):
+    content: str
+
+class OutgoingGroupMessagePayload(BaseModel):
+    id: int
+    project_id: int
+    sender_id: int
+    content: str
+    timestamp: dt
+
+class NotificationPayload(BaseModel):
+    notification_type: str # Por ejemplo: 'new_task', 'update_task'
+    message: str
+    related_entity_id: int | None = None # ID de la tarea, mencion, etc
+    timestamp: dt

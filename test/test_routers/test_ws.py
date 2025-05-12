@@ -3,48 +3,77 @@ from conftest import auth_headers, client, test_create_project_init, select, db_
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import WebSocketException, WebSocket
 from routers import ws
-from models import exceptions
+from models import exceptions, schemas
 from unittest.mock import AsyncMock
 from starlette.requests import Request
 
 def test_websocket_connection(client, auth_headers, test_create_project_init, test_session):
-    g = test_create_project_init
-    
+    project_id_to_test = 1 
+    user_id_from_token = 1 
+
     try:
         # Usar solo el header Authorization
         headers = {"Authorization": auth_headers["Authorization"]}
-        with client.websocket_connect("/ws/1", headers=headers) as ws:
 
-            # Recibir el mensaje de conexión
-            connect_msg = json.loads(ws.receive_text())
-            assert "se ha conectado" in connect_msg["content"]
+        # Conectar al WebSocket usando el project_id
+        with client.websocket_connect(f"/ws/{project_id_to_test}", headers=headers) as websocket: 
+
+            connect_event = websocket.receive_json() # Espera y recibe JSON
+            print(f"Received connect event: {connect_event}")
+
+            # Verifica la estructura y contenido del evento de conexión
+            assert connect_event["type"] == "user_connected"
+            # assert "payload" in connect_event
             
-            # Enviar un mensaje
-            ws.send_text("Hola")
+            connect_payload = connect_event["payload"]
+            assert connect_payload["user_id"] == user_id_from_token # Verifica que sea el user_id correcto
+
+            message_content_to_send = "Hola desde el test" # Define el contenido del mensaje
             
-            # Recibir el mensaje transmitido
-            received_msg = json.loads(ws.receive_text())
+            # Prepara el payload del mensaje entrante
+            message_payload_to_send = schemas.GroupMessagePayload(content=message_content_to_send)
             
-            assert received_msg["content"] == "Hola"
-            assert received_msg["user_id"] == 1  # Verifica el user_id
-            assert received_msg["project_id"] == 1  # Verifica el project_id
-            
-            # Verificar que el mensaje se guardó en la base de datos
+            # Prepara el evento completo para enviar
+            message_event_to_send = schemas.WebSocketEvent(
+                type="group_message",
+                payload=message_payload_to_send.model_dump() 
+            )
+
+            # Envía el mensaje como JSON
+            print(f"Sending message event: {message_event_to_send.model_dump_json()}")
+            websocket.send_json(message_event_to_send.model_dump())
+
+            received_event = websocket.receive_json() # Espera y recibe JSON
+            print(f"Received broadcast event: {received_event}")
+
+            # Verifica la estructura del evento recibido
+            assert received_event["type"] == "group_message"
+            assert "payload" in received_event
+            received_payload = received_event["payload"]
+
+            assert "id" in received_payload # El ID generado por la base de datos
+            assert received_payload["project_id"] == project_id_to_test
+            assert received_payload["sender_id"] == user_id_from_token # El servidor asigna el user_id correcto
+            assert received_payload["content"] == message_content_to_send # El contenido debe coincidir
+            assert "timestamp" in received_payload # Verifica que el timestamp exista
+
+            # Verifica si se guardo el mensaje en la base de datos
             stmt = select(db_models.ProjectChat).where(
-                db_models.ProjectChat.project_id == 1,
-                db_models.ProjectChat.user_id == 1,
-                db_models.ProjectChat.message == "Hola"
+                db_models.ProjectChat.project_id == project_id_to_test,
+                db_models.ProjectChat.user_id == user_id_from_token,
+                db_models.ProjectChat.message == message_content_to_send # Verifica que el contenido guardado coincida
             )
             chat_message = test_session.exec(stmt).first()
+
             assert chat_message is not None, "El mensaje no se guardó en la base de datos"
-            
+
     except ws.WebSocketDisconnect as e:
-        print(f"WebSocketDisconnect: code={e.code}, reason={e.reason}")
-        raise
+        pytest.fail(f"WebSocket disconnected unexpectedly: code={e.code}, reason={e.reason}")
+
+    except Exception as e:
+        pytest.fail(f"An unexpected error occurred during the test: {e}")
 
 def test_get_chat(client, auth_headers, test_create_project_init):
-    g = test_create_project_init
-
     response = client.get('/chat/1', headers=auth_headers)
     assert response.status_code == 200
     messages = response.json()

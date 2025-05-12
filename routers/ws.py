@@ -6,6 +6,7 @@ from db.database import get_session, Session, select, SQLAlchemyError
 from .auth import auth_user_ws, auth_user
 from core.logger import logger
 from core.limiter import limiter
+import json
 
 router = APIRouter(tags=['WebSocket'])
 
@@ -43,10 +44,12 @@ async def get_current_user_ws(session: Session, websocket: WebSocket):
         auth_header = websocket.headers.get("Authorization")
         
         if not auth_header:
+            logger.info(f'Error: No tiene el Header')
             await websocket.close(code=1008, reason='Error de autenticacion')
             raise WebSocketException(code=1008)
         
         if not auth_header.startswith("Bearer "):
+            logger.info('Error: Formato incorrecto')
             await websocket.close(code=1008, reason='Formato de token invalido')
             raise WebSocketException(code=1008)
         
@@ -54,22 +57,27 @@ async def get_current_user_ws(session: Session, websocket: WebSocket):
         user = await auth_user_ws(token, session)
 
         if not user:
+            logger.info('Error: Usuario no encontrado')
             await websocket.close(code=1008, reason=f'User no encontrado para token')
             raise WebSocketException(code=1008)
         
         return user
 
-    except WebSocketException:
+    except WebSocketException as e:
+        logger.warning(f'Error: Desconeccion repentina: {e}')
         raise
 
     except Exception as e:
+        logger.warning(f'Error: Desconeccion repentina: {e}')
         await websocket.close(code=1008, reason=f"Error de autenticación: {str(e)}")
         raise
 
 def verify_user_in_project(user_id: int, project_id: int, session: Session = Depends(get_session)):
     print(f"Verificando usuario {user_id} en proyecto {project_id}")
+    logger.info(f"Verificando usuario {user_id} en proyecto {project_id}")
     project = session.get(db_models.Project, project_id)
     if not project:
+        logger.info(f"Proyecto {project_id} no encontrado")
         print(f"Proyecto {project_id} no encontrado")
         raise exceptions.ProjectNotFoundError(project_id)
     
@@ -79,9 +87,11 @@ def verify_user_in_project(user_id: int, project_id: int, session: Session = Dep
     )
     project_user = session.exec(stmt).first()
     if not project_user:
+        logger.info(f"Usuario {user_id} no autorizado para proyecto {project_id}")
         print(f"Usuario {user_id} no autorizado para proyecto {project_id}")
         raise exceptions.NotAuthorized(user_id)
     print(f"Usuario {user_id} verificado en proyecto {project_id}")
+    logger.info(f"Usuario {user_id} verificado en proyecto {project_id}")
     return project_user
 
 manager = ConnectionManager()
@@ -89,7 +99,7 @@ manager = ConnectionManager()
 @router.websocket("/ws/{project_id}")
 async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Session = Depends(get_session)):
     user = await get_current_user_ws(session, websocket)
-
+    
     try:
         verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
 
@@ -114,28 +124,77 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
         content=f'El usuario {user.user_id} se ha conectado al projecto {project_id}'
     )
 
-    await manager.broadcast(msg_connect.model_dump_json(), project_id)
-    
+    outgoing_event = schemas.WebSocketEvent(
+        type='user_connected',
+        payload=msg_connect.model_dump()
+    )
+
+    outgoing_event_json = outgoing_event.model_dump_json()
+
+    await manager.broadcast(outgoing_event_json, project_id)
+
     try:
         while True:
-            data = await websocket.receive_text()        
+            # Obtiene la data en json
+            data_json = await websocket.receive_json()
 
-            msg = schemas.Message(
-                content=data,
-                user_id=user.user_id,
-                project_id=project_id,
-                timestamp=datetime.now()
-            )
-            
-            message = db_models.ProjectChat(
-                project_id=project_id,
-                user_id=user.user_id,
-                message=data
-            )
-            
-            session.add(message)
-            session.commit()            
-            await manager.broadcast(msg.model_dump_json(), project_id)
+            try:
+                # Verifica que el evento tenga estructura general de evento
+                event = schemas.WebSocketEvent(**data_json)
+
+                if event.type == 'group_message':
+                    # Verifica que tenga los datos del schema
+                    message_payload = schemas.GroupMessagePayload(**event.payload)
+
+                    # Crea el mensaje a guardar en BD
+                    message = db_models.ProjectChat(
+                        project_id=project_id,
+                        user_id=user.user_id,
+                        message=message_payload.content
+                    )
+
+                    session.add(message)
+                    session.commit()
+                    session.refresh(message)
+
+                    # Crea el mensaje de salida, que se envia al grupo
+                    outgoing_payload = schemas.OutgoingGroupMessagePayload(
+                        id=message.chat_id,
+                        project_id=message.project_id,
+                        sender_id=message.user_id,
+                        content=message.message,
+                        timestamp=message.timestamp
+                    )
+
+                    # Crea el evento completo
+                    outgoing_event = schemas.WebSocketEvent(
+                        type='group_message',
+                        payload=outgoing_payload.model_dump()
+                    )
+
+                    # Parsea a json
+                    outgoing_event_json = outgoing_event.model_dump_json()
+
+                    await manager.broadcast(outgoing_event_json, project_id)
+                    logger.info(f'Broadcast group message ID {message.chat_id} for project {project_id}')
+
+                else:
+                    # Manejar tipos de eventos desconocidos
+                    logger.warning(f'Received unknown event type: {event.type} from user {user.user_id} in project {project_id}')
+
+            except json.JSONDecodeError:
+                # Error si el mensaje no es un JSON válido
+                logger.error(f"Received invalid JSON from user {user.user_id} in project {project_id}")
+                await websocket.send_json({"type": "error", "payload": {"message": "Invalid JSON format."}})
+
+            except ValueError as ve: # Captura errores de validación
+                logger.error(f"Payload validation error for event type {event.type}: {ve} from user {user.user_id} in project {project_id}")
+                await websocket.send_json({"type": "error", "payload": {"message": f"Invalid payload for type {event.type}."}})
+
+            except Exception as e:
+                # Captura cualquier otro error durante el procesamiento del mensaje
+                logger.error(f"Error processing message from user {user.user_id} in project {project_id}: {e}", exc_info=True)
+                await websocket.send_json({"type": "error", "payload": {"message": "Internal server error processing message."}})
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, project_id)
