@@ -13,31 +13,55 @@ router = APIRouter(tags=['WebSocket'])
 class ConnectionManager:
     # Crea una lista de conexiones activas
     def __init__(self):
+        # Conexiones por proyecto
         self.active_connections: Dict[int, List[WebSocket]] = {}
+        # Conexiones por usuario
+        self.active_users_connections: Dict[int, List[WebSocket]] = {}
 
     # Conecta el usuario a ws y lo agrega a la lista de conexiones activas
-    async def connect(self, websocket: WebSocket, project_id: int):
+    async def connect(self, websocket: WebSocket, project_id: int, user_id:int):
         await websocket.accept()
+        
         if project_id not in self.active_connections:
             self.active_connections[project_id] = []
         self.active_connections[project_id].append(websocket)
 
+        if user_id not in self.active_users_connections:
+            self.active_users_connections[user_id] = []
+        self.active_users_connections[user_id].append(websocket)
+
     # Desconecta y elimina el usuario de conexiones
-    def disconnect(self, websocket: WebSocket, project_id: int):
+    def disconnect(self, websocket: WebSocket, project_id: int, user_id: int):
+        # Elimina conexiones por proyecto
         if project_id in self.active_connections:
             self.active_connections[project_id].remove(websocket)
+            if not self.active_connections[project_id]:
+                del self.active_connections[project_id]
+        
+        # Elimina conexiones por usuario
+        if user_id in self.active_users_connections:
+            self.active_users_connections[user_id].remove(websocket)
+            if not self.active_users_connections[user_id]:
+                del self.active_users_connections[user_id]
 
     # Envia un mensaje personal
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
-
-    async def broadcast(self, message: str, project_id: int):
-        if project_id in self.active_connections:
-            for connection in list(self.active_connections[project_id]):
+    async def send_to_user(self, message_json_string: str, user_id: int):
+        if user_id in self.active_users_connections:
+            connections_to_send = list(self.active_users_connections[user_id])
+            for connection in connections_to_send:
                 try:
-                    await connection.send_text(message)
+                    await connection.send_text(message_json_string)
                 except Exception:
-                    self.active_connections[project_id].remove(connection)
+                    logger.error(f'Fallo al enviar mensaje al websocket de usuario {user_id}. La conexión podría no estar activa')
+
+    async def broadcast(self, message_json_string: str, project_id: int):
+        if project_id in self.active_connections:
+            connections_to_send = list(self.active_connections[project_id])
+            for connection in connections_to_send:
+                try:
+                    await connection.send_text(message_json_string)
+                except Exception:
+                    logger.error(f'Fallo al broadcast a websocket en proyecto {project_id}. La conexión podría no estar activa')
 
 async def get_current_user_ws(session: Session, websocket: WebSocket):
     try:
@@ -98,9 +122,11 @@ manager = ConnectionManager()
 
 @router.websocket("/ws/{project_id}")
 async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Session = Depends(get_session)):
+    # Obtiene el usuario actual
     user = await get_current_user_ws(session, websocket)
     
     try:
+        # Verifica que el usuario exista en el proyecto
         verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
 
     except exceptions.ProjectNotFoundError as e:
@@ -115,7 +141,8 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
         await websocket.close(code=1008, reason=f"Error interno: {str(e)}")
         return
 
-    await manager.connect(websocket, project_id)
+    # Conecta el usario a websocket
+    await manager.connect(websocket=websocket, project_id=project_id, user_id=user.user_id)
     
     msg_connect = schemas.Message(
         user_id=user.user_id,
@@ -175,8 +202,59 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
                     # Parsea a json
                     outgoing_event_json = outgoing_event.model_dump_json()
 
+                    # Envia al broadcast
                     await manager.broadcast(outgoing_event_json, project_id)
                     logger.info(f'Broadcast group message ID {message.chat_id} for project {project_id}')
+
+                if event.type == 'personal_message':
+                    # Verifica que tenga los datos del schema
+                    message_payload = schemas.PersonalMessagePayload(**event.payload)
+
+                    # Crea el mensaje de salida, que se envia al usuario
+                    outgoing_payload = schemas.OutgoingPersonalMessagePayload(
+                        sender_id=user.user_id,
+                        received_user_id=message_payload.received_user_id,
+                        content=message_payload.content,
+                        timestamp=datetime.now()
+                    )
+
+                    # Crea el evento completo
+                    outgoing_event = schemas.WebSocketEvent(
+                        type='personal_message',
+                        payload=outgoing_payload.model_dump()
+                    )
+
+                    # Parsea a json
+                    outgoing_event_json = outgoing_event.model_dump_json()
+
+                    # Envia al usuario
+                    await manager.send_to_user(outgoing_event_json, message_payload.received_user_id)
+                    logger.info(f'Personal message send for user with user_id {user.user_id} to user with user_id {message_payload.received_user_id}')
+    
+                elif event.type == 'notification':
+                    # Verifica que tenga los datos del schema
+                    notification_payload = schemas.NotificationPayload(**event.payload)
+
+                    # Crea la notifiacion de salida
+                    outgoing_payload = schemas.OutgoingNotificationPayload(
+                        notification_type=notification_payload.notification_type,
+                        message=notification_payload.message,
+                        related_entity_id=notification_payload.related_entity_id,
+                        timestamp= datetime.now()
+                    )
+
+                    # Crea el evento completo
+                    outgoing_event = schemas.WebSocketEvent(
+                        type='notification',
+                        payload=outgoing_payload.model_dump()
+                    )
+
+                    # Parsea a json
+                    outgoing_event_json = outgoing_event.model_dump_json()
+
+                    # Envia la notificacion
+                    await manager.broadcast(outgoing_event_json, project_id)
+                    logger.info(f'Broadcast notification for project {project_id}')
 
                 else:
                     # Manejar tipos de eventos desconocidos
@@ -197,7 +275,8 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
                 await websocket.send_json({"type": "error", "payload": {"message": "Internal server error processing message."}})
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket, project_id)
+        manager.disconnect(websocket, project_id, user.user_id)
+        logger.info(f'El usuario con ID {user.user_id} se desconecto')
 
         msg_disconnect = schemas.Message(
             user_id=user.user_id,
@@ -209,19 +288,19 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
     
     except RuntimeError as e:
         logger.error(f'Error de ejecución: {e}')
-        manager.disconnect(websocket, project_id)
+        manager.disconnect(websocket, project_id, user.user_id)
     
     except ValueError:
         logger.error(f'Se esperaba un mensaje de texto valido')
-        manager.disconnect(websocket, project_id)
+        manager.disconnect(websocket, project_id, user.user_id)
 
     except SQLAlchemyError as e:
         logger.error(f'Error interno en WebSocket: {e}')
-        manager.disconnect(websocket, project_id)
+        manager.disconnect(websocket, project_id, user.user_id)
     
     except Exception as e:
         logger.error(f'Error inesperado: {e}')
-        manager.disconnect(websocket, project_id)
+        manager.disconnect(websocket, project_id, user.user_id)
 
 @router.get('/chat/{project_id}',
         description=""" Obtiene el chat de un proyecto.

@@ -165,4 +165,19 @@ class NotificationPayload(BaseModel):
     notification_type: str # Por ejemplo: 'new_task', 'update_task'
     message: str
     related_entity_id: int | None = None # ID de la tarea, mencion, etc
+
+class OutgoingNotificationPayload(BaseModel):
+    notification_type: str # Por ejemplo: 'new_task', 'update_task'
+    message: str
+    related_entity_id: int | None = None # ID de la tarea, mencion, etc
+    timestamp: dt
+
+class PersonalMessagePayload(BaseModel):
+    content: str
+    received_user_id: int
+
+class OutgoingPersonalMessagePayload(BaseModel):
+    sender_id: int
+    received_user_id: int
+    content: str
     timestamp: dt

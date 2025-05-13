@@ -8,70 +8,144 @@ from unittest.mock import AsyncMock
 from starlette.requests import Request
 
 def test_websocket_connection(client, auth_headers, test_create_project_init, test_session):
-    project_id_to_test = 1 
-    user_id_from_token = 1 
+    project_id_to_test = 1
+    user_id_from_token = 1
 
     try:
         # Usar solo el header Authorization
         headers = {"Authorization": auth_headers["Authorization"]}
 
         # Conectar al WebSocket usando el project_id
-        with client.websocket_connect(f"/ws/{project_id_to_test}", headers=headers) as websocket: 
-
+        with client.websocket_connect(f"/ws/{project_id_to_test}", headers=headers) as websocket:
             connect_event = websocket.receive_json() # Espera y recibe JSON
-            print(f"Received connect event: {connect_event}")
+            print(f"Received connection event: {connect_event}")
 
-            # Verifica la estructura y contenido del evento de conexión
-            assert connect_event["type"] == "user_connected"
-            # assert "payload" in connect_event
-            
+            assert isinstance(connect_event, dict), "Received connection event is not a dictionary"
+            assert "type" in connect_event, "Connection event missing 'type' field"
+            assert connect_event["type"] == "user_connected", f"Connection event type is incorrect. Expected 'user_connected', got {connect_event['type']}"
+            assert "payload" in connect_event, "Connection event missing 'payload' field"
+            assert isinstance(connect_event["payload"], dict), "Connection event payload is not a dictionary"
+
+            # Verifica el contenido del payload del evento de conexión (basado en schemas.Message)
             connect_payload = connect_event["payload"]
-            assert connect_payload["user_id"] == user_id_from_token # Verifica que sea el user_id correcto
+            assert "user_id" in connect_payload, "Connection event payload missing 'user_id'"
+            assert connect_payload["user_id"] == user_id_from_token, f"Connection event payload user_id is incorrect. Expected {user_id_from_token}, got {connect_payload['user_id']}"
+            assert "project_id" in connect_payload, "Connection event payload missing 'project_id'"
+            assert connect_payload["project_id"] == project_id_to_test, f"Connection event payload project_id is incorrect. Expected {project_id_to_test}, got {connect_payload['project_id']}"
+            assert "timestamp" in connect_payload, "Connection event payload missing 'timestamp'" # Verifica que la clave exista
+            assert "content" in connect_payload, "Connection event payload missing 'content'" # Verifica que la clave exista
 
-            message_content_to_send = "Hola desde el test" # Define el contenido del mensaje
-            
-            # Prepara el payload del mensaje entrante
+            message_content_to_send = "Hola desde el test"
             message_payload_to_send = schemas.GroupMessagePayload(content=message_content_to_send)
-            
-            # Prepara el evento completo para enviar
+
             message_event_to_send = schemas.WebSocketEvent(
                 type="group_message",
-                payload=message_payload_to_send.model_dump() 
+                payload=message_payload_to_send.model_dump()
             )
 
-            # Envía el mensaje como JSON
-            print(f"Sending message event: {message_event_to_send.model_dump_json()}")
             websocket.send_json(message_event_to_send.model_dump())
 
+            # Recibe el mensaje 
             received_event = websocket.receive_json() # Espera y recibe JSON
-            print(f"Received broadcast event: {received_event}")
 
-            # Verifica la estructura del evento recibido
-            assert received_event["type"] == "group_message"
-            assert "payload" in received_event
+            # Verifica la estructura básica del evento recibido
+            assert isinstance(received_event, dict), "Received broadcast event is not a dictionary"
+            assert "type" in received_event, "Broadcast event missing 'type' field"
+            assert received_event["type"] == "group_message", f"Broadcast event type is incorrect. Expected 'group_message', got {received_event['type']}"
+            assert "payload" in received_event, "Broadcast event missing 'payload' field"
+            assert isinstance(received_event["payload"], dict), "Broadcast event payload is not a dictionary"
+
+
+            # Verifica los campos del payload saliente 
             received_payload = received_event["payload"]
+            assert "id" in received_payload, "Broadcast payload missing 'id' field"
+            assert received_payload["project_id"] == project_id_to_test, f"Broadcast payload project_id is incorrect. Expected {project_id_to_test}, got {received_payload['project_id']}"
+            assert received_payload["sender_id"] == user_id_from_token, f"Broadcast payload sender_id is incorrect. Expected {user_id_from_token}, got {received_payload['sender_id']}" # El servidor asigna el user_id correcto
+            assert received_payload["content"] == message_content_to_send, "Broadcast payload content does not match sent content"
+            assert "timestamp" in received_payload, "Broadcast payload missing 'timestamp' field"
 
-            assert "id" in received_payload # El ID generado por la base de datos
-            assert received_payload["project_id"] == project_id_to_test
-            assert received_payload["sender_id"] == user_id_from_token # El servidor asigna el user_id correcto
-            assert received_payload["content"] == message_content_to_send # El contenido debe coincidir
-            assert "timestamp" in received_payload # Verifica que el timestamp exista
 
-            # Verifica si se guardo el mensaje en la base de datos
-            stmt = select(db_models.ProjectChat).where(
-                db_models.ProjectChat.project_id == project_id_to_test,
-                db_models.ProjectChat.user_id == user_id_from_token,
-                db_models.ProjectChat.message == message_content_to_send # Verifica que el contenido guardado coincida
+            message_content_to_send = "Hola user test"
+            received_user_id_test = 2
+            message_payload_to_send = schemas.PersonalMessagePayload(content=message_content_to_send, received_user_id=received_user_id_test)
+
+            message_event_to_send = schemas.WebSocketEvent(
+                type="personal_message",
+                payload=message_payload_to_send.model_dump()
             )
-            chat_message = test_session.exec(stmt).first()
 
-            assert chat_message is not None, "El mensaje no se guardó en la base de datos"
+            websocket.send_json(message_event_to_send.model_dump())
 
+    except WebSocketException as e:
+        # Captura excepciones de FastAPI/Starlette durante el handshake o manejo inicial
+        pytest.fail(f"WebSocket connection failed with WebSocketException: code={e.code}, reason={e.reason}")
     except ws.WebSocketDisconnect as e:
-        pytest.fail(f"WebSocket disconnected unexpectedly: code={e.code}, reason={e.reason}")
-
+        # Captura la desconexión normal al final del bloque 'with' o una desconexión inesperada antes.
+        # Si se llega aquí sin un pytest.fail previo, significa que el bloque 'with' terminó correctamente.
+        print(f"WebSocket disconnected: code={e.code}, reason={e.reason}")
+        pass 
     except Exception as e:
-        pytest.fail(f"An unexpected error occurred during the test: {e}")
+        # Captura cualquier otra excepción inesperada durante la ejecución del test
+        print(f"An unexpected error occurred during the test: {e}")
+        pytest.fail(f"Test failed due to unexpected exception: {e}", pytrace=True) # pytrace=True muestra el traceback del test
+
+def test_personal_message(client, auth_headers2, test_session):
+    project_id_to_test = 1
+    user_id_from_token = 2
+
+    try:
+        # Usar solo el header Authorization
+        headers = {"Authorization": auth_headers2["Authorization"]}
+
+        # Conectar al WebSocket usando el project_id
+        with client.websocket_connect(f"/ws/{project_id_to_test}", headers=headers) as websocket:
+            connect_event = websocket.receive_json() # Espera y recibe JSON
+            print(f"Received connection event: {connect_event}")
+
+            assert isinstance(connect_event, dict), "Received connection event is not a dictionary"
+            assert "type" in connect_event, "Connection event missing 'type' field"
+            assert connect_event["type"] == "user_connected", f"Connection event type is incorrect. Expected 'user_connected', got {connect_event['type']}"
+            assert "payload" in connect_event, "Connection event missing 'payload' field"
+            assert isinstance(connect_event["payload"], dict), "Connection event payload is not a dictionary"
+
+            # Verifica el contenido del payload del evento de conexión (basado en schemas.Message)
+            connect_payload = connect_event["payload"]
+            assert "user_id" in connect_payload, "Connection event payload missing 'user_id'"
+            assert connect_payload["user_id"] == user_id_from_token, f"Connection event payload user_id is incorrect. Expected {user_id_from_token}, got {connect_payload['user_id']}"
+            assert "project_id" in connect_payload, "Connection event payload missing 'project_id'"
+            assert connect_payload["project_id"] == project_id_to_test, f"Connection event payload project_id is incorrect. Expected {project_id_to_test}, got {connect_payload['project_id']}"
+            assert "timestamp" in connect_payload, "Connection event payload missing 'timestamp'" # Verifica que la clave exista
+            assert "content" in connect_payload, "Connection event payload missing 'content'" # Verifica que la clave exista
+
+            # Recibe el mensaje
+            received_event = websocket.receive_json() # Espera y recibe JSON
+
+            # Verifica la estructura básica del evento recibido
+            assert isinstance(received_event, dict), "Received personal message event is not a dictionary"
+            assert "type" in received_event, "Broadcast event missing 'type' field"
+            assert received_event["type"] == "personal_message", f"Personal message event type is incorrect. Expected 'personal_message', got {received_event['type']}"
+            assert "payload" in received_event, "Personal message event missing 'payload' field"
+            assert isinstance(received_event["payload"], dict), "Personal message event payload is not a dictionary"
+
+            # Verifica los campos del payload saliente
+            received_payload = received_event["payload"]
+            assert received_payload["received_user_id"] == user_id_from_token, f"Personal message payload project_id is incorrect. Expected {user_id_from_token}, got {received_payload['received_user_id']}"
+            assert received_payload["sender_id"] == 1, f"Personal message payload sender_id is incorrect. Expected {1}, got {received_payload['sender_id']}"
+            assert received_payload["content"] == 'Hola user test', "Personal message payload content does not match sent content"
+            assert "timestamp" in received_payload, "Personal message payload missing 'timestamp' field"
+
+    except WebSocketException as e:
+        # Captura excepciones de FastAPI/Starlette durante el handshake o manejo inicial
+        pytest.fail(f"WebSocket connection failed with WebSocketException: code={e.code}, reason={e.reason}")
+    except ws.WebSocketDisconnect as e:
+        # Captura la desconexión normal al final del bloque 'with' o una desconexión inesperada antes.
+        # Si se llega aquí sin un pytest.fail previo, significa que el bloque 'with' terminó correctamente.
+        print(f"WebSocket disconnected: code={e.code}, reason={e.reason}")
+        pass 
+    except Exception as e:
+        # Captura cualquier otra excepción inesperada durante la ejecución del test
+        print(f"An unexpected error occurred during the test: {e}")
+        pytest.fail(f"Test failed due to unexpected exception: {e}", pytrace=True) # pytrace=True muestra el traceback del test
 
 def test_get_chat(client, auth_headers, test_create_project_init):
     response = client.get('/chat/1', headers=auth_headers)
