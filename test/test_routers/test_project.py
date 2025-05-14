@@ -234,7 +234,8 @@ def test_delete_project_error(mocker):
     
     db_session_mock.rollback.assert_called_once()
 
-def test_add_user_to_project_error(mocker):
+@pytest.mark.asyncio
+async def test_add_user_to_project_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_append_user = mocker.Mock(spec=db_models.User)
     mock_append_user.id = 2
@@ -257,7 +258,7 @@ def test_add_user_to_project_error(mocker):
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        project.add_user_to_project(
+        await project.add_user_to_project(
                 request=mock_request,
                 group_id=1,
                 user_id=2,
@@ -267,7 +268,8 @@ def test_add_user_to_project_error(mocker):
     
     db_session_mock.rollback.assert_called_once()
 
-def test_remove_user_from_project_error(mocker):
+@pytest.mark.asyncio
+async def test_remove_user_from_project_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_append_user = mocker.Mock(spec=db_models.User)
     mock_append_user.id = 2
@@ -290,7 +292,7 @@ def test_remove_user_from_project_error(mocker):
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        project.remove_user_from_project(
+        await project.remove_user_from_project(
                 request=mock_request,
                 group_id=1,
                 project_id = 1,
@@ -300,7 +302,8 @@ def test_remove_user_from_project_error(mocker):
     
     db_session_mock.rollback.assert_called_once()
 
-def test_update_user_permission_in_project_error(mocker):
+@pytest.mark.asyncio
+async def test_update_user_permission_in_project_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_append_user = mocker.Mock(spec=db_models.User)
     mock_append_user.id = 2
@@ -323,7 +326,7 @@ def test_update_user_permission_in_project_error(mocker):
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        project.update_user_permission_in_project(
+        await project.update_user_permission_in_project(
                 request=mock_request,
                 group_id=1,
                 user_id=2,

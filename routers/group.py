@@ -6,6 +6,8 @@ from .auth import auth_user
 from utils import get_group_or_404, get_user_or_404, require_role, role_of_user_in_group
 from core.logger import logger
 from core.limiter import limiter
+from routers.ws import manager
+from datetime import datetime
 
 router = APIRouter(prefix='/group', tags=['Group'])
 
@@ -177,7 +179,7 @@ def get_groups_in_user(
                 404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
                 500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
-def append_user_group( 
+async def append_user_group( 
         request: Request,
         group_id: int,
         user_id: int,
@@ -198,6 +200,25 @@ def append_user_group(
         # Lo agrega al grupo
         found_group.users.append(new_user)
         session.commit()
+
+        # Se crea la notificacion
+        outgoing_payload = schemas.OutgoingNotificationPayload(
+            notification_type='append_to_group',
+            message=f'Has sido agregado a group {group_id}',
+            timestamp=datetime.now())
+
+        # Crea el evento
+        outgoing_event = schemas.WebSocketEvent(
+            type='notification',
+            payload=outgoing_payload.model_dump()
+        )
+
+        # Parsea el evento
+        outgoing_event_json = outgoing_event.model_dump_json()
+
+        # Envia el evento
+        await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+
         return {'detail':'El usuario ha sido agregado al grupo'}
     
     except SQLAlchemyError as e:
@@ -215,7 +236,7 @@ def append_user_group(
                 404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
                 500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
-def delete_user_group(  
+async def delete_user_group(  
         request: Request,
         group_id: int,
         user_id: int,
@@ -239,6 +260,24 @@ def delete_user_group(
             if role_user in ['editor', 'member'] and actual_role == 'admin' or role_user == 'member' and actual_role == 'editor':            
                 found_group.users.remove(found_user)
                 session.commit()
+
+                # Se crea la notificacion
+                outgoing_payload = schemas.OutgoingNotificationPayload(
+                    notification_type='remove_user_to_group',
+                    message=f'Fuiste removido del group {group_id}',
+                    timestamp=datetime.now())
+
+                # Crea el evento
+                outgoing_event = schemas.WebSocketEvent(
+                    type='notification',
+                    payload=outgoing_payload.model_dump()
+                )
+
+                # Parsea el evento
+                outgoing_event_json = outgoing_event.model_dump_json()
+
+                # Envia el evento
+                await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
                 logger.info(f'User {user_id} eliminado del Group {group_id} por {actual_user.user_id}')
                 return {'detail':'El usuario ha sido eliminado al grupo'}
@@ -264,7 +303,7 @@ def delete_user_group(
             404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
             500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
-def update_user_group(
+async def update_user_group(
         request: Request,
         group_id: int,
         user_id: int,
@@ -289,6 +328,25 @@ def update_user_group(
         found_user.role = update_role.role
 
         session.commit()
+        session.refresh(found_user)
+
+        # Se crea la notificacion
+        outgoing_payload = schemas.OutgoingNotificationPayload(
+            notification_type='update_role_to_group',
+            message=f'Tu rol en group {group_id} fue actualizado a: {found_user.role.value}',
+            timestamp=datetime.now())
+
+        # Crea el evento
+        outgoing_event = schemas.WebSocketEvent(
+            type='notification',
+            payload=outgoing_payload.model_dump()
+        )
+
+        # Parsea el evento
+        outgoing_event_json = outgoing_event.model_dump_json()
+
+        # Envia el evento
+        await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
         return {'detail':'Se ha cambiado los permisos del usuario en el grupo'}
 

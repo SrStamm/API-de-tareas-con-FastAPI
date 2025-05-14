@@ -6,6 +6,8 @@ from .auth import auth_user
 from utils import get_group_or_404, get_user_or_404, found_project_or_404, require_permission, require_role
 from core.logger import logger
 from core.limiter import limiter
+from routers.ws import manager
+from datetime import datetime
 
 router = APIRouter(prefix='/project', tags=['Project'])
 
@@ -156,6 +158,7 @@ def update_project(
             found_project.description = updated_project.description
         
         session.commit()
+        session.refresh(found_project)
         
         return {'detail':'Se ha actualizado la informacion del projecto'}
     
@@ -182,12 +185,12 @@ def delete_project(
 
     try:
         found_project = found_project_or_404(group_id=group_id, project_id=project_id, session=session)
-        
+
         session.delete(found_project)
         session.commit()
-        
+
         return {'detail':'Se ha eliminado el proyecto'}
-    
+
     except SQLAlchemyError as e:
         logger.error(f'Error al eliminar el proyecto {project_id} en el grupo {group_id}: {e}')
         session.rollback()
@@ -204,7 +207,7 @@ def delete_project(
             404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
             500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
-def add_user_to_project(
+async def add_user_to_project(
         request:Request,
         group_id: int,
         user_id: int,
@@ -234,6 +237,24 @@ def add_user_to_project(
 
         session.commit()
 
+        # Se crea la notificacion
+        outgoing_payload = schemas.OutgoingNotificationPayload(
+            notification_type='add_user_to_project',
+            message=f'Fuiste agregagdo al project {project_id}',
+            timestamp=datetime.now())
+
+        # Crea el evento
+        outgoing_event = schemas.WebSocketEvent(
+            type='notification',
+            payload=outgoing_payload.model_dump()
+        )
+
+        # Parsea el evento
+        outgoing_event_json = outgoing_event.model_dump_json()
+
+        # Envia el evento
+        await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+
         return {'detail':'El usuario ha sido agregado al proyecto'}
     
     except SQLAlchemyError as e:
@@ -252,7 +273,7 @@ def add_user_to_project(
             404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
             500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
-def remove_user_from_project(
+async def remove_user_from_project(
         request:Request,
         group_id: int,
         project_id: int,
@@ -277,7 +298,25 @@ def remove_user_from_project(
             # Lo elimina del proyecto
             found_project.users.remove(user)
             session.commit()
-            
+
+            # Se crea la notificacion
+            outgoing_payload = schemas.OutgoingNotificationPayload(
+                notification_type='delete_user_from_project',
+                message=f'Fuiste eliminado del project {project_id}',
+                timestamp=datetime.now())
+
+            # Crea el evento
+            outgoing_event = schemas.WebSocketEvent(
+                type='notification',
+                payload=outgoing_payload.model_dump()
+            )
+
+            # Parsea el evento
+            outgoing_event_json = outgoing_event.model_dump_json()
+
+            # Envia el evento
+            await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+
             return {'detail':'El usuario ha sido eliminado del proyecto'}
         else:
             logger.error(f'El user {user_id} no existe en el proyecto {project_id}')
@@ -299,7 +338,7 @@ def remove_user_from_project(
             404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
             500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
-def update_user_permission_in_project(
+async def update_user_permission_in_project(
         request:Request,
         group_id: int,
         user_id: int,
@@ -324,6 +363,25 @@ def update_user_permission_in_project(
         user.permission = update_role.permission
 
         session.commit()
+        session.refresh(user)
+
+        # Se crea la notificacion
+        outgoing_payload = schemas.OutgoingNotificationPayload(
+            notification_type='permission_update',
+            message=f'Tus permisos en project {project_id} fue actualizado a {user.permission.value}',
+            timestamp=datetime.now())
+
+        # Crea el evento
+        outgoing_event = schemas.WebSocketEvent(
+            type='notification',
+            payload=outgoing_payload.model_dump()
+        )
+
+        # Parsea el evento
+        outgoing_event_json = outgoing_event.model_dump_json()
+
+        # Envia el evento
+        await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
         return {'detail':'Se ha cambiado los permisos del usuario en el proyecto'}
 

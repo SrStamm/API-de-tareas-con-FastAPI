@@ -201,7 +201,8 @@ def test_get_groups_in_user_error(mocker):
             session=db_session_mock
         )
 
-def test_append_user_group_error(mocker):
+@pytest.mark.asyncio
+async def test_append_user_group_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
 
     db_session_mock = mocker.Mock()
@@ -219,7 +220,7 @@ def test_append_user_group_error(mocker):
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        group.append_user_group(
+        await group.append_user_group(
             request=mock_request,
             group_id=1,
             user_id=2,
@@ -229,7 +230,8 @@ def test_append_user_group_error(mocker):
     
     db_session_mock.rollback.assert_called_once()
 
-def test_delete_user_group_database_error(mocker):
+@pytest.mark.asyncio
+async def test_delete_user_group_database_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_delete_user = mocker.Mock(spec=db_models.User)
     mock_delete_user.user_id = 2
@@ -250,7 +252,7 @@ def test_delete_user_group_database_error(mocker):
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        group.delete_user_group(
+        await group.delete_user_group(
             request=mock_request,
             group_id=1,
             user_id=2,
@@ -260,7 +262,8 @@ def test_delete_user_group_database_error(mocker):
 
     db_session_mock.rollback.assert_called_once()
 
-def test_delete_user_group_NotAuthorized_error(mocker):
+@pytest.mark.asyncio
+async def test_delete_user_group_NotAuthorized_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
 
     mock_delete_user = mocker.Mock(spec=db_models.User)
@@ -282,7 +285,7 @@ def test_delete_user_group_NotAuthorized_error(mocker):
 
 
     with pytest.raises(exceptions.NotAuthorized):
-        group.delete_user_group(
+        await group.delete_user_group(
             request=mock_request,
             group_id=1,
             user_id=2,
@@ -290,7 +293,8 @@ def test_delete_user_group_NotAuthorized_error(mocker):
             auth_data=mock_auth_data
         )
 
-def test_update_user_group_error(mocker):
+@pytest.mark.asyncio
+async def test_update_user_group_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_delete_user = mocker.Mock(spec=db_models.User)
     mock_delete_user.id = 2
@@ -309,7 +313,7 @@ def test_update_user_group_error(mocker):
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        group.update_user_group(
+        await group.update_user_group(
             request=mock_request,
             group_id=1,
             user_id=mock_delete_user.id,

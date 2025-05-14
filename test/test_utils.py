@@ -35,7 +35,8 @@ def test_get_project_or_404_error(mocker):
             session=session_mock
         )
 
-def test_role_of_user_in_group(mocker):
+@pytest.mark.asyncio
+async def test_role_of_user_in_group(mocker):
     request_mocker = mocker.Mock(spec=Request)
     
     session_mock = mocker.Mock()
@@ -55,7 +56,7 @@ def test_role_of_user_in_group(mocker):
     mocker.patch("routers.group.get_user_or_404", return_value=mock_user)
 
     with pytest.raises(exceptions.UserNotInGroupError):
-        group.delete_user_group(
+        await group.delete_user_group(
             request=request_mocker,
             group_id=1,
             user_id=1,
