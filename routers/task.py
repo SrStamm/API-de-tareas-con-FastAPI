@@ -6,6 +6,8 @@ from typing import List
 from utils import found_task_or_404, get_user_or_404, found_user_in_project_or_404, require_permission
 from core.logger import logger
 from core.limiter import limiter
+from routers.ws import manager
+from datetime import datetime
 
 router = APIRouter(prefix='/task', tags=['Task'])
 
@@ -106,7 +108,7 @@ def get_task_in_project(
                     404: {'description':'Dato no encontrado', 'model':responses.DataNotFound},
                     500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
-def create_task(
+async def create_task(
         request:Request,
         new_task: schemas.CreateTask,
         project_id: int,
@@ -136,6 +138,24 @@ def create_task(
                 user_id=user_id)
             session.add(task_user)
 
+            # Se crea la notificacion
+            outgoing_payload = schemas.OutgoingNotificationPayload(
+                notification_type='assigned_task',
+                message=f'Ya no estas asignado a task {task.task_id} en project {project_id}',
+                timestamp=datetime.now())
+
+            # Crea el evento
+            outgoing_event = schemas.WebSocketEvent(
+                type='notification',
+                payload=outgoing_payload.model_dump()
+            )
+
+            # Parsea el evento
+            outgoing_event_json = outgoing_event.model_dump_json()
+
+            # Envia el evento
+            await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+
         session.commit()
 
         return {'detail':'Se ha creado una nueva tarea y asignado los usuarios con exito'}
@@ -152,7 +172,7 @@ def create_task(
                     404: {'description':'Dato no encontrado', 'model':responses.DataNotFound},
                     500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
-def update_task(
+async def update_task(
         request:Request,
         task_id: int,
         project_id: int,
@@ -234,6 +254,48 @@ def update_task(
         
         session.commit()
         
+        task = session.get(db_models.Task, task_id)
+
+        if update_task.append_user_ids:
+            for user_id in update_task.append_user_ids:
+                # Se crea la notificacion
+                outgoing_payload = schemas.OutgoingNotificationPayload(
+                    notification_type='assigned_task',
+                    message=f'Te asignaron a task {task_id} en project {project_id}',
+                    timestamp=datetime.now())
+
+                # Crea el evento
+                outgoing_event = schemas.WebSocketEvent(
+                    type='notification',
+                    payload=outgoing_payload.model_dump()
+                )
+
+                # Parsea el evento
+                outgoing_event_json = outgoing_event.model_dump_json()
+
+                # Envia el evento
+                await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+
+        if update_task.exclude_user_ids:
+            for user_id in update_task.exclude_user_ids:
+                # Se crea la notificacion
+                outgoing_payload = schemas.OutgoingNotificationPayload(
+                    notification_type='assigned_task',
+                    message=f'Ya no estas asignado a task {task_id} en project {project_id}',
+                    timestamp=datetime.now())
+
+                # Crea el evento
+                outgoing_event = schemas.WebSocketEvent(
+                    type='notification',
+                    payload=outgoing_payload.model_dump()
+                )
+
+                # Parsea el evento
+                outgoing_event_json = outgoing_event.model_dump_json()
+
+                # Envia el evento
+                await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+
         return {'detail':'Se ha actualizado la tarea'}
 
     except SQLAlchemyError as e:
@@ -256,7 +318,7 @@ def delete_task(
     try:        
         # Verifica que exista la task
         task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
-                
+        
         session.delete(task)
         session.commit()
         

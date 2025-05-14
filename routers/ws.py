@@ -7,6 +7,7 @@ from .auth import auth_user_ws, auth_user
 from core.logger import logger
 from core.limiter import limiter
 import json
+from utils import found_user_in_project_or_404, found_project_or_404
 
 router = APIRouter(tags=['WebSocket'])
 
@@ -204,7 +205,7 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
 
                     # Envia al broadcast
                     await manager.broadcast(outgoing_event_json, project_id)
-                    logger.info(f'Broadcast group message ID {message.chat_id} for project {project_id}')
+                    logger.info(f'Broadcast group message ID {message.chat_id} for project {project_id} via WS')
 
                 if event.type == 'personal_message':
                     # Verifica que tenga los datos del schema
@@ -333,3 +334,51 @@ def get_chat(request: Request,
     
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_chat')
+
+@router.post('/chat/{project_id}')
+async def send_message_to_group(
+        project_id: int,
+        message_payload: schemas.GroupMessagePayload,
+        user: db_models.User = Depends(auth_user),
+        session: Session = Depends(get_session)):
+
+    try:
+        found_user_in_project_or_404(user.user_id, project_id, session)
+
+        # Crea el mensaje a guardar en BD
+        message = db_models.ProjectChat(
+            project_id=project_id,
+            user_id=user.user_id,
+            message=message_payload.content
+        )
+
+        session.add(message)
+        session.commit()
+        session.refresh(message)
+
+        # Crea el mensaje de salida, que se envia al grupo
+        outgoing_payload = schemas.OutgoingGroupMessagePayload(
+            id=message.chat_id,
+            project_id=message.project_id,
+            sender_id=message.user_id,
+            content=message.message,
+            timestamp=message.timestamp
+        )
+
+        # Crea el evento completo
+        outgoing_event = schemas.WebSocketEvent(
+            type='group_message',
+            payload=outgoing_payload.model_dump()
+        )
+
+        # Parsea a json
+        outgoing_event_json = outgoing_event.model_dump_json()
+
+        # Envia al broadcast
+        await manager.broadcast(outgoing_event_json, project_id)
+
+        return {'detail':f'Mensaje enviado con exito al proyecto {project_id} por user {user.user_id}'}
+
+    except SQLAlchemyError as e:
+        session.rollback()
+        raise exceptions.DatabaseError(error=e, func='send_message_to_group')

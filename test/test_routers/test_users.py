@@ -55,8 +55,6 @@ def test_get_users_error(mocker):
     with pytest.raises(exceptions.DatabaseError):
         user.get_users(request=mock_request, session=db_session_mock)
 
-    # db_session_mock.rollback.assert_called_once()
-
 def test_create_user_error(mocker):
     db_session_mock = mocker.Mock()
     mock_request = mocker.Mock(spec=Request)

@@ -3,7 +3,6 @@ from typing import List, Optional
 from datetime import datetime as dt
 from .db_models import State, Group_Role, Project_Permission
 
-
 class CreateUser(BaseModel):
     username: str = Field(examples=['User64'])
     email: EmailStr = Field(examples=['User@gmail.com'])

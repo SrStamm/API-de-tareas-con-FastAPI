@@ -5,6 +5,7 @@ from routers import task
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
         'project_id, datos, status, detail', [
             (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1]}, 200, 'Se ha creado una nueva tarea y asignado los usuarios con exito'),
@@ -12,12 +13,13 @@ from fastapi import Request
             (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1000]}, 404, 'User with user_id 1000 not found'),
         ]
 )
-def test_create_task(client, auth_headers, test_create_project_init_for_tasks, project_id, datos, status, detail):
+async def test_create_task(client, auth_headers, test_create_project_init_for_tasks, project_id, datos, status, detail):
     response = client.post(f'/task/{project_id}', headers=auth_headers, json= datos)
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
-def test_failed_create_task(client, auth_headers2):
+@pytest.mark.asyncio
+async def test_failed_create_task(client, auth_headers2):
     response = client.post('/task/1', headers=auth_headers2, json= {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1]})
     assert response.status_code == 401
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
@@ -121,7 +123,8 @@ def test_get_task_in_project_error(mocker):
             user= mock_user,
             session=session_mock)
 
-def test_create_task_error(mocker): 
+@pytest.mark.asyncio
+async def test_create_task_error(mocker): 
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
 
@@ -130,7 +133,7 @@ def test_create_task_error(mocker):
     session_mock.add.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        task.create_task(
+        await task.create_task(
             request=mock_request,
             new_task=schemas.CreateTask(description='crear', date_exp='2025-10-10', user_ids=[1]),
             project_id=1,
@@ -138,19 +141,21 @@ def test_create_task_error(mocker):
         
     session_mock.rollback.assert_called_once()
 
-def test_create_task_Value_error(mocker): 
+@pytest.mark.asyncio
+async def test_create_task_Value_error(mocker): 
     session_mock = mocker.Mock()
 
     mock_request = mocker.Mock(spec=Request)
 
     with pytest.raises(ValueError):
-        task.create_task(
+        await task.create_task(
             request=mock_request,
             new_task=schemas.CreateTask(description='crear', date_exp='2022-10-10'),
             project_id=1,
             session=session_mock)
 
-def test_update_task_error(mocker):
+@pytest.mark.asyncio
+async def test_update_task_error(mocker):
     session_mock = mocker.Mock()
 
     mock_user = mocker.Mock(spec=db_models.User)
@@ -169,18 +174,19 @@ def test_update_task_error(mocker):
     mock_auth_data = {'user': mock_user, 'permission': 'write'}
 
     with pytest.raises(exceptions.DatabaseError):
-        task.update_task(
-            request=mock_request,
-            task_id=1,
-            project_id=1,
-            update_task=schemas.UpdateTask(description='crear'),
-            session=session_mock,
-            auth_data=mock_auth_data
-        )
+        await task.update_task(
+                request=mock_request,
+                task_id=1,
+                project_id=1,
+                update_task=schemas.UpdateTask(description='crear'),
+                session=session_mock,
+                auth_data=mock_auth_data
+            )
 
     session_mock.commit.assert_called_once()
 
-def test_update_task_error_NotAuthorized(mocker):
+@pytest.mark.asyncio
+async def test_update_task_error_NotAuthorized(mocker):
     session_mock = mocker.Mock()
 
     mock_user = mocker.Mock(spec=db_models.User)
@@ -196,7 +202,7 @@ def test_update_task_error_NotAuthorized(mocker):
     mock_auth_data = {'user': mock_user, 'permission': 'write'}
 
     with pytest.raises(exceptions.NotAuthorized):
-        task.update_task(
+        await task.update_task(
             request=mock_request,
             task_id=1,
             project_id=1,
@@ -206,7 +212,7 @@ def test_update_task_error_NotAuthorized(mocker):
         )
     
     with pytest.raises(exceptions.NotAuthorized):
-        task.update_task(
+        await task.update_task(
             request=mock_request,
             task_id=1,
             project_id=1,

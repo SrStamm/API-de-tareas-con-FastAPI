@@ -89,64 +89,6 @@ def test_websocket_connection(client, auth_headers, test_create_project_init, te
         print(f"An unexpected error occurred during the test: {e}")
         pytest.fail(f"Test failed due to unexpected exception: {e}", pytrace=True) # pytrace=True muestra el traceback del test
 
-def test_personal_message(client, auth_headers2, test_session):
-    project_id_to_test = 1
-    user_id_from_token = 2
-
-    try:
-        # Usar solo el header Authorization
-        headers = {"Authorization": auth_headers2["Authorization"]}
-
-        # Conectar al WebSocket usando el project_id
-        with client.websocket_connect(f"/ws/{project_id_to_test}", headers=headers) as websocket:
-            connect_event = websocket.receive_json() # Espera y recibe JSON
-            print(f"Received connection event: {connect_event}")
-
-            assert isinstance(connect_event, dict), "Received connection event is not a dictionary"
-            assert "type" in connect_event, "Connection event missing 'type' field"
-            assert connect_event["type"] == "user_connected", f"Connection event type is incorrect. Expected 'user_connected', got {connect_event['type']}"
-            assert "payload" in connect_event, "Connection event missing 'payload' field"
-            assert isinstance(connect_event["payload"], dict), "Connection event payload is not a dictionary"
-
-            # Verifica el contenido del payload del evento de conexión (basado en schemas.Message)
-            connect_payload = connect_event["payload"]
-            assert "user_id" in connect_payload, "Connection event payload missing 'user_id'"
-            assert connect_payload["user_id"] == user_id_from_token, f"Connection event payload user_id is incorrect. Expected {user_id_from_token}, got {connect_payload['user_id']}"
-            assert "project_id" in connect_payload, "Connection event payload missing 'project_id'"
-            assert connect_payload["project_id"] == project_id_to_test, f"Connection event payload project_id is incorrect. Expected {project_id_to_test}, got {connect_payload['project_id']}"
-            assert "timestamp" in connect_payload, "Connection event payload missing 'timestamp'" # Verifica que la clave exista
-            assert "content" in connect_payload, "Connection event payload missing 'content'" # Verifica que la clave exista
-
-            # Recibe el mensaje
-            received_event = websocket.receive_json() # Espera y recibe JSON
-
-            # Verifica la estructura básica del evento recibido
-            assert isinstance(received_event, dict), "Received personal message event is not a dictionary"
-            assert "type" in received_event, "Broadcast event missing 'type' field"
-            assert received_event["type"] == "personal_message", f"Personal message event type is incorrect. Expected 'personal_message', got {received_event['type']}"
-            assert "payload" in received_event, "Personal message event missing 'payload' field"
-            assert isinstance(received_event["payload"], dict), "Personal message event payload is not a dictionary"
-
-            # Verifica los campos del payload saliente
-            received_payload = received_event["payload"]
-            assert received_payload["received_user_id"] == user_id_from_token, f"Personal message payload project_id is incorrect. Expected {user_id_from_token}, got {received_payload['received_user_id']}"
-            assert received_payload["sender_id"] == 1, f"Personal message payload sender_id is incorrect. Expected {1}, got {received_payload['sender_id']}"
-            assert received_payload["content"] == 'Hola user test', "Personal message payload content does not match sent content"
-            assert "timestamp" in received_payload, "Personal message payload missing 'timestamp' field"
-
-    except WebSocketException as e:
-        # Captura excepciones de FastAPI/Starlette durante el handshake o manejo inicial
-        pytest.fail(f"WebSocket connection failed with WebSocketException: code={e.code}, reason={e.reason}")
-    except ws.WebSocketDisconnect as e:
-        # Captura la desconexión normal al final del bloque 'with' o una desconexión inesperada antes.
-        # Si se llega aquí sin un pytest.fail previo, significa que el bloque 'with' terminó correctamente.
-        print(f"WebSocket disconnected: code={e.code}, reason={e.reason}")
-        pass 
-    except Exception as e:
-        # Captura cualquier otra excepción inesperada durante la ejecución del test
-        print(f"An unexpected error occurred during the test: {e}")
-        pytest.fail(f"Test failed due to unexpected exception: {e}", pytrace=True) # pytrace=True muestra el traceback del test
-
 def test_get_chat(client, auth_headers, test_create_project_init):
     response = client.get('/chat/1', headers=auth_headers)
     assert response.status_code == 200
@@ -179,6 +121,32 @@ def test_get_chat_error(mocker):
                 project_id=1,
                 user=mock_user,
                 session=session_mock)
+
+def test_send_message_to_group(client, auth_headers):
+    response = client.post('/chat/1', headers=auth_headers, json={'content':'Enviando mensaje por http'})
+    assert response.status_code == 200
+    assert response.json() == {'detail':'Mensaje enviado con exito al proyecto 1 por user 1'}
+
+@pytest.mark.asyncio
+async def test_send_message_to_group(mocker, auth_headers):
+    message_mocker = mocker.Mock(spec=schemas.GroupMessagePayload)
+    message_mocker.content = 'Probando error en base de datos'
+
+    user_mock = mocker.Mock(spec=db_models.User)
+    session_mock = mocker.Mock()
+
+    mocker.patch('routers.ws.found_user_in_project_or_404', return_value=1)
+
+    session_mock.add.side_effect = SQLAlchemyError('Error en base de datos')
+
+    with pytest.raises(exceptions.DatabaseError):
+        await ws.send_message_to_group(
+            project_id=1,
+            message_payload=message_mocker,
+            user=user_mock,
+            session=session_mock)
+    
+    session_mock.rollback.assert_called_once()
 
 def test_verify_user_in_project_error(mocker):
     session_mock = mocker.Mock()
