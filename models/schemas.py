@@ -132,6 +132,11 @@ class UpdateProject(BaseModel):
 class Token(BaseModel):
     access_token: str = Field(examples=[])
     token_type: str = Field(examples=['bearer'])
+    refresh_token: str
+
+class Access_Token(BaseModel):
+    access_token: str = Field(examples=[])
+    token_type: str = Field(examples=['bearer'])
 
 class Message(BaseModel):
     content: str = Field(max_length=150, examples=['Hola a todos!'])

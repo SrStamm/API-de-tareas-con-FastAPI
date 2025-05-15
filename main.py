@@ -1,9 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from routers import group, project, task, user, auth, ws
 from db.database import create_db_and_tables
 from contextlib import asynccontextmanager
 from core.logger import logger
 from core.limiter import limiter, _rate_limit_exceeded_handler, RateLimitExceeded
+from time import time
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,3 +29,14 @@ app.include_router(ws.router)
 @app.get('/')
 def root():
     return {'detail':'Bienvenido a esta API!'}
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time()
+    response = await call_next(request)
+    duration = time() - start_time
+    user = request.state.user if hasattr(request.state, 'user') else 'anonymous'
+    logger.info(
+        f"method={request.method} path={request.url.path} user={user} duration={duration:.3f}s status={response.status_code}"
+    )
+    return response

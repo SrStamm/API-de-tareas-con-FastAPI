@@ -49,7 +49,8 @@ async def test_auth_user_success(mocker):
     expiration_time = current_time + timedelta(hours=1)
     mock_payload = {
         "sub": expected_user_id,
-        "exp": expiration_time.timestamp()
+        "exp": expiration_time.timestamp(),
+        "scope": 'api_access'
     }
 
     # Mockea jwt.decode DENTRO del módulo 'auth' donde se usa
@@ -119,7 +120,8 @@ async def test_auth_user_not_found_in_db(mocker):
     expiration_time = current_time + timedelta(hours=1)
     mock_payload = {
         "sub": expected_user_id,
-        "exp": expiration_time.timestamp()
+        "exp": expiration_time.timestamp(),
+        "scope": 'api_access'
     }
 
     mocker.patch('routers.auth.jwt.decode', return_value=mock_payload)
@@ -142,7 +144,7 @@ async def test_auth_user_no_exp(mocker):
     mock_session.get.return_value = mock_user
 
     # Payload sin 'exp'
-    mock_payload = {"sub": expected_user_id}
+    mock_payload = {"sub": expected_user_id, "scope": 'api_access'}
     mocker.patch('routers.auth.jwt.decode', return_value=mock_payload)
 
     test_token = "token.without.exp"
@@ -165,7 +167,8 @@ async def test_auth_user_expired_token(mocker):
     expiration_time = current_time - timedelta(hours=1) # Expiró hace 1 hora
     mock_payload = {
         "sub": expected_user_id,
-        "exp": expiration_time.timestamp()
+        "exp": expiration_time.timestamp(),
+        "scope": 'api_access'
     }
 
     mocker.patch('routers.auth.jwt.decode', return_value=mock_payload)

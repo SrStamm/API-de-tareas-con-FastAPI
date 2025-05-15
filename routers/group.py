@@ -26,7 +26,7 @@ def get_groups(
         skip: int = 0,
         session:Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]:
 
-    try: 
+    try:
         statement = (select(db_models.Group)
                     .options(selectinload(db_models.Group.users))
                     .order_by(db_models.Group.group_id).limit(limit).offset(skip))
@@ -376,7 +376,7 @@ def get_user_in_group(
     try:
         get_group_or_404(group_id, session)
         
-        statement = (select(db_models.User, db_models.group_user.role)
+        statement = (select(db_models.User.username, db_models.User.user_id, db_models.group_user.role)
                     .join(db_models.group_user, db_models.group_user.user_id == db_models.User.user_id)
                     .where(db_models.group_user.group_id == group_id)
                     .limit(limit).offset(skip))
@@ -384,10 +384,12 @@ def get_user_in_group(
         results = session.exec(statement).all()
         
         # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
-        return [
-            schemas.ReadGroupUser(user_id=user.user_id, username=user.username, role=role)
-            for user, role in results
-        ]
+        # return [
+        #     schemas.ReadGroupUser(user_id=user.user_id, username=user.username, role=role)
+        #     for user, role in results
+        # ]
+        
+        return results
     
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener los usuarios del grupo {e}')
