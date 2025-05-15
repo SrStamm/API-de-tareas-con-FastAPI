@@ -8,4 +8,7 @@ logging.basicConfig(
     ]
 )
 
+# filename='app.log'
+# Podria agregarse para guardar los logs en un archivo, pero debe sacarse 'handlers'
+
 logger = logging.getLogger("task_api")

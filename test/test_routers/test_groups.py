@@ -1,10 +1,12 @@
 import pytest
-from conftest import auth_headers, client, auth_headers2, test_user2
+from conftest import auth_headers, client, auth_headers2, test_user2, async_client
 from models import db_models, exceptions, schemas
 from sqlalchemy.exc import SQLAlchemyError
 from routers import group
 from fastapi import Request
 from utils import require_role
+
+import pytest_asyncio
 
 def test_create_group(client, auth_headers, test_user2):
     response = client.post('/group', headers=auth_headers, json={'name':'probando'})
@@ -17,8 +19,20 @@ def test_create_group(client, auth_headers, test_user2):
 
     hola = test_user2
 
-def test_get_groups(client, auth_headers):
-    response = client.get('/group', headers=auth_headers)
+@pytest.mark.asyncio
+async def test_get_groups_error(mocker):
+    db_session_mock = mocker.Mock()
+    mock_request = mocker.Mock(spec=Request)
+
+    db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
+
+    with pytest.raises(exceptions.DatabaseError):
+        await group.get_groups(request=mock_request, session=db_session_mock)
+
+
+@pytest.mark.asyncio
+async def test_get_groups(async_client, auth_headers):
+    response = await async_client.get('/group', headers=auth_headers)
     assert response.status_code == 200
     groups = response.json()
     assert isinstance(groups, list)
@@ -103,14 +117,6 @@ def test_delete_group(client, auth_headers, group_id, status, respuesta):
     assert response.status_code == status
     assert response.json() == {'detail': respuesta}
 
-def test_get_groups_error(mocker):
-    db_session_mock = mocker.Mock()
-    mock_request = mocker.Mock(spec=Request)
-
-    db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
-
-    with pytest.raises(exceptions.DatabaseError):
-        group.get_groups(request=mock_request, session=db_session_mock)
 
 def test_create_group_error(mocker):
     db_session_mock = mocker.Mock()

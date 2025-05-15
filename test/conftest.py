@@ -9,12 +9,18 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from fastapi.testclient import TestClient
 from main import app
 from sqlmodel import SQLModel, create_engine, Session
-from db.database import get_session, select
+from db.database import get_session, select, redis_client
 from models import db_models
 from routers.auth import encrypt_password
 
+from httpx import AsyncClient
+from httpx import ASGITransport
+import pytest_asyncio
+
 # Crea la BD, cierra las conexiones y elimina la BD
 engine = create_engine("sqlite:///./test/test.db")
+
+PASSWORD='0000'
 
 @pytest.fixture(scope="module")
 def test_db():
@@ -43,7 +49,20 @@ def client(test_session):
     yield TestClient(app)
     app.dependency_overrides.clear()
 
-PASSWORD='0000'
+@pytest_asyncio.fixture
+async def async_client(test_session):
+    app.dependency_overrides[get_session] = lambda: test_session
+    
+    transport = ASGITransport(app=app) # Se usa esto para transportar la app, ya que no sabe como manejar FastAPI
+
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        yield client
+    app.dependency_overrides.clear()
+
+@pytest_asyncio.fixture(autouse=True)
+async def close_redis_after_tests():
+    yield
+    await redis_client.aclose()
 
 @pytest.fixture
 def test_user(test_session):

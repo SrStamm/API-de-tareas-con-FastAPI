@@ -17,11 +17,7 @@ url = f'postgresql+psycopg2://{user}:{password}@localhost:5432/{db_name}'
 engine = create_engine(url) # echo=True, pool_pre_ping=True 
 
 def create_db_and_tables():
-    print(url)
-    print('Intentando crear las tablas')
     SQLModel.metadata.create_all(engine)
-    print('Tablas creadas o ya existentes')
-
     try:
         with engine.connect() as connection:
             result = connection.execute(text("SELECT 1"))
@@ -36,3 +32,8 @@ def get_session():
         yield session
     finally:
         session.close()
+
+
+import redis.asyncio as redis
+
+redis_client = redis.Redis(host='localhost', port=6379, db=0)

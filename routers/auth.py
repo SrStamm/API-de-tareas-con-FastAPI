@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from db.database import get_session, Session, select
 from passlib.context import CryptContext
 from sqlalchemy.exc import SQLAlchemyError
-from models import db_models, schemas, exceptions
+from models import db_models, schemas, exceptions, responses
 import os
 from core.logger import logger
 from core.limiter import limiter
@@ -148,7 +148,15 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='login')
 
-@router.post("/refresh", description='Endpoint para obtener un nuevo token. Se necesita refresh token.')
+@router.post(
+            "/refresh",
+            description='Endpoint para obtener un nuevo token. Se necesita refresh token.',
+            responses={
+                200:{'detail':'Nuevo access_token y refresh_token obtenidos', 'model':schemas.Token},
+                401:{'detail':'Token incorrecto', 'model':responses.InvalidToken},
+                404:{'detail':'User no encontrado', 'model':responses.NotFound},
+                500:{'detail':'Error interno', 'model': responses.DatabaseErrorResponse}
+            })
 @limiter.limit("5/minute")
 async def refresh(
         refresh: str,
@@ -252,7 +260,13 @@ async def refresh(
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='refresh')
 
-@router.post("/logout", description='Endpoint para cerrar sesion. Se cierran todas las sesiones')
+@router.post(
+            "/logout",
+            description='Endpoint para cerrar sesion. Se cierran todas las sesiones',
+            responses={
+                200: {'description':'Todas las sesiones estan cerradas.'},
+                500:{'detail':'Error interno', 'model':responses.DatabaseErrorResponse}
+            })
 @limiter.limit("5/minute")
 async def logout(
         request: Request,

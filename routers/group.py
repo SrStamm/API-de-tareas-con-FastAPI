@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
-from db.database import get_session, Session, select, selectinload, SQLAlchemyError
+from db.database import get_session, Session, select, selectinload, SQLAlchemyError, redis_client
 from typing import List
 from .auth import auth_user
 from utils import get_group_or_404, get_user_or_404, require_role, role_of_user_in_group
@@ -8,6 +8,7 @@ from core.logger import logger
 from core.limiter import limiter
 from routers.ws import manager
 from datetime import datetime
+import json
 
 router = APIRouter(prefix='/group', tags=['Group'])
 
@@ -20,19 +21,39 @@ router = APIRouter(prefix='/group', tags=['Group'])
             200:{'description':'Grupos obtenidos', 'model':schemas.ReadBasicDataGroup},
             500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("60/minute")
-def get_groups(
+async def get_groups(
         request: Request,
         limit:int = 10,
         skip: int = 0,
         session:Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]:
 
     try:
+        # Busca si existe una respuesta guardada y la busca
+        cached = await redis_client.get('group')
+
+        if cached:
+            logger.info('Obtenido por Redis')
+            decoded = json.loads(cached)
+            return decoded
+        
         statement = (select(db_models.Group)
                     .options(selectinload(db_models.Group.users))
                     .order_by(db_models.Group.group_id).limit(limit).offset(skip))
         
         found_group = session.exec(statement).all()
-        return found_group
+        
+        # Cachea la respuesta
+        to_cache = [
+            {
+                **group.model_dump(),
+                'users': [user.model_dump() for user in group.users]
+            }
+            for group in found_group]
+        
+        # Guarda la respuesta
+        await redis_client.setex('group', 60, json.dumps(to_cache, default=str))
+
+        return to_cache
 
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener los grupos {e}')

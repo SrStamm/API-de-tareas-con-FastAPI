@@ -91,3 +91,6 @@ class DatabaseErrorResponse(BaseModel):
 
 class NotAuthorized(BaseModel):
     detail: str = Field(example=["User whit user_id 1 is Not Authorized"])
+
+class InvalidToken(BaseModel):
+    detail: str = Field(example=["Token Not Authorized", "Tipo de Token incorrecto", "Token expirado"])
