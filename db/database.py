@@ -14,7 +14,7 @@ password = os.environ.get('POSTGRES_PASSWORD')
 
 url = f'postgresql+psycopg2://{user}:{password}@localhost:5432/{db_name}'
 
-engine = create_engine(url, echo=True, pool_pre_ping=True) # 
+engine = create_engine(url) # echo=True, pool_pre_ping=True 
 
 def create_db_and_tables():
     print(url)

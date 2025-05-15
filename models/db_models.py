@@ -86,3 +86,15 @@ class ProjectChat(SQLModel, table=True):
     timestamp: dt = Field(default_factory=lambda: dt.now(timezone.utc))
 
     project: Mapped[Optional["Project"]] = Relationship(back_populates='chats')
+
+class Session(SQLModel, table=True):
+    jti: str = Field(primary_key=True, max_length=36)
+    sub: str = Field(index=True)
+    
+    is_active: bool = Field(default=True)
+    use_count: int = Field(default=0, ge=0)
+    
+    created_at: dt = Field(default_factory=lambda: dt.now(timezone.utc))
+    expires_at: dt
+    class Config:
+        indexes = [("sub", "is_active")]

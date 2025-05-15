@@ -200,3 +200,9 @@ async def test_auth_user_expired_token(mocker):
         await auth.auth_user(token=test_token, session=mock_session)
 
     mock_session.get.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_logout(client, auth_headers):
+    response = client.post('/logout', headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json() == {'detail':'Cerradas todas las sesiones'}
