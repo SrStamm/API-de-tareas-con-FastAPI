@@ -29,19 +29,19 @@ async def get_groups(
 
     try:
         # Busca si existe una respuesta guardada y la busca
-        cached = await redis_client.get('group')
+        cached = await redis_client.get(f'groups:limit:{limit}:offset:{skip}')
 
         if cached:
             logger.info('Obtenido por Redis')
             decoded = json.loads(cached)
             return decoded
-        
+
         statement = (select(db_models.Group)
                     .options(selectinload(db_models.Group.users))
                     .order_by(db_models.Group.group_id).limit(limit).offset(skip))
-        
+
         found_group = session.exec(statement).all()
-        
+
         # Cachea la respuesta
         to_cache = [
             {
@@ -49,9 +49,9 @@ async def get_groups(
                 'users': [user.model_dump() for user in group.users]
             }
             for group in found_group]
-        
+
         # Guarda la respuesta
-        await redis_client.setex('group', 60, json.dumps(to_cache, default=str))
+        await redis_client.setex(f'groups:limit:{limit}:offset:{skip}', 300, json.dumps(to_cache, default=str))
 
         return to_cache
 
@@ -67,7 +67,7 @@ async def get_groups(
             200:{'description':'Grupo creado', 'model':responses.GroupCreateSucces},
             500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
-def create_group(  
+async def create_group(
         request: Request,
         new_group: schemas.CreateGroup,
         user: db_models.User = Depends(auth_user),
@@ -88,6 +88,9 @@ def create_group(
         session.add(group_user)
         session.commit()
 
+        # Elimina cache existente
+        await redis_client.delete(f'groups:limit:*:offset:*')
+
         return {'detail': 'Se ha creado un nuevo grupo de forma exitosa'}
 
     except SQLAlchemyError as e:
@@ -105,7 +108,7 @@ def create_group(
             404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
             500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
-def update_group(
+async def update_group(
         request: Request,
         group_id: int,
         updated_group: schemas.UpdateGroup,
@@ -122,7 +125,10 @@ def update_group(
             found_group.description = updated_group.description
         
         session.commit()
-        
+
+        # Elimina cache existente
+        await redis_client.delete(f'groups:limit:*:offset:*')
+
         return {'detail':'Se ha actualizado la informacion del grupo'}
     
     except SQLAlchemyError as e:
@@ -139,7 +145,7 @@ def update_group(
             404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
             500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
-def delete_group(
+async def delete_group(
         request: Request,
         group_id: int,
         auth_data: dict = Depends(require_role(roles=['admin'])),
@@ -149,17 +155,20 @@ def delete_group(
         # found_group = get_group_or_404(group_id, session)
 
         found_group = session.get(db_models.Group, group_id)
-        
+
         session.delete(found_group)
         session.commit()
-        
+
+        # Elimina cache existente
+        await redis_client.delete(f'groups:limit:*:offset:*')
+
         return {'detail':'Se ha eliminado el grupo'}
-    
+
     except SQLAlchemyError as e:
         logger.error(f'Error al eliminar el grupo {e}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_group')
-    
+
 @router.get(
         '/me',
         description=""" Obtiene todos los grupos a los que pertenece el usuario con informacion limitada.
@@ -169,7 +178,7 @@ def delete_group(
             200:{'description':'Grupo donde esta el usuario obtenidos', 'model':schemas.ReadGroup},
             500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("60/minute")
-def get_groups_in_user(
+async def get_groups_in_user(
         request: Request,
         limit:int = 10,
         skip: int = 0,
@@ -177,15 +186,38 @@ def get_groups_in_user(
         session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:
 
     try:
+        # Busca si existe una respuesta guardada y la busca
+        cached = await redis_client.get(f'groups:user_id:{user.user_id}:limit:{limit}:offset:{skip}')
+
+        if cached:
+            logger.info(f'Obtenido grupos donde esta el user {user.user_id}')
+            decoded = json.loads(cached)
+            return decoded
+
         statement = (select(db_models.Group)
                     .join(db_models.group_user, db_models.group_user.group_id == db_models.Group.group_id)
                     .where(db_models.group_user.user_id == user.user_id)
                     .order_by(db_models.Group.group_id)
                     .limit(limit).offset(skip))
-        
+
         found_group = session.exec(statement).all()
-        return found_group
-    
+
+        # Cachea la respuesta
+        to_cache = [
+            {
+                **group.model_dump(),
+                'users': [user.model_dump() for user in group.users]
+            }
+            for group in found_group]
+
+        # Guarda la respuesta
+        await redis_client.setex(
+            f'groups:user_id:{user.user_id}:limit:{limit}:offset:{skip}',
+            600,
+            json.dumps(to_cache, default=str))
+
+        return to_cache
+
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener los grupos donde pertenece el usuario {e}')
         raise exceptions.DatabaseError(error=e, func='get_groups_in_user')
@@ -200,7 +232,7 @@ def get_groups_in_user(
                 404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
                 500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
-async def append_user_group( 
+async def append_user_group(
         request: Request,
         group_id: int,
         user_id: int,
@@ -209,15 +241,17 @@ async def append_user_group(
 
     try:
         actual_role = auth_data['role']
+        actual_user = auth_data['user']
+
         found_group = get_group_or_404(group_id, session)
-        
+
         # Busca el usuario
         new_user = get_user_or_404(user_id, session)
 
         if new_user in found_group.users:
             logger.error(f'El user {user_id} ya existe en el grupo {group_id}')
             raise exceptions.UserInGroupError(user_id=new_user.user_id, group_id=found_group.group_id)
-        
+
         # Lo agrega al grupo
         found_group.users.append(new_user)
         session.commit()
@@ -240,8 +274,11 @@ async def append_user_group(
         # Envia el evento
         await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
+        # Elimina cache existente
+        await redis_client.delete(f'groups:user_id:{actual_user.user_id}:limit:*:offset:*')
+
         return {'detail':'El usuario ha sido agregado al grupo'}
-    
+
     except SQLAlchemyError as e:
         logger.error(f'Error al agregar un usuario al grupo {e}')
         session.rollback()
@@ -301,6 +338,10 @@ async def delete_user_group(
                 await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
                 logger.info(f'User {user_id} eliminado del Group {group_id} por {actual_user.user_id}')
+
+                # Elimina cache existente
+                await redis_client.delete(f'groups:user_id:{actual_user.user_id}:limit:*:offset:*')
+
                 return {'detail':'El usuario ha sido eliminado al grupo'}
 
             raise exceptions.NotAuthorized(actual_user.user_id)
@@ -333,6 +374,8 @@ async def update_user_group(
         session: Session = Depends(get_session)):
 
     try:
+        actual_user = auth_data['user']
+
         get_group_or_404(group_id, session)
 
         # Busca el usuario
@@ -345,9 +388,9 @@ async def update_user_group(
         if not found_user:
             logger.error(f'No se encontro el user {user_id} en el grupo {group_id}')
             raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
-
+        
         found_user.role = update_role.role
-
+        
         session.commit()
         session.refresh(found_user)
 
@@ -369,6 +412,9 @@ async def update_user_group(
         # Envia el evento
         await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
+        # Elimina cache existente
+        await redis_client.delete(f'groups:user_id:{actual_user.user_id}:limit:*:offset:*')
+
         return {'detail':'Se ha cambiado los permisos del usuario en el grupo'}
 
     except SQLAlchemyError as e:
@@ -386,7 +432,7 @@ async def update_user_group(
                 404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
                 500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("60/minute")
-def get_user_in_group(
+async def get_user_in_group(
         request: Request, 
         group_id: int,
         limit:int = 10,
@@ -395,23 +441,37 @@ def get_user_in_group(
         session:Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
 
     try:
+        # Busca si existe una respuesta guardada y la busca
+        cached = await redis_client.get(f'users_in_group:group_id:{group_id}:limit:{limit}:offset:{skip}')
+
+        if cached:
+            logger.info(f'Obtenido todos los usuarios pertenecientes al grupo {group_id}')
+            decoded = json.loads(cached)
+            return decoded
+
         get_group_or_404(group_id, session)
-        
+
         statement = (select(db_models.User.username, db_models.User.user_id, db_models.group_user.role)
                     .join(db_models.group_user, db_models.group_user.user_id == db_models.User.user_id)
                     .where(db_models.group_user.group_id == group_id)
                     .limit(limit).offset(skip))
-        
+
         results = session.exec(statement).all()
-        
-        # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
-        # return [
-        #     schemas.ReadGroupUser(user_id=user.user_id, username=user.username, role=role)
-        #     for user, role in results
-        # ]
-        
-        return results
-    
+
+        # Cachea la respuesta
+        to_cache = [
+            schemas.ReadGroupUser(user_id=user_id, username=username, role=role.value)
+            for username, user_id, role in results
+            ]
+
+        # Guarda la respuesta
+        await redis_client.setex(
+            f'users_in_group:group_id:{group_id}:limit:{limit}:offset:{skip}',
+            600,
+            json.dumps([user_.model_dump() for user_ in to_cache], default=str))
+
+        return to_cache
+
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener los usuarios del grupo {e}')
         session.rollback()

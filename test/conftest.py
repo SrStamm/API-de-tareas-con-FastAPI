@@ -3,7 +3,7 @@
 # pytest --cov=./routers --cov-report=html
 # xdg-open htmlcov/index.html
 
-import sys, os, pytest, errno
+import sys, os, pytest, pytest_asyncio, errno
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from fastapi.testclient import TestClient
@@ -13,9 +13,7 @@ from db.database import get_session, select, redis_client
 from models import db_models
 from routers.auth import encrypt_password
 
-from httpx import AsyncClient
-from httpx import ASGITransport
-import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
 
 # Crea la BD, cierra las conexiones y elimina la BD
 engine = create_engine("sqlite:///./test/test.db")
@@ -42,6 +40,7 @@ def test_session(test_db):
         yield session
     finally:
         session.close()
+        redis_client.aclose()
 
 @pytest.fixture
 def client(test_session):
@@ -58,6 +57,16 @@ async def async_client(test_session):
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
     app.dependency_overrides.clear()
+
+@pytest_asyncio.fixture(scope="function")
+async def clean_redis():
+    """
+    Limpia claves específicas de Redis después de cada prueba para evitar interferencias
+    en tests que dependen de consultas a la base de datos.
+    """
+    yield
+    async for key in redis_client.scan_iter('groups:limit:*:offset:*'):
+        await redis_client.delete(key)
 
 @pytest_asyncio.fixture(autouse=True)
 async def close_redis_after_tests():
@@ -102,13 +111,13 @@ def auth_headers2(client, test_user2):
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
-@pytest.fixture
-def test_create_group_init(client, auth_headers, test_user2):
-    response = client.post('/group', headers=auth_headers, json={'name':'probando'})
+@pytest_asyncio.fixture
+async def test_create_group_init(async_client, auth_headers, test_user2):
+    response = await async_client.post('/group', headers=auth_headers, json={'name':'probando'})
     assert response.status_code == 200
     assert response.json() == {'detail': 'Se ha creado un nuevo grupo de forma exitosa'}
 
-    client.post('/group/1/2', headers=auth_headers)
+    await async_client.post('/group/1/2', headers=auth_headers)
     return
 
 @pytest.fixture

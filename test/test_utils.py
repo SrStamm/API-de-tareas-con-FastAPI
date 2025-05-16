@@ -4,7 +4,8 @@ from routers import group, project
 from fastapi import Request
 import utils
 
-def test_get_group_or_404_error(mocker):
+@pytest.mark.asyncio
+async def test_get_group_or_404_error(mocker):
     request_mocker = mocker.Mock(spec=Request)
     
     session_mock = mocker.Mock()
@@ -12,7 +13,7 @@ def test_get_group_or_404_error(mocker):
     session_mock.exec.return_value.first.return_value = None
 
     with pytest.raises(exceptions.GroupNotFoundError):
-        group.update_group(
+        await group.update_group(
             request=request_mocker,
             group_id=1,
             updated_group=schemas.UpdateGroup(),
