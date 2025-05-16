@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
-from db.database import get_session, Session, select, selectinload, SQLAlchemyError
+from db.database import get_session, Session, select, selectinload, SQLAlchemyError, redis_client
 from typing import List
 from .auth import auth_user
 from utils import get_group_or_404, get_user_or_404, found_project_or_404, require_permission, require_role
@@ -8,6 +8,7 @@ from core.logger import logger
 from core.limiter import limiter
 from routers.ws import manager
 from datetime import datetime
+import json
 
 router = APIRouter(prefix='/project', tags=['Project'])
 
@@ -20,7 +21,7 @@ router = APIRouter(prefix='/project', tags=['Project'])
             200:{'description':'Projectos donde esta el usuario obtenidos', 'model':schemas.ReadBasicProject},
             500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
-def get_projects_iam(
+async def get_projects_iam(
         request:Request,
         limit:int = 10,
         skip: int = 0,
@@ -28,13 +29,33 @@ def get_projects_iam(
         session: Session = Depends(get_session)) -> List[schemas.ReadBasicProject]:
 
     try:
+        key = f'projects_me:user_id:{user.user_id}:limit:{limit}:offset:{skip}'
+        # Busca si existe una respuesta cacheada
+        cached = await redis_client.get(key)
+
+        # Devuelve si es verdad
+        if cached:
+            logger.info(f'Redis Cache: {key}')
+            decoded = json.loads(cached)
+            return decoded
+
         statement = (select(db_models.Project.project_id, db_models.Project.group_id, db_models.Project.title)
                     .where( db_models.Project.project_id == db_models.project_user.project_id,
                             db_models.project_user.user_id == user.user_id)
                     .limit(limit).offset(skip))
 
         found_projects = session.exec(statement).all()
-        return found_projects
+
+        # Cachea la respuesta
+        to_cache = [
+            schemas.ReadBasicProject(group_id=group_id, project_id=project_id, title=title)
+            for group_id, project_id, title in found_projects
+            ]
+
+        # Guarda la respuesta
+        await redis_client.setex(key, 10, json.dumps([project_.model_dump() for project_ in to_cache], default=str))
+
+        return to_cache
 
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener los proyectos a los que pertenece el user {user.user_id}: {e}')
@@ -50,7 +71,7 @@ def get_projects_iam(
             404:{'description':'Grupo o proyectos no encontrados','model':responses.NotFound},
             500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
-def get_projects(
+async def get_projects(
         request:Request,
         group_id: int,
         limit:int = 10,
@@ -59,6 +80,16 @@ def get_projects(
         session: Session = Depends(get_session)) -> List[schemas.ReadProject]:
 
     try:
+        key = f'projects:group_id:{group_id}:limit:{limit}:offset:{skip}'
+        # Busca si existe una respuesta cacheada
+        cached = await redis_client.get(key)
+
+        # Devuelve si es verdad
+        if cached:
+            logger.info(f'Redis Cache: {key}')
+            decoded = json.loads(cached)
+            return decoded
+        
         get_group_or_404(group_id=group_id, session=session)
 
         statement = (select(db_models.Project)
@@ -67,7 +98,19 @@ def get_projects(
                     .limit(limit).offset(skip))
 
         found_projects = session.exec(statement).all()
-        return found_projects
+        
+        # Cachea la respuesta
+        to_cache = [
+            {
+                **project.model_dump(),
+                'users': [user.model_dump() for user in project.users]
+            }
+            for project in found_projects]
+
+        # Guarda la respuesta
+        await redis_client.setex(key, 10, json.dumps(to_cache, default=str))
+
+        return to_cache
     
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener todos los proyectos del grupo {group_id}: {e}')
@@ -82,7 +125,7 @@ def get_projects(
             404:{'description':'Grupo no encontrado','model':responses.NotFound},
             500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
-def create_project(
+async def create_project(
         request:Request,
         new_project: schemas.CreateProject,
         group_id: int,
@@ -94,7 +137,7 @@ def create_project(
         found_group = get_group_or_404(group_id, session)
 
         project = db_models.Project(**new_project.model_dump(), group_id=found_group.group_id)
-        
+
         session.add(project)
         session.commit()
         session.refresh(project)
@@ -123,8 +166,10 @@ def create_project(
 
         session.commit()
 
+        await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+
         return {'detail':'Se ha creado un nuevo proyecto de forma exitosa'}
-    
+
     except SQLAlchemyError as e:
         logger.error(f'Error al crear un proyecto en el grupo {group_id}: {e}')
         session.rollback()
@@ -140,7 +185,7 @@ def create_project(
             404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
             500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
-def update_project(
+async def update_project(
         request:Request,
         group_id: int,
         project_id: int,
@@ -159,7 +204,9 @@ def update_project(
         
         session.commit()
         session.refresh(found_project)
-        
+
+        await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+
         return {'detail':'Se ha actualizado la informacion del projecto'}
     
     except SQLAlchemyError as e:
@@ -176,7 +223,7 @@ def update_project(
             404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
             500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
-def delete_project(
+async def delete_project(
         request:Request,
         group_id: int,
         project_id: int,
@@ -188,6 +235,11 @@ def delete_project(
 
         session.delete(found_project)
         session.commit()
+
+        await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+
+        # Elimina cache
+        await redis_client.delete('users_project:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
 
         return {'detail':'Se ha eliminado el proyecto'}
 
@@ -255,6 +307,10 @@ async def add_user_to_project(
         # Envia el evento
         await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
+        # Elimina cache
+        await redis_client.delete('users_project:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+        await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+
         return {'detail':'El usuario ha sido agregado al proyecto'}
     
     except SQLAlchemyError as e:
@@ -316,6 +372,10 @@ async def remove_user_from_project(
 
             # Envia el evento
             await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+
+            # Elimina cache
+            await redis_client.delete('users_project:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+            await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
 
             return {'detail':'El usuario ha sido eliminado del proyecto'}
         else:
@@ -383,6 +443,9 @@ async def update_user_permission_in_project(
         # Envia el evento
         await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
+        # Elimina cache
+        await redis_client.delete('users_project:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+
         return {'detail':'Se ha cambiado los permisos del usuario en el proyecto'}
 
     except SQLAlchemyError as e:
@@ -401,7 +464,7 @@ async def update_user_permission_in_project(
                 404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
                 500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
-def get_user_in_project(
+async def get_user_in_project(
         request:Request,
         group_id: int,
         project_id: int,
@@ -409,7 +472,16 @@ def get_user_in_project(
         skip: int = 0,
         session:Session = Depends(get_session),
         user: db_models.User = Depends(auth_user)) -> List[schemas.ReadProjectUser]:
+
     try:
+        key = f'users_project:group_id:{group_id}:project_id:{project_id}:limit:{limit}:offset:{skip}'
+        cached = await redis_client.get(key)
+
+        if cached:
+            logger.info(f'Redis Cache: {key}')
+            decoded = json.loads(cached)
+            return decoded
+
         found_project_or_404(group_id, project_id, session)
 
         statement = (select(db_models.User.user_id, db_models.User.username, db_models.project_user.permission)
@@ -424,10 +496,14 @@ def get_user_in_project(
             raise exceptions.UsersNotFoundInProjectError(project_id=project_id)
         
         # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
-        return [
+        to_cache = [
             schemas.ReadProjectUser(user_id=user_id, username=username, permission=permission)
             for user_id, username, permission in results
         ]
+
+        await redis_client.setex(key, 10, json.dumps([project.model_dump() for project in to_cache], default=str))
+
+        return to_cache
 
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener los usuarios del proyecto {project_id}: {e}')

@@ -20,7 +20,8 @@ async def test_get_group_or_404_error(mocker):
             session=session_mock
         )
 
-def test_get_project_or_404_error(mocker):
+@pytest.mark.asyncio
+async def test_get_project_or_404_error(mocker):
     request_mocker = mocker.Mock(spec=Request)
     
     session_mock = mocker.Mock()
@@ -28,7 +29,7 @@ def test_get_project_or_404_error(mocker):
     session_mock.exec.return_value.first.return_value = None
 
     with pytest.raises(exceptions.ProjectNotFoundError):
-        project.update_project(
+        await project.update_project(
             request=request_mocker,
             group_id=1,
             project_id=1,

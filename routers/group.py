@@ -28,11 +28,12 @@ async def get_groups(
         session:Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]:
 
     try:
+        key = f'groups:limit:{limit}:offset:{skip}'
         # Busca si existe una respuesta guardada y la busca
-        cached = await redis_client.get(f'groups:limit:{limit}:offset:{skip}')
+        cached = await redis_client.get(key)
 
         if cached:
-            logger.info('Obtenido por Redis')
+            logger.info(f'Redis Cache: {key}')
             decoded = json.loads(cached)
             return decoded
 
@@ -51,7 +52,7 @@ async def get_groups(
             for group in found_group]
 
         # Guarda la respuesta
-        await redis_client.setex(f'groups:limit:{limit}:offset:{skip}', 300, json.dumps(to_cache, default=str))
+        await redis_client.setex(key, 300, json.dumps(to_cache, default=str))
 
         return to_cache
 
@@ -186,11 +187,12 @@ async def get_groups_in_user(
         session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:
 
     try:
+        key = f'groups:user_id:{user.user_id}:limit:{limit}:offset:{skip}'
         # Busca si existe una respuesta guardada y la busca
-        cached = await redis_client.get(f'groups:user_id:{user.user_id}:limit:{limit}:offset:{skip}')
+        cached = await redis_client.get(key)
 
         if cached:
-            logger.info(f'Obtenido grupos donde esta el user {user.user_id}')
+            logger.info(f'Redis Cache {key}')
             decoded = json.loads(cached)
             return decoded
 
@@ -211,10 +213,7 @@ async def get_groups_in_user(
             for group in found_group]
 
         # Guarda la respuesta
-        await redis_client.setex(
-            f'groups:user_id:{user.user_id}:limit:{limit}:offset:{skip}',
-            600,
-            json.dumps(to_cache, default=str))
+        await redis_client.setex(key, 600, json.dumps(to_cache, default=str))
 
         return to_cache
 
@@ -441,11 +440,12 @@ async def get_user_in_group(
         session:Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
 
     try:
+        key = f'users_in_group:group_id:{group_id}:limit:{limit}:offset:{skip}'
         # Busca si existe una respuesta guardada y la busca
-        cached = await redis_client.get(f'users_in_group:group_id:{group_id}:limit:{limit}:offset:{skip}')
+        cached = await redis_client.get(key)
 
         if cached:
-            logger.info(f'Obtenido todos los usuarios pertenecientes al grupo {group_id}')
+            logger.info(f'Redis Cache: {key}')
             decoded = json.loads(cached)
             return decoded
 
@@ -465,10 +465,7 @@ async def get_user_in_group(
             ]
 
         # Guarda la respuesta
-        await redis_client.setex(
-            f'users_in_group:group_id:{group_id}:limit:{limit}:offset:{skip}',
-            600,
-            json.dumps([user_.model_dump() for user_ in to_cache], default=str))
+        await redis_client.setex(key, 600, json.dumps([user_.model_dump() for user_ in to_cache], default=str))
 
         return to_cache
 

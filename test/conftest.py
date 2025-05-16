@@ -68,6 +68,21 @@ async def clean_redis():
     async for key in redis_client.scan_iter('groups:limit:*:offset:*'):
         await redis_client.delete(key)
 
+    async for key in redis_client.scan_iter('groups:user_id:*:limit:*:offset:*'):
+        await redis_client.delete(key)
+
+    async for key in redis_client.scan_iter('users_in_group:group_id:*:limit:*:offset:*'):
+        await redis_client.delete(key)
+
+    async for key in redis_client.scan_iter('projects:group_id:*:limit:*:offset:*'):
+        await redis_client.delete(key)
+
+    async for key in redis_client.scan_iter('projects_me:user_id:*:limit:*:offset:*'):
+        await redis_client.delete(key)
+
+    async for key in redis_client.scan_iter('users_project:group_id:*:project_id:*:limit:*:offset:*'):
+        await redis_client.delete(key)
+
 @pytest_asyncio.fixture(autouse=True)
 async def close_redis_after_tests():
     yield
@@ -120,42 +135,42 @@ async def test_create_group_init(async_client, auth_headers, test_user2):
     await async_client.post('/group/1/2', headers=auth_headers)
     return
 
-@pytest.fixture
-def test_create_project_init(client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
+@pytest_asyncio.fixture
+async def test_create_project_init(async_client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
     print("Ejecutando test_create_project_init")
     
     # Crear proyecto
-    response = client.post('/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
+    response = await async_client.post('/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
     assert response.status_code == 200, f"Error al crear proyecto: {response.json()}"
     print("Proyecto 1 creado")
 
     # Verificar si el usuario 1 ya está asociado antes de intentar asociarlo
-    check_response = client.get('/project/1/1/users', headers=auth_headers)
+    check_response = await async_client.get('/project/1/1/users', headers=auth_headers)
     if check_response.status_code == 200:
         print("Usuario 1 ya está asociado al proyecto 1")
     else:
         # Asociar user1 solo si no está ya asociado
-        response = client.post('/project/1/1/1', headers=auth_headers)
+        response = await async_client.post('/project/1/1/1', headers=auth_headers)
         assert response.status_code == 200, f"Error al asociar user1: {response.json()}"
 
-    client.post('/group/1/2', headers=auth_headers)
+    await async_client.post('/group/1/2', headers=auth_headers)
 
 @pytest.fixture
-def test_create_project_init_for_tasks(client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
+async def test_create_project_init_for_tasks(async_client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
     print("Ejecutando test_create_project_init")
     
     # Crear proyecto
-    response = client.post('/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
+    response = await async_client.post('/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
     assert response.status_code == 200, f"Error al crear proyecto: {response.json()}"
     print("Proyecto 1 creado")
 
     # Verificar si el usuario 1 ya está asociado antes de intentar asociarlo
-    check_response = client.get('/project/1/1/users', headers=auth_headers)
+    check_response = await async_client.get('/project/1/1/users', headers=auth_headers)
     if check_response.status_code == 200:
         print("Usuario 1 ya está asociado al proyecto 1")
     else:
         # Asociar user1 solo si no está ya asociado
-        response = client.post('/project/1/1/1', headers=auth_headers)
+        response = await async_client.post('/project/1/1/1', headers=auth_headers)
         assert response.status_code == 200, f"Error al asociar user1: {response.json()}"
     
-    client.post('/project/1/1/2', headers=auth_headers)
+    await async_client.post('/project/1/1/2', headers=auth_headers)

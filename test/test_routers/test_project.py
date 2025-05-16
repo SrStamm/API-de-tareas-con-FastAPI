@@ -1,43 +1,48 @@
 import pytest
-from conftest import auth_headers, client, auth_headers2, test_create_group_init
+from conftest import auth_headers, client, auth_headers2, test_create_group_init, async_client, clean_redis
 from models import db_models, schemas, exceptions
 from routers import project
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
 from utils import require_permission
 
-def test_get_projects(client, test_create_group_init, auth_headers):
-    response = client.get('/project/1', headers=auth_headers)
+@pytest.mark.asyncio
+async def test_get_projects(async_client, test_create_group_init, auth_headers, clean_redis):
+    response = await async_client.get('/project/1', headers=auth_headers)
     assert response.status_code == 200
     projects = response.json()
     assert isinstance(projects, list)
     for project in projects:
         assert all(key in project for key in ['project_id', 'group_id', 'tittle', 'description', 'users'])
 
-def test_get_projects_iam(client, auth_headers):
-    response = client.get('/project/me', headers=auth_headers)
+@pytest.mark.asyncio
+async def test_get_projects_iam(async_client, auth_headers, clean_redis):
+    response = await async_client.get('/project/me', headers=auth_headers)
     assert response.status_code == 200
     projects = response.json()
     assert isinstance(projects, list)
     for project in projects:
         assert all(key in project for key in ['project_id', 'group_id', 'tittle'])
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
         'group_id, status, detail', [
             (1, 200, 'Se ha creado un nuevo proyecto de forma exitosa'),
             (1, 200, 'Se ha creado un nuevo proyecto de forma exitosa'),
         ]
 )
-def test_create_project(client, auth_headers, test_create_group_init, group_id, status, detail):
-    response = client.post(f'/project/{group_id}', headers=auth_headers, json={'title':'creando un proyecto'})
+async def test_create_project(async_client, auth_headers, test_create_group_init, group_id, status, detail):
+    response = await async_client.post(f'/project/{group_id}', headers=auth_headers, json={'title':'creando un proyecto'})
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
-def test_update_project(client, auth_headers):
-    response = client.patch('/project/1/1', headers=auth_headers, json={'title':'actualizando un proyecto', 'description':'actualizando...'})
+@pytest.mark.asyncio
+async def test_update_project(async_client, auth_headers):
+    response = await async_client.patch('/project/1/1', headers=auth_headers, json={'title':'actualizando un proyecto', 'description':'actualizando...'})
     assert response.status_code == 200
     assert response.json() == {'detail': 'Se ha actualizado la informacion del projecto'}
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
         'user_id, status, detail', [
             (2, 200, 'El usuario ha sido agregado al proyecto'),
@@ -46,27 +51,29 @@ def test_update_project(client, auth_headers):
             (100, 404, 'User with user_id 100 not found')
         ]
 )
-def test_add_user_to_project(client, auth_headers, user_id, status, detail):
-    response = client.post(f'/project/1/1/{user_id}', headers=auth_headers)
+async def test_add_user_to_project(async_client, auth_headers, user_id, status, detail):
+    response = await async_client.post(f'/project/1/1/{user_id}', headers=auth_headers)
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
-def test_get_user_in_project(client, auth_headers):
-    response = client.get('/project/1/1/users', headers=auth_headers)
+@pytest.mark.asyncio
+async def test_get_user_in_project(async_client, auth_headers, clean_redis):
+    response = await async_client.get('/project/1/1/users', headers=auth_headers)
     assert response.status_code == 200
     groups = response.json()
     assert isinstance(groups, list)
     for group in groups:
         assert all(key in group for key in ['user_id', 'username', 'permission'])
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
         'project_id, user_id, permission, status, detail', [
             (1, 2, db_models.Project_Permission.READ, 200, 'Se ha cambiado los permisos del usuario en el proyecto'),
             (1, 100000, db_models.Project_Permission.ADMIN, 400, 'User with user_id 100000 is not in project with project_id 1')
             ]
 )
-def test_update_user_permission_in_project(client, auth_headers, project_id, user_id, permission, status, detail):
-    response = client.patch(f'/project/1/{project_id}/{user_id}', headers=auth_headers, json={'permission': permission})
+async def test_update_user_permission_in_project(async_client, auth_headers, project_id, user_id, permission, status, detail):
+    response = await async_client.patch(f'/project/1/{project_id}/{user_id}', headers=auth_headers, json={'permission': permission})
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
@@ -75,7 +82,8 @@ def test_update_project_error(client, auth_headers2):
     assert response.status_code == 401
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
-def test_update_project_error_database(mocker):
+@pytest.mark.asyncio
+async def test_update_project_error_database(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
 
     db_session_mock = mocker.Mock()
@@ -95,7 +103,7 @@ def test_update_project_error_database(mocker):
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        project.update_project(
+        await project.update_project(
                 request=mock_request,
                 group_id=1,
                 project_id = 1,
@@ -111,6 +119,7 @@ def test_failed_delete_project(client, auth_headers2):
     assert response.status_code == 401
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
         'user_id, status, detail', [
             (2, 200, 'El usuario ha sido eliminado del proyecto'),
@@ -118,18 +127,19 @@ def test_failed_delete_project(client, auth_headers2):
             (3, 400, 'User with user_id 3 is not in Group with group_id 1')
         ]
 )
-def test_remove_user_from_project(client, auth_headers, user_id, status, detail):
-    response = client.delete(f'/project/1/1/{user_id}', headers=auth_headers)
+async def test_remove_user_from_project(async_client, auth_headers, user_id, status, detail):
+    response = await async_client.delete(f'/project/1/1/{user_id}', headers=auth_headers)
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
         'project_id, status, detail', [
             (2, 200, 'Se ha eliminado el proyecto')
         ]
 )
-def test_delete_project(client, auth_headers, project_id, status, detail):
-    response = client.delete(f'/project/1/{project_id}', headers=auth_headers)
+async def test_delete_project(async_client, auth_headers, project_id, status, detail):
+    response = await async_client.delete(f'/project/1/{project_id}', headers=auth_headers)
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
@@ -152,7 +162,8 @@ def test_require_permission(mocker):
     assert exc_info.value.user_id == mock_user.user_id
     assert exc_info.value.project_id == 10000
 
-def test_get_projects_error(mocker):
+@pytest.mark.asyncio
+async def test_get_projects_error(mocker):
     db_session_mock = mocker.Mock()
 
     mock_request = mocker.Mock(spec=Request)
@@ -163,13 +174,14 @@ def test_get_projects_error(mocker):
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        project.get_projects(
+        await project.get_projects(
                 request=mock_request,
                 group_id=1,
                 session=db_session_mock
             )
 
-def test_get_projects_iam_error(mocker):
+@pytest.mark.asyncio
+async def test_get_projects_iam_error(mocker):
     db_session_mock = mocker.Mock()
 
     user_mock = mocker.Mock()
@@ -180,13 +192,14 @@ def test_get_projects_iam_error(mocker):
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        project.get_projects_iam(
+        await project.get_projects_iam(
             request=mock_request,
             user=user_mock,
             session=db_session_mock
             )
 
-def test_create_project_error(mocker):
+@pytest.mark.asyncio
+async def test_create_project_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     db_session_mock = mocker.Mock()
 
@@ -199,7 +212,7 @@ def test_create_project_error(mocker):
     db_session_mock.add.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        project.create_project(
+        await project.create_project(
                 request=mock_request,
                 new_project=schemas.CreateProject(title='hello world'),
                 group_id=1,
@@ -209,7 +222,8 @@ def test_create_project_error(mocker):
     
     db_session_mock.rollback.assert_called_once()
 
-def test_delete_project_error(mocker):
+@pytest.mark.asyncio
+async def test_delete_project_error(mocker):
     db_session_mock = mocker.Mock()
 
     mock_group = mocker.Mock()
@@ -225,7 +239,7 @@ def test_delete_project_error(mocker):
     db_session_mock.delete.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        project.delete_project(
+        await project.delete_project(
                 request=mock_request,
                 group_id=1,
                 project_id = mock_project.id,
@@ -337,7 +351,8 @@ async def test_update_user_permission_in_project_error(mocker):
     
     db_session_mock.rollback.assert_called_once()
 
-def test_get_user_in_project_error(mocker):
+@pytest.mark.asyncio
+async def test_get_user_in_project_error(mocker):
     db_session_mock = mocker.Mock()
 
     mock_group = mocker.Mock()
@@ -353,14 +368,15 @@ def test_get_user_in_project_error(mocker):
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        project.get_user_in_project(
+        await project.get_user_in_project(
                 request=mock_request,
                 group_id=1,
                 project_id = 1,
                 session=db_session_mock
             )
 
-def test_get_user_in_project_not_results_error(mocker):
+@pytest.mark.asyncio
+async def test_get_user_in_project_not_results_error(mocker):
     db_session_mock = mocker.Mock()
 
     mock_group = mocker.Mock()
@@ -376,7 +392,7 @@ def test_get_user_in_project_not_results_error(mocker):
     mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
 
     with pytest.raises(exceptions.UsersNotFoundInProjectError):
-        project.get_user_in_project(
+        await project.get_user_in_project(
                 request=mock_request,
                 group_id=1,
                 project_id = 1,
