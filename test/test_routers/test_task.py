@@ -1,5 +1,5 @@
 import pytest
-from conftest import auth_headers, client, auth_headers2, test_create_project_init_for_tasks
+from conftest import auth_headers, auth_headers2, test_create_project_init_for_tasks, async_client, clean_redis
 from models import schemas, db_models, exceptions
 from routers import task
 from sqlalchemy.exc import SQLAlchemyError
@@ -13,33 +13,42 @@ from fastapi import Request
             (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1000]}, 404, 'User with user_id 1000 not found'),
         ]
 )
-async def test_create_task(client, auth_headers, test_create_project_init_for_tasks, project_id, datos, status, detail):
-    response = client.post(f'/task/{project_id}', headers=auth_headers, json= datos)
+async def test_create_task(async_client, auth_headers, test_create_project_init_for_tasks, project_id, datos, status, detail):
+    response = await async_client.post(f'/task/{project_id}', headers=auth_headers, json= datos)
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
 @pytest.mark.asyncio
-async def test_failed_create_task(client, auth_headers2):
-    response = client.post('/task/1', headers=auth_headers2, json= {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1]})
+async def test_failed_create_task(async_client, auth_headers2):
+    response = await async_client.post('/task/1', headers=auth_headers2, json= {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1]})
     assert response.status_code == 401
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
-def test_get_task(client, auth_headers):
-    response = client.get('/task', headers=auth_headers)
+@pytest.mark.asyncio
+async def test_get_task(async_client, auth_headers, clean_redis):
+    response = await async_client.get('/task', headers=auth_headers)
     assert response.status_code == 200
     tasks = response.json()
     assert isinstance(tasks, list)
     for task in tasks:
         assert all(key in task for key in ['task_id', 'description', 'date_exp', 'state', 'project_id'])
+    
+    response = await async_client.get('/task', headers=auth_headers)
+    assert response.status_code == 200
 
-def test_get_task_in_project(client, auth_headers):
-    response = client.get('/task/1', headers=auth_headers)
+@pytest.mark.asyncio
+async def test_get_task_in_project(async_client, auth_headers, clean_redis):
+    response = await async_client.get('/task/1', headers=auth_headers)
     assert response.status_code == 200
     tasks = response.json()
     assert isinstance(tasks, list)
     for task in tasks:
         assert all(key in task for key in ['task_id', 'description', 'date_exp', 'state', 'asigned'])
 
+    response = await async_client.get('/task/1', headers=auth_headers)
+    assert response.status_code == 200
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
         'project_id, task_id, datos, status, detail', [
             (1, 1, {'description':'probando el testing... otra vez', 'date_exp':'2025-12-12', 'state':db_models.State.EN_PROCESO, 'exclude_user_ids': [1], 'append_user_ids':[2]}, 200, 'Se ha actualizado la tarea'),
@@ -51,36 +60,43 @@ def test_get_task_in_project(client, auth_headers):
             (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'append_user_ids':[100000]}, 404, 'User with user_id 100000 not found'),
         ]
 )
-def test_update_task(client, auth_headers, project_id, task_id, datos, status, detail):
-    response = client.patch(f'/task/{project_id}/{task_id}', headers=auth_headers, json= datos)
+async def test_update_task(async_client, auth_headers, project_id, task_id, datos, status, detail):
+    response = await async_client.patch(f'/task/{project_id}/{task_id}', headers=auth_headers, json= datos)
     assert response.status_code == status
     assert response.json() == {'detail':detail}
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
         'task_id, status, detail', [
             (1, 200, 'Se ha eliminado la tarea'),
             (1, 404, 'Task with task_id 1 is not in Project with project_id 1')
         ]
 )
-def test_delete_task(client, auth_headers, task_id, status, detail):
-    response = client.delete(f'/task/1/{task_id}', headers=auth_headers)
+async def test_delete_task(async_client, auth_headers, task_id, status, detail):
+    response = await async_client.delete(f'/task/1/{task_id}', headers=auth_headers)
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
-def test_failed_delete_task(client, auth_headers2):
-    response = client.delete(f'/task/1/2', headers=auth_headers2)
+@pytest.mark.asyncio
+async def test_failed_delete_task(async_client, auth_headers2):
+    response = await async_client.delete(f'/task/1/2', headers=auth_headers2)
     assert response.status_code == 401
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
-def test_get_users_for_task(client, auth_headers):
-    response = client.get('/task/1/users', headers=auth_headers)
+@pytest.mark.asyncio
+async def test_get_users_for_task(async_client, auth_headers, clean_redis):
+    response = await async_client.get('/task/1/users', headers=auth_headers)
     assert response.status_code == 200
     users = response.json()
     assert isinstance(users, list)
     for user in users:
         assert all(key in user for key in ['user_id', 'username'])
 
-def test_get_task_error(mocker):
+    response = await async_client.get('/task/1/users', headers=auth_headers)
+    assert response.status_code == 200
+
+@pytest.mark.asyncio
+async def test_get_task_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_user.user_id = 1
 
@@ -90,24 +106,26 @@ def test_get_task_error(mocker):
     session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        task.get_task(
+        await task.get_task(
             request=mock_request,
             user=mock_user,
             session=session_mock)
 
-def test_get_users_for_task_error(mocker):
+@pytest.mark.asyncio
+async def test_get_users_for_task_error(mocker):
     session_mock = mocker.Mock()
     mock_request = mocker.Mock(spec=Request)
 
     session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        task.get_users_for_task(
+        await task.get_users_for_task(
             request=mock_request,
             task_id=1,
             session=session_mock)
 
-def test_get_task_in_project_error(mocker):
+@pytest.mark.asyncio
+async def test_get_task_in_project_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_user.user_id = 1
 
@@ -117,7 +135,7 @@ def test_get_task_in_project_error(mocker):
     session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        task.get_task_in_project(
+        await task.get_task_in_project(
             request=mock_request,
             project_id=1,
             user= mock_user,
@@ -234,7 +252,8 @@ def test_update_task_Value_error(mocker):
             update_task=schemas.UpdateTask(description='crear', date_exp='2022-10-10'),
             session=session_mock)
 
-def test_delete_task_error(mocker):
+@pytest.mark.asyncio
+async def test_delete_task_error(mocker):
     session_mock = mocker.Mock()
     mock_user = mocker.Mock(spec=db_models.User)
 
@@ -243,7 +262,7 @@ def test_delete_task_error(mocker):
     mocker.patch('routers.task.found_task_or_404')
 
     with pytest.raises(exceptions.DatabaseError):
-        task.delete_task(
+        await task.delete_task(
             task_id=1,
             project_id=1,
             session=session_mock)

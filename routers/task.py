@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
 from .auth import auth_user
-from db.database import get_session, Session, select, SQLAlchemyError, joinedload
+from db.database import get_session, Session, select, SQLAlchemyError, joinedload, redis_client
 from typing import List
-from utils import found_task_or_404, get_user_or_404, found_user_in_project_or_404, require_permission
+from core.utils import found_task_or_404, get_user_or_404, found_user_in_project_or_404, require_permission
 from core.logger import logger
 from core.limiter import limiter
 from routers.ws import manager
 from datetime import datetime
+import json
 
 router = APIRouter(prefix='/task', tags=['Task'])
 
@@ -19,22 +20,44 @@ router = APIRouter(prefix='/task', tags=['Task'])
         responses={ 200: {'description':'Tareas obtenidas', 'model':schemas.ReadTask},
                     500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("30/minute")
-def get_task(
+async def get_task(
         request:Request,
         limit:int = 10,
         skip: int = 0,
         user:db_models.User = Depends(auth_user),
         session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
-    
+
     try:
+        key = f'task:user:user_id:{user.user_id}:limit:{limit}:offset:{skip}'
+        cached = await redis_client.get(key)
+
+        if cached:
+            decoded = json.loads(cached)
+            logger.info(f'Redis Cache {key}')
+            return decoded
+
         statement = (select(db_models.Task)
-                    .where( db_models.Task.task_id == db_models.tasks_user.task_id,
-                            db_models.tasks_user.user_id == user.user_id)
+                    .join(db_models.tasks_user, db_models.Task.task_id == db_models.tasks_user.task_id)
+                    .where(db_models.tasks_user.user_id == user.user_id)
                     .limit(limit).offset(skip))
-        
+
         found_tasks = session.exec(statement).all()
-        return found_tasks
-    
+
+        to_cache = [
+            schemas.ReadTask(
+                task_id=task.task_id,
+                project_id=task.project_id,
+                description=task.description,
+                date_exp=task.date_exp,
+                state=task.state
+            )
+            for task in found_tasks
+        ]
+
+        await redis_client.setex(key, 10, json.dumps([task.model_dump() for task in to_cache], default=str))
+
+        return to_cache
+
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener las tareas asignadas al user {user.user_id}: {e}')
         raise exceptions.DatabaseError(error=e, func='get_task')
@@ -47,7 +70,7 @@ def get_task(
         responses={ 200: {'description':'Usarios asignados a tareas obtenidos', 'model':schemas.ReadUser},
                     500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
-def get_users_for_task(
+async def get_users_for_task(
         request:Request,
         task_id: int,
         limit:int = 10,
@@ -56,6 +79,14 @@ def get_users_for_task(
         session: Session = Depends(get_session)) -> List[schemas.ReadUser]:
 
     try:
+        key = f'task:users:task_id:{task_id}:limit:{limit}:offset:{skip}'
+        cached = await redis_client.get(key)
+
+        if cached:
+            decoded = json.loads(cached)
+            logger.info(f'Redis Cache {key}')
+            return decoded
+        
         statement = (select(db_models.User.user_id, db_models.User.username)
                     .join(db_models.tasks_user, db_models.tasks_user.user_id == db_models.User.user_id)
                     .where(db_models.tasks_user.task_id == task_id)
@@ -63,7 +94,15 @@ def get_users_for_task(
 
         resultados = session.exec(statement).all()
 
-        return resultados
+        to_cache = [
+            schemas.ReadUser(user_id=user_id, username=username)
+            for user_id, username in resultados
+            ]
+
+        # Guarda la respuesta
+        await redis_client.setex(key, 600, json.dumps([user_.model_dump() for user_ in to_cache], default=str))
+
+        return to_cache
 
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener los usuarios asignados a task {task_id}: {e}')
@@ -77,7 +116,7 @@ def get_users_for_task(
         responses={ 200: {'description':'Tareas del projecto obtenidas', 'model':schemas.ReadTaskInProject},
                     500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
-def get_task_in_project(
+async def get_task_in_project(
         request:Request,
         project_id: int,
         limit:int = 10,
@@ -86,6 +125,14 @@ def get_task_in_project(
         session: Session = Depends(get_session)) -> List[schemas.ReadTaskInProject]:
 
     try:
+        key = f'task:users:project_id:{project_id}:user_id:{user.user_id}:limit:{limit}:offset:{skip}'
+        cached = await redis_client.get(key)
+
+        if cached:
+            decoded = json.loads(cached)
+            logger.info(f'Redis Cache {key}')
+            return decoded
+
         # Selecciona las tareas asignadas a los usuarios en el proyecto
         statement = (select(db_models.Task)
                     .join(db_models.tasks_user, db_models.tasks_user.task_id == db_models.Task.task_id)
@@ -95,7 +142,22 @@ def get_task_in_project(
                     .limit(limit).offset(skip))
         
         found_tasks = session.exec(statement).unique().all()
-        return found_tasks
+
+        to_cache = [
+            schemas.ReadTaskInProject(
+                task_id=task.task_id,
+                description=task.description,
+                date_exp=task.date_exp,
+                state=task.state,
+                asigned=task.asigned
+            )
+            for task in found_tasks
+        ]
+
+        # Guarda la respuesta
+        await redis_client.setex(key, 10, json.dumps([task_.model_dump() for task_ in to_cache], default=str))
+
+        return to_cache
     
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener las tareas del proyecto {project_id}: {e}')
@@ -251,9 +313,9 @@ async def update_task(
                     session.delete(user_in_task)
             else:
                 raise exceptions.NotAuthorized(user.user_id)
-        
+
         session.commit()
-        
+
         task = session.get(db_models.Task, task_id)
 
         if update_task.append_user_ids:
@@ -296,6 +358,8 @@ async def update_task(
                 # Envia el evento
                 await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
+        await redis_client.delete(f'task:users:project_id:{project_id}:user_id:*:limit:*:offset:*')
+
         return {'detail':'Se ha actualizado la tarea'}
 
     except SQLAlchemyError as e:
@@ -309,7 +373,7 @@ async def update_task(
         responses={ 200: {'description':'Tarea eliminada', 'model':responses.TaskDeleteSucces},
                     400: {'description':'Error en request', 'model':responses.ErrorInRequest},
                     500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
-def delete_task(
+async def delete_task(
         task_id: int,
         project_id: int,
         auth_data: dict = Depends(require_permission(permissions=['admin'])),
@@ -318,10 +382,14 @@ def delete_task(
     try:        
         # Verifica que exista la task
         task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
-        
+
         session.delete(task)
         session.commit()
+
+        await redis_client.delete(f'task:users:task_id:{task_id}:limit:*:offset:*')
+        await redis_client.delete(f'task:users:project_id:{project_id}:user_id:*:limit:*:offset:*')
         
+
         return {'detail':'Se ha eliminado la tarea'}
     
     except SQLAlchemyError as e:

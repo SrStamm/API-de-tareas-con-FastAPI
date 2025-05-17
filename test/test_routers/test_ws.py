@@ -76,6 +76,20 @@ def test_websocket_connection(client, auth_headers, test_create_project_init, te
 
             websocket.send_json(message_event_to_send.model_dump())
 
+
+            notifiaction_content_to_send = "Hola desde el test"
+            notifiaction_payload_to_send = schemas.NotificationPayload(message=notifiaction_content_to_send, notification_type='testing')
+
+            notification_event_to_send = schemas.WebSocketEvent(
+                type="notification",
+                payload=notifiaction_payload_to_send.model_dump()
+            )
+
+            websocket.send_json(notification_event_to_send.model_dump())
+
+            # Recibe el mensaje 
+            received_event = websocket.receive_json() # Espera y recibe JSON
+
     except WebSocketException as e:
         # Captura excepciones de FastAPI/Starlette durante el handshake o manejo inicial
         pytest.fail(f"WebSocket connection failed with WebSocketException: code={e.code}, reason={e.reason}")

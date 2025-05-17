@@ -7,7 +7,7 @@ from .auth import auth_user_ws, auth_user
 from core.logger import logger
 from core.limiter import limiter
 import json
-from utils import found_user_in_project_or_404, found_project_or_404
+from core.utils import found_user_in_project_or_404, found_project_or_404
 
 router = APIRouter(tags=['WebSocket'])
 

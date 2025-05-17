@@ -60,10 +60,7 @@ async def async_client(test_session):
 
 @pytest_asyncio.fixture(scope="function")
 async def clean_redis():
-    """
-    Limpia claves específicas de Redis después de cada prueba para evitar interferencias
-    en tests que dependen de consultas a la base de datos.
-    """
+    # Limpia Redis con keys especificas
     yield
     async for key in redis_client.scan_iter('groups:limit:*:offset:*'):
         await redis_client.delete(key)
@@ -71,16 +68,28 @@ async def clean_redis():
     async for key in redis_client.scan_iter('groups:user_id:*:limit:*:offset:*'):
         await redis_client.delete(key)
 
-    async for key in redis_client.scan_iter('users_in_group:group_id:*:limit:*:offset:*'):
+    async for key in redis_client.scan_iter('groups:users:group_id:*:limit:*:offset:*'):
         await redis_client.delete(key)
 
     async for key in redis_client.scan_iter('projects:group_id:*:limit:*:offset:*'):
         await redis_client.delete(key)
 
-    async for key in redis_client.scan_iter('projects_me:user_id:*:limit:*:offset:*'):
+    async for key in redis_client.scan_iter('project:user:user_id:*:limit:*:offset:*'):
         await redis_client.delete(key)
 
-    async for key in redis_client.scan_iter('users_project:group_id:*:project_id:*:limit:*:offset:*'):
+    async for key in redis_client.scan_iter('project:users:group_id:*:project_id:*:limit:*:offset:*'):
+        await redis_client.delete(key)
+
+    async for key in redis_client.scan_iter('users:limit:*:offset:*'):
+        await redis_client.delete(key)
+
+    async for key in redis_client.scan_iter('task:user:user_id:*:limit:*:offset:*'):
+        await redis_client.delete(key)
+
+    async for key in redis_client.scan_iter('task:users:project_id:*:user_id:*:limit:*:offset:*'):
+        await redis_client.delete(key)
+
+    async for key in redis_client.scan_iter('task:users:task_id:*:limit:*:offset:*'):
         await redis_client.delete(key)
 
 @pytest_asyncio.fixture(autouse=True)

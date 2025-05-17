@@ -3,7 +3,7 @@ from models import db_models, schemas, exceptions, responses
 from db.database import get_session, Session, select, selectinload, SQLAlchemyError, redis_client
 from typing import List
 from .auth import auth_user
-from utils import get_group_or_404, get_user_or_404, require_role, role_of_user_in_group
+from core.utils import get_group_or_404, get_user_or_404, require_role, role_of_user_in_group
 from core.logger import logger
 from core.limiter import limiter
 from routers.ws import manager
@@ -440,7 +440,7 @@ async def get_user_in_group(
         session:Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
 
     try:
-        key = f'users_in_group:group_id:{group_id}:limit:{limit}:offset:{skip}'
+        key = f'groups:users:group_id:{group_id}:limit:{limit}:offset:{skip}'
         # Busca si existe una respuesta guardada y la busca
         cached = await redis_client.get(key)
 

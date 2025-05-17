@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
-from db.database import get_session, Session, select, SQLAlchemyError, or_
+from db.database import get_session, Session, select, SQLAlchemyError, or_, redis_client
 from typing import List
 from .auth import encrypt_password, auth_user
 from core.logger import logger
 from core.limiter import limiter
+import json
 
 router = APIRouter(prefix='/user', tags=['User'])
 
@@ -16,16 +17,33 @@ router = APIRouter(prefix='/user', tags=['User'])
         responses={ 200: {'description':'Usuarios encontrados','model':schemas.ReadUser},
                     500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
-def get_users(
+async def get_users(
         request:Request,
         limit:int = 10,
         skip: int = 0,
         session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     try:
+        key = f'users:limit:{limit}:offset:{skip}'
+        cached = await redis_client.get(key)
+
+        if cached:
+            decoded = json.loads(cached)
+            logger.info(f'Redis Cached {key}')
+            return decoded
+
         statement = select(db_models.User.user_id, db_models.User.username).limit(limit).offset(skip)
         found_users = session.exec(statement).all()
-        return found_users
-    
+
+        to_cache = [
+            schemas.ReadUser(user_id=user_id, username=username)
+            for user_id, username in found_users
+            ]
+
+        # Guarda la respuesta
+        await redis_client.setex(key, 600, json.dumps([user_.model_dump() for user_ in to_cache], default=str))
+
+        return to_cache
+
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener los usuarios {e}')
         raise exceptions.DatabaseError(error=e, func='get_users')
@@ -37,7 +55,7 @@ def get_users(
                     406: {'description':'Conflicto de datos', 'model':responses.UserConflictError},
                     500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}}) 
 @limiter.limit("5/minute")
-def create_user(
+async def create_user(
         request:Request,
         new_user: schemas.CreateUser,
         session:Session = Depends(get_session)):
@@ -56,9 +74,11 @@ def create_user(
         new_user = db_models.User(**new_user.model_dump())
 
         new_user.password = encrypt_password(new_user.password)
-        
+
         session.add(new_user)
         session.commit()
+
+        await redis_client.delete(f'users:limit:*:offset:*')
 
         return {'detail':'Se ha creado un nuevo usuario con exito'}
 
@@ -75,8 +95,7 @@ def create_user(
 @limiter.limit("20/minute")
 def get_user_me(request:Request, user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
-        return user 
-    
+        return user
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener el user {user.user_id} actual {e}')
         raise exceptions.DatabaseError(error=e, func='get_users')
@@ -87,7 +106,7 @@ def get_user_me(request:Request, user: db_models.User = Depends(auth_user)) -> s
         responses={ 200: {'description':'Usuario actualizado', 'model': responses.UserUpdateSucces},
                     500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
-def update_user_me(
+async def update_user_me(
         request:Request,
         updated_user: schemas.UpdateUser,
         user: db_models.User = Depends(auth_user),
@@ -96,6 +115,8 @@ def update_user_me(
     try:        
         if user.username != updated_user.username and updated_user.username:
             user.username = updated_user.username
+
+            await redis_client.delete(f'users:limit:*:offset:*')
 
         if user.email != updated_user.email and updated_user.email:
             user.email = updated_user.email
@@ -115,7 +136,7 @@ def update_user_me(
         responses= {200: {'description':'Usuario actual eliminado', 'model':responses.UserDeleteSucces},
                     500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
-def delete_user_me(
+async def delete_user_me(
         request:Request,
         user: db_models.User = Depends(auth_user),
         session: Session = Depends(get_session)):
@@ -124,6 +145,8 @@ def delete_user_me(
         session.delete(user)
         session.commit()
         
+        await redis_client.delete(f'users:limit:*:offset:*')
+
         return {'detail':'Se ha eliminado el usuario'}
     
     except SQLAlchemyError as e:

@@ -282,7 +282,7 @@ async def logout(
 
         if not active_sessions:
             logger.error(f'User {user.user_id} no tenia sesiones activas')
-            return {'detail':'No habia sesiones activas'}
+            raise exceptions.SessionNotFound(user.user_id)
 
         # Invalidar las sesiones actuales
         for individual_session in active_sessions:

@@ -1,6 +1,7 @@
 from conftest import client, test_user
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
+from fastapi import Request
 from models import exceptions, db_models
 from routers import auth
 from datetime import datetime, timezone, timedelta
@@ -99,7 +100,7 @@ async def test_auth_user_no_sub(mocker):
     expiration_time = datetime.now(timezone.utc) + timedelta(hours=1)
 
     # Payload sin 'sub'
-    mock_payload = {"exp": expiration_time.timestamp()}
+    mock_payload = {"exp": expiration_time.timestamp(), "sub":''}
     mocker.patch('routers.auth.jwt.decode', return_value=mock_payload)
     test_token = "token.without.sub"
 
@@ -206,3 +207,34 @@ async def test_logout(client, auth_headers):
     response = client.post('/logout', headers=auth_headers)
     assert response.status_code == 200
     assert response.json() == {'detail':'Cerradas todas las sesiones'}
+
+@pytest.mark.asyncio
+async def test_logout_error(mocker):
+    user_mock = mocker.Mock(spec=db_models.User)
+
+    mock_request = mocker.Mock(spec=Request)
+
+    session_mock = mocker.Mock()
+    session_mock.exec.return_value.all.return_value = None
+
+    with pytest.raises(exceptions.SessionNotFound):
+        await auth.logout(
+            request=mock_request,
+            session=session_mock,
+            user=user_mock
+        )
+    
+    session_db_mocker = mocker.Mock(spec=db_models.Session)
+
+    session_mock.exec.return_value.all.return_value = session_db_mocker
+
+    session_mock.exec.side_effect = SQLAlchemyError('Error en la base de datos')
+    
+    with pytest.raises(exceptions.DatabaseError):
+        await auth.logout(
+            request=mock_request,
+            session=session_mock,
+            user=user_mock
+        )
+    
+    session_mock.rollback.assert_called_once()

@@ -2,7 +2,7 @@ import pytest
 from models import schemas, db_models, exceptions
 from routers import group, project
 from fastapi import Request
-import utils
+import core.utils as utils
 
 @pytest.mark.asyncio
 async def test_get_group_or_404_error(mocker):

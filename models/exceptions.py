@@ -155,3 +155,11 @@ class DatabaseError(HTTPException):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f'database error en {func}: {str(error)}'
         )
+
+class SessionNotFound(HTTPException):
+    def __init__(self, user_id):
+        self.user_id = user_id
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Session not found for user {user_id}'
+        )

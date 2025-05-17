@@ -1,10 +1,10 @@
 import pytest
-from conftest import auth_headers, client, auth_headers2, test_user2, async_client, clean_redis
+from conftest import auth_headers, auth_headers2, test_user2, async_client, clean_redis
 from models import db_models, exceptions, schemas
 from sqlalchemy.exc import SQLAlchemyError
 from routers import group
 from fastapi import Request
-from utils import require_role
+from core.utils import require_role
 
 @pytest.mark.asyncio
 async def test_create_group(async_client, auth_headers, test_user2):
@@ -26,6 +26,9 @@ async def test_get_groups(async_client, auth_headers, clean_redis):
     assert isinstance(groups, list)
     for group in groups:
         assert all(key in group for key in ['group_id', 'name', 'users'])
+    
+    response = await async_client.get('/group', headers=auth_headers)
+    assert response.status_code == 200
 
 @pytest.mark.asyncio
 async def test_get_groups_error(mocker, clean_redis):
@@ -37,6 +40,7 @@ async def test_get_groups_error(mocker, clean_redis):
     with pytest.raises(exceptions.DatabaseError):
         await group.get_groups(request=mock_request, session=db_session_mock)
 
+@pytest.mark.asyncio
 async def test_get_groups_in_user(async_client, auth_headers):
     response = await async_client.get('/group/me', headers=auth_headers)
     assert response.status_code == 200
@@ -44,6 +48,9 @@ async def test_get_groups_in_user(async_client, auth_headers):
     assert isinstance(groups, list)
     for group in groups:
         assert all(key in group for key in ['group_id', 'name', 'description', 'users'])
+
+    response = await async_client.get('/group/me', headers=auth_headers)
+    assert response.status_code == 200
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
@@ -67,20 +74,19 @@ async def test_get_user_in_group(async_client, auth_headers, clean_redis):
     assert isinstance(groups, list)
     for group in groups:
         assert all(key in group for key in ['user_id', 'username', 'role'])
+    
+    response = await async_client.get('/group/1/users', headers=auth_headers)
+    assert response.status_code == 200
 
-def test_update_group(client, auth_headers):
-    response = client.patch('/group/1', headers=auth_headers, json={'name':'probando el update'})
+@pytest.mark.asyncio
+async def test_update_group(async_client, auth_headers):
+    response = await async_client.patch('/group/1', headers=auth_headers, json={'name':'probando el update'})
     assert response.status_code == 200
     assert response.json() == {'detail': 'Se ha actualizado la informacion del grupo'}
 
 @pytest.mark.asyncio
-async def test_update_group2(async_client, auth_headers, clean_redis):
-    response = await async_client.patch('/group/1', headers=auth_headers, json={'description':'probando otra vez'})
-    assert response.status_code == 200
-    assert response.json() == {'detail': 'Se ha actualizado la informacion del grupo'}
-
-def test_failed_update_group(client, auth_headers2):
-    response = client.patch('/group/1', headers=auth_headers2, json={'description':'probando otra vez'})
+async def test_failed_update_group(async_client, auth_headers2):
+    response = await async_client.patch('/group/1', headers=auth_headers2, json={'description':'probando otra vez'})
     assert response.status_code == 401 
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
@@ -387,8 +393,3 @@ def test_require_role_error(mocker):
 
     assert exc_info.value.user_id == mock_user.user_id
     assert exc_info.value.group_id == 10000
-
-def test_update_group(client, auth_headers2):
-    response = client.patch('/group/1', headers=auth_headers2, json={'description':'probando otra vez', 'name':'probando el update'})
-    assert response.status_code == 401
-    assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}

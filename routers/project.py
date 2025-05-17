@@ -3,7 +3,7 @@ from models import db_models, schemas, exceptions, responses
 from db.database import get_session, Session, select, selectinload, SQLAlchemyError, redis_client
 from typing import List
 from .auth import auth_user
-from utils import get_group_or_404, get_user_or_404, found_project_or_404, require_permission, require_role
+from core.utils import get_group_or_404, get_user_or_404, found_project_or_404, require_permission, require_role
 from core.logger import logger
 from core.limiter import limiter
 from routers.ws import manager
@@ -29,7 +29,7 @@ async def get_projects_iam(
         session: Session = Depends(get_session)) -> List[schemas.ReadBasicProject]:
 
     try:
-        key = f'projects_me:user_id:{user.user_id}:limit:{limit}:offset:{skip}'
+        key = f'project:user:user_id:{user.user_id}:limit:{limit}:offset:{skip}'
         # Busca si existe una respuesta cacheada
         cached = await redis_client.get(key)
 
@@ -53,7 +53,7 @@ async def get_projects_iam(
             ]
 
         # Guarda la respuesta
-        await redis_client.setex(key, 10, json.dumps([project_.model_dump() for project_ in to_cache], default=str))
+        await redis_client.setex(key, 6000, json.dumps([project_.model_dump() for project_ in to_cache], default=str))
 
         return to_cache
 
@@ -108,7 +108,7 @@ async def get_projects(
             for project in found_projects]
 
         # Guarda la respuesta
-        await redis_client.setex(key, 10, json.dumps(to_cache, default=str))
+        await redis_client.setex(key, 6000, json.dumps(to_cache, default=str))
 
         return to_cache
     
@@ -236,10 +236,9 @@ async def delete_project(
         session.delete(found_project)
         session.commit()
 
-        await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
-
         # Elimina cache
-        await redis_client.delete('users_project:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+        await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+        await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
 
         return {'detail':'Se ha eliminado el proyecto'}
 
@@ -308,7 +307,7 @@ async def add_user_to_project(
         await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
         # Elimina cache
-        await redis_client.delete('users_project:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+        await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
         await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
 
         return {'detail':'El usuario ha sido agregado al proyecto'}
@@ -374,7 +373,7 @@ async def remove_user_from_project(
             await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
             # Elimina cache
-            await redis_client.delete('users_project:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+            await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
             await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
 
             return {'detail':'El usuario ha sido eliminado del proyecto'}
@@ -444,7 +443,7 @@ async def update_user_permission_in_project(
         await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
 
         # Elimina cache
-        await redis_client.delete('users_project:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+        await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
 
         return {'detail':'Se ha cambiado los permisos del usuario en el proyecto'}
 
@@ -474,7 +473,7 @@ async def get_user_in_project(
         user: db_models.User = Depends(auth_user)) -> List[schemas.ReadProjectUser]:
 
     try:
-        key = f'users_project:group_id:{group_id}:project_id:{project_id}:limit:{limit}:offset:{skip}'
+        key = f'project:users:group_id:{group_id}:project_id:{project_id}:limit:{limit}:offset:{skip}'
         cached = await redis_client.get(key)
 
         if cached:
@@ -501,7 +500,7 @@ async def get_user_in_project(
             for user_id, username, permission in results
         ]
 
-        await redis_client.setex(key, 10, json.dumps([project.model_dump() for project in to_cache], default=str))
+        await redis_client.setex(key, 600, json.dumps([project.model_dump() for project in to_cache], default=str))
 
         return to_cache
 

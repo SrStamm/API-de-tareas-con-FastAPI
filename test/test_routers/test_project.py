@@ -1,13 +1,13 @@
 import pytest
-from conftest import auth_headers, client, auth_headers2, test_create_group_init, async_client, clean_redis
+from conftest import auth_headers, auth_headers2, test_create_group_init, async_client, clean_redis
 from models import db_models, schemas, exceptions
 from routers import project
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
-from utils import require_permission
+from core.utils import require_permission
 
 @pytest.mark.asyncio
-async def test_get_projects(async_client, test_create_group_init, auth_headers, clean_redis):
+async def test_get_projects(async_client, test_create_group_init, auth_headers):
     response = await async_client.get('/project/1', headers=auth_headers)
     assert response.status_code == 200
     projects = response.json()
@@ -15,14 +15,20 @@ async def test_get_projects(async_client, test_create_group_init, auth_headers, 
     for project in projects:
         assert all(key in project for key in ['project_id', 'group_id', 'tittle', 'description', 'users'])
 
+    response = await async_client.get('/project/1', headers=auth_headers)
+    assert response.status_code == 200
+
 @pytest.mark.asyncio
-async def test_get_projects_iam(async_client, auth_headers, clean_redis):
+async def test_get_projects_iam(async_client, auth_headers):
     response = await async_client.get('/project/me', headers=auth_headers)
     assert response.status_code == 200
     projects = response.json()
     assert isinstance(projects, list)
     for project in projects:
         assert all(key in project for key in ['project_id', 'group_id', 'tittle'])
+
+    response = await async_client.get('/project/me', headers=auth_headers)
+    assert response.status_code == 200
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
@@ -77,8 +83,9 @@ async def test_update_user_permission_in_project(async_client, auth_headers, pro
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
-def test_update_project_error(client, auth_headers2):
-    response = client.patch('/project/1/1', headers=auth_headers2, json={'description':'probando otra vez', 'name':'probando el update'})
+@pytest.mark.asyncio
+async def test_update_project_error(async_client, auth_headers2):
+    response = await async_client.patch('/project/1/1', headers=auth_headers2, json={'description':'probando otra vez', 'name':'probando el update'})
     assert response.status_code == 401
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
@@ -114,8 +121,9 @@ async def test_update_project_error_database(mocker):
     
     db_session_mock.rollback.assert_called_once()
 
-def test_failed_delete_project(client, auth_headers2):
-    response = client.delete(f'/project/1/1', headers=auth_headers2)
+@pytest.mark.asyncio
+async def test_failed_delete_project(async_client, auth_headers2):
+    response = await async_client.delete(f'/project/1/1', headers=auth_headers2)
     assert response.status_code == 401
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
 
