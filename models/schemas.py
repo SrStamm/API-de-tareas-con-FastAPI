@@ -1,7 +1,9 @@
 from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 from typing import List, Optional
-from datetime import datetime as dt
+from datetime import datetime as dt, timezone
 from .db_models import State, Group_Role, Project_Permission
+
+# User
 
 class CreateUser(BaseModel):
     username: str = Field(examples=['User64'])
@@ -38,6 +40,8 @@ class ReadProjectUser(BaseModel):
     permission: Project_Permission = Field(examples=[Project_Permission.WRITE])
 
     model_config = ConfigDict(from_attributes=True)
+
+# Task
 
 class CreateTask(BaseModel):
     description: str = Field(examples=['Actualizar la API'])
@@ -84,6 +88,27 @@ class UpdateTask(BaseModel):
             raise ValueError('La fechad expiración debe ser en el futuro.')
         return value
 
+# Comment
+
+class CreateComment(BaseModel):
+    content: str = Field(max_length=300)
+
+class ReadComment(BaseModel):
+    comment_id: int
+    task_id: int
+    user_id: int
+    content: str
+    created_at: dt
+    update_at: dt
+    is_deleted: bool
+
+class UpdateComment(BaseModel):
+    content: Optional[str] = Field(default=None, max_length=300)
+    update_at: dt = Field(default_factory=lambda: dt.now(timezone.utc))
+    is_deleted: Optional[bool] = Field(default=None)
+
+# Group
+
 class CreateGroup(BaseModel):
     name: str = Field(examples=['Google'])
     description: str | None = Field(default=None, examples=['Somos un navegador Web'])
@@ -104,6 +129,8 @@ class ReadBasicDataGroup(BaseModel):
 class UpdateGroup(BaseModel):
     name: str | None = Field(default=None, examples=['AWS'])
     description: str | None = Field(default=None, examples=['Servicio en la Nube'])
+
+# Project
 
 class CreateProject(BaseModel):
     title: str = Field(examples=['Crear un nuevo Microservicio'])
@@ -129,6 +156,7 @@ class UpdateProject(BaseModel):
     title: str | None = Field(default=None, examples=['ChatRealTime'])
     description: str | None = Field(default=None, examples=['Chat en tiempo real que maneje millones de conexiones'])
 
+# Tocken
 class Token(BaseModel):
     access_token: str = Field(examples=[])
     token_type: str = Field(examples=['bearer'])
@@ -137,6 +165,8 @@ class Token(BaseModel):
 class Access_Token(BaseModel):
     access_token: str = Field(examples=[])
     token_type: str = Field(examples=['bearer'])
+
+# Mensaje y WebSocket
 
 class Message(BaseModel):
     content: str = Field(max_length=150, examples=['Hola a todos!'])

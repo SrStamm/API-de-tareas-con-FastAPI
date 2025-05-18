@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from routers import group, project, task, user, auth, ws
+from routers import group, project, task, user, auth, ws, comment
 from db.database import create_db_and_tables
 from contextlib import asynccontextmanager
 from core.logger import logger
@@ -8,7 +8,7 @@ from time import time
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await create_db_and_tables()
+    create_db_and_tables()
     yield
     logger.info({'Atencion':'La base de datos se encuentra desactivada'})
     logger.info({'Atencion':'El servidor no se encuentra disponible'})
@@ -25,6 +25,7 @@ app.include_router(task.router)
 app.include_router(user.router)
 app.include_router(auth.router)
 app.include_router(ws.router)
+app.include_router(comment.router)
 
 @app.get('/')
 def root():

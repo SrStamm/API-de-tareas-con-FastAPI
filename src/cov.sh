@@ -11,6 +11,8 @@ echo "Cerrando Redis:"
 
 docker stop redis-stack
 
-echo "Abriendo resultado"
+find . -type d -name "__pycache__" -exec rm -r {} + && rm -rf .pytest_cache
+echo "Eliminado cache de tests"
 
+echo "Abriendo resultado"
 xdg-open htmlcov/index.html

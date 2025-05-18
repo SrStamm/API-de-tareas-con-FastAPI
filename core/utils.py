@@ -1,5 +1,5 @@
 from fastapi import Depends
-from db.database import Session, select
+from db.database import Session, select, selectinload
 from models import db_models, exceptions
 from core.logger import logger
 from typing import Callable
@@ -77,6 +77,25 @@ def found_task_or_404(project_id:int, task_id: int, session: Session) -> db_mode
         raise exceptions.TaskNotFound(task_id=task_id, project_id=project_id)
     
     return task_found
+
+def found_user_in_task_or_404(user_id:int, task_id: int, session: Session):
+    stmt = (select(db_models.Task)
+            .options(selectinload(db_models.Task.asigned))
+            .where(db_models.Task.task_id == task_id))
+
+    found_users_assigned = session.exec(stmt).first()
+
+    if not found_users_assigned:
+        logger.error(f'Task {task_id} no encontrado')
+        raise exceptions.TaskErrorNotFound(task_id)
+
+    user_found = session.get(db_models.User, user_id)
+
+    for user in found_users_assigned.asigned:
+        if user.username == user_found.username and user.user_id == user_id:
+            return
+    
+    raise exceptions.TaskIsNotAssignedError(task_id, user_id)
 
 def require_role(roles: List[str]) -> Callable:
     def dependency( group_id: int,

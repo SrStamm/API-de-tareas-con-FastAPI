@@ -102,16 +102,12 @@ def test_user(test_session):
     user = db_models.User(username='mirko', email='mirko@dev.com', password=encrypt_password(PASSWORD))
     test_session.add(user)
     test_session.commit()
-    test_session.refresh(user)
-    return user
 
 @pytest.fixture
 def test_user2(test_session):
     user = db_models.User(username='moure', email='moure@dev.com', password=encrypt_password(PASSWORD))
     test_session.add(user)
     test_session.commit()
-    test_session.refresh(user)
-    return user
 
 @pytest.fixture
 def test_user3(test_session):
@@ -123,14 +119,14 @@ def test_user3(test_session):
 
 @pytest.fixture
 def auth_headers(client, test_user):
-    response = client.post("/login", data={"username": test_user.username, "password": PASSWORD})
+    response = client.post("/login", data={"username": 'mirko', "password": PASSWORD})
     assert response.status_code == 200, f"Error en login: {response.json()}"
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture
 def auth_headers2(client, test_user2):
-    response = client.post("/login", data={"username":test_user2.username, "password":PASSWORD})
+    response = client.post("/login", data={"username":'moure', "password":PASSWORD})
     assert response.status_code == 200
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

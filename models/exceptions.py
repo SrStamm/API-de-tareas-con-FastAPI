@@ -76,6 +76,23 @@ class UserNotFoundError(HTTPException):
             detail=f'User with user_id {user_id} not found'
         )
 
+class CommentNotFoundError(HTTPException):
+    def __init__(self, task_id):
+        self.task_id = task_id
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Comments not found in task_id {task_id}'
+        )
+
+class UserNotAuthorizedInCommentError(HTTPException):
+    def __init__(self, user_id, comment_id):
+        self.user_id = user_id
+        self.comment_id = comment_id
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f'User with {user_id} is not authorized to edit this comment {comment_id}'
+        )
+
 class UserInProjectError(HTTPException):
     def __init__(self, user_id, project_id):
         self.user_id = user_id
@@ -127,6 +144,14 @@ class TaskNotFound(HTTPException):
         super().__init__(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f'Task with task_id {task_id} is not in Project with project_id {project_id}'
+        )
+
+class TaskErrorNotFound(HTTPException):
+    def __init__(self, task_id):
+        self.task_id = task_id
+        super().__init__(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'Task with task_id {task_id} not found'
         )
 
 class TaskIsAssignedError(HTTPException):

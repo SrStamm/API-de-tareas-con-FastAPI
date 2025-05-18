@@ -67,6 +67,7 @@ class User(SQLModel, table=True):
     groups: Mapped[List["Group"]] = Relationship(back_populates='users', link_model=group_user)
     projects: Mapped[List["Project"]] = Relationship(back_populates='users', link_model=project_user)
     tasks_asigned: Mapped[List["Task"]] = Relationship(back_populates='asigned', link_model=tasks_user)
+    comments: List["Task_comments"] = Relationship(back_populates="user")
 
 class Task(SQLModel, table=True):
     task_id: Optional[int] = Field(default=None, primary_key=True)
@@ -77,6 +78,19 @@ class Task(SQLModel, table=True):
 
     asigned: Mapped[List["User"]] = Relationship(back_populates='tasks_asigned', link_model=tasks_user)
     project: Mapped[Optional["Project"]] = Relationship(back_populates='tasks')
+    comments: List["Task_comments"] = Relationship(back_populates="task")
+
+class Task_comments(SQLModel, table=True):
+    comment_id: Optional[int] = Field(primary_key=True, default=None)
+    task_id: int = Field(foreign_key='task.task_id', index=True)
+    user_id: int = Field(foreign_key='user.user_id', index=True)
+    content: str = Field(max_length=300)
+    created_at: dt = Field(default_factory=lambda: dt.now(timezone.utc))
+    update_at: Optional[dt] = Field(description='Fecha de actualización de comentario', default_factory=lambda: dt.now(timezone.utc))
+    is_deleted: bool = Field(default=False)
+
+    task: Optional["Task"] = Relationship(back_populates="comments")
+    user: Optional["User"] = Relationship(back_populates="comments")
 
 class ProjectChat(SQLModel, table=True):
     chat_id: Optional[int] = Field(default=None, primary_key=True)

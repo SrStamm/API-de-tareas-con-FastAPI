@@ -18,7 +18,7 @@ def test_failed_login_not_found(client):
     assert response.json() == {'detail':'User not found'}
 
 def test_failed_login_incorrect_password(client, test_user):
-    response = client.post("/login", data= {"username":test_user.username, "password":'5555'})
+    response = client.post("/login", data= {"username":'mirko', "password":'5555'})
     assert response.status_code == 400
     assert response.json() == {'detail':'Password incorrect'}
 
