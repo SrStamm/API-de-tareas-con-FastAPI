@@ -105,7 +105,7 @@ async def create_group(
 
     except SQLAlchemyError as e:
         logger.error(f'Error al crear un grupo {e}')
-        await session.rollback()
+        session.rollback()
         raise exceptions.DatabaseError(error=e, func='create_group')
 
 @router.patch(
@@ -146,7 +146,7 @@ async def update_group(
     
     except SQLAlchemyError as e:
         logger.error(f'Error al actualizar el grupo {e}')
-        await session.rollback()
+        session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_group')
 
 @router.delete(
@@ -167,7 +167,7 @@ async def delete_group(
     try:
         # found_group = get_group_or_404(group_id, session)
 
-        found_group = await session.get(db_models.Group, group_id)
+        found_group = session.get(db_models.Group, group_id)
 
         session.delete(found_group)
         await session.commit()
@@ -182,7 +182,7 @@ async def delete_group(
 
     except SQLAlchemyError as e:
         logger.error(f'Error al eliminar el grupo {e}')
-        await session.rollback()
+        session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_group')
 
 @router.get(
@@ -217,7 +217,7 @@ async def get_groups_in_user(
                     .order_by(db_models.Group.group_id)
                     .limit(limit).offset(skip))
 
-        found_group = session.exec(statement).all()
+        found_group = await session.exec(statement).all()
 
         # Cachea la respuesta
         to_cache = [
@@ -267,7 +267,7 @@ async def append_user_group(
             raise exceptions.UserInGroupError(user_id=new_user.user_id, group_id=found_group.group_id)
 
         # Lo agrega al grupo
-        await found_group.users.append(new_user)
+        found_group.users.append(new_user)
         await session.commit()
 
         # Se crea la notificacion
@@ -298,7 +298,7 @@ async def append_user_group(
 
     except SQLAlchemyError as e:
         logger.error(f'Error al agregar un usuario al grupo {e}')
-        await session.rollback()
+        session.rollback()
         raise exceptions.DatabaseError(error=e, func='append_user_group')
 
 @router.delete(
@@ -372,7 +372,7 @@ async def delete_user_group(
 
     except SQLAlchemyError as e:
         logger.error(f'Error al eliminar un usuario del grupo {e}')
-        await session.rollback()
+        session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_user_group')
 
 @router.patch(
@@ -403,7 +403,7 @@ async def update_user_group(
                     .join(db_models.Group, db_models.group_user.group_id == db_models.Group.group_id)
                     .where(db_models.group_user.user_id == user_id))
 
-        result = session.exec(statement)
+        result = await session.exec(statement)
         found_user = result.first()
 
         if not found_user:
@@ -443,7 +443,7 @@ async def update_user_group(
 
     except SQLAlchemyError as e:
         logger.error(f'Error al actualizar el usuario en el grupo')
-        await session.rollback()
+        session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_user_group')
 
 @router.get(
@@ -500,5 +500,5 @@ async def get_user_in_group(
 
     except SQLAlchemyError as e:
         logger.error(f'Error al obtener los usuarios del grupo {e}')
-        await session.rollback()
+        session.rollback()
         raise exceptions.DatabaseError(error=e, func='get_user_in_group')

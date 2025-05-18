@@ -16,172 +16,136 @@ from routers.auth import encrypt_password
 from httpx import AsyncClient, ASGITransport
 
 # Crea la BD, cierra las conexiones y elimina la BD
-engine = create_engine("sqlite:///./test/test.db")
+engine = create_engine("sqlite+aiosqlite:///./test/test.db", echo=False)
 
 PASSWORD='0000'
 
-@pytest.fixture(scope="module")
-def test_db():
-    SQLModel.metadata.create_all(engine)
+@pytest_asyncio.fixture(scope="module")
+async def test_db():
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            SQLModel.metadata.create_all(engine)
     yield engine
-    engine.dispose()
-    try:
-        os.remove("./test/test.db")
-        print("Base de datos test.db eliminada")
-    except OSError as e:
-        if e.errno != errno.ENOENT:
-            print(f"Error al eliminar test.db: {e}")
-            raise
+    async with AsyncSession(engine) as session:
+        async with session.begin():
+            SQLModel.metadata.drop_all(engine)
+            os.remove("./test/test.db")
+            print("Base de datos test.db eliminada")
+    await engine.dispose()
 
-
-@pytest.fixture
-def test_session(test_db):
-    session = Session(test_db)
-    try:
-        yield session
-    finally:
-        session.close()
-        redis_client.aclose()
-
-@pytest.fixture
-def client(test_session):
-    app.dependency_overrides[get_session] = lambda: test_session
-    yield TestClient(app)
-    app.dependency_overrides.clear()
+@pytest_asyncio.fixture
+async def test_session(test_db):
+    async with AsyncSession(test_db) as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 @pytest_asyncio.fixture
 async def async_client(test_session):
-    app.dependency_overrides[get_session] = lambda: test_session
-    
-    transport = ASGITransport(app=app) # Se usa esto para transportar la app, ya que no sabe como manejar FastAPI
+    async def override_get_async_session():
+        yield test_session
 
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    app.dependency_overrides[get_async_session] = override_get_async_session
+    
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
         yield client
     app.dependency_overrides.clear()
 
-
-
 @pytest_asyncio.fixture(scope="function")
 async def clean_redis():
-    # Limpia Redis con keys especificas
     yield
-    async for key in redis_client.scan_iter('groups:limit:*:offset:*'):
+    async for key in redis_client.scan_iter('groups:*:limit:*:offset:*'):
         await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('groups:user_id:*:limit:*:offset:*'):
+    async for key in redis_client.scan_iter('projects:*:limit:*:offset:*'):
         await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('groups:users:group_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('projects:group_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('project:user:user_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('project:users:group_id:*:project_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
     async for key in redis_client.scan_iter('users:limit:*:offset:*'):
         await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('task:user:user_id:*:limit:*:offset:*'):
+    async for key in redis_client.scan_iter('task:*:limit:*:offset:*'):
         await redis_client.delete(key)
 
-    async for key in redis_client.scan_iter('task:users:project_id:*:user_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('task:users:task_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-@pytest_asyncio.fixture(autouse=True)
-async def close_redis_after_tests():
+@pytest_asyncio.fixture(scope="module", autouse=True)
+async def manage_redis():
     yield
-    await redis_client.aclose()
+    # Cierra la conexión de Redis solo al final del módulo
+    try:
+        await redis_client.aclose()
+    except RuntimeError:
+        pass
 
-@pytest.fixture
-def test_user(test_session):
+@pytest_asyncio.fixture
+async def test_user(test_session):
     user = db_models.User(username='mirko', email='mirko@dev.com', password=encrypt_password(PASSWORD))
     test_session.add(user)
-    test_session.commit()
-    test_session.refresh(user)
+    await test_session.commit()
+    await test_session.refresh(user)
     return user
 
-@pytest.fixture
-def test_user2(test_session):
+@pytest_asyncio.fixture
+async def test_user2(test_session):
     user = db_models.User(username='moure', email='moure@dev.com', password=encrypt_password(PASSWORD))
     test_session.add(user)
-    test_session.commit()
-    test_session.refresh(user)
+    await test_session.commit()
+    await test_session.refresh(user)
     return user
 
-@pytest.fixture
-def test_user3(test_session):
+@pytest_asyncio.fixture
+async def test_user3(test_session):
     user = db_models.User(username='dalto', email='dalto@dev.com', password=encrypt_password(PASSWORD))
     test_session.add(user)
-    test_session.commit()
-    test_session.refresh(user)
+    await test_session.commit()
+    await test_session.refresh(user)
     return user
 
-@pytest.fixture
-def auth_headers(client, test_user):
-    response = client.post("/login", data={"username": test_user.username, "password": PASSWORD})
+@pytest_asyncio.fixture
+async def auth_headers(async_client, test_user):
+    response = await async_client.post("/login", data={"username": test_user.username, "password": PASSWORD})
     assert response.status_code == 200, f"Error en login: {response.json()}"
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
-@pytest.fixture
-def auth_headers2(client, test_user2):
-    response = client.post("/login", data={"username":test_user2.username, "password":PASSWORD})
+@pytest_asyncio.fixture
+async def auth_headers2(async_client, test_user2):
+    response = await async_client.post("/login", data={"username": test_user2.username, "password": PASSWORD})
     assert response.status_code == 200
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 @pytest_asyncio.fixture
 async def test_create_group_init(async_client, auth_headers, test_user2):
-    response = await async_client.post('/group', headers=auth_headers, json={'name':'probando'})
+    response = await async_client.post('/group', headers=auth_headers, json={'name': 'probando'})
     assert response.status_code == 200
     assert response.json() == {'detail': 'Se ha creado un nuevo grupo de forma exitosa'}
 
-    await async_client.post('/group/1/2', headers=auth_headers)
+    response = await async_client.post('/group/1/2', headers=auth_headers)
+    assert response.status_code == 200
     return
 
 @pytest_asyncio.fixture
 async def test_create_project_init(async_client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
     print("Ejecutando test_create_project_init")
     
-    # Crear proyecto
     response = await async_client.post('/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
     assert response.status_code == 200, f"Error al crear proyecto: {response.json()}"
     print("Proyecto 1 creado")
 
-    # Verificar si el usuario 1 ya está asociado antes de intentar asociarlo
-    check_response = await async_client.get('/project/1/1/users', headers=auth_headers)
-    if check_response.status_code == 200:
-        print("Usuario 1 ya está asociado al proyecto 1")
-    else:
-        # Asociar user1 solo si no está ya asociado
+    response = await async_client.get('/project/1/1/users', headers=auth_headers)
+    if response.status_code != 200:
         response = await async_client.post('/project/1/1/1', headers=auth_headers)
         assert response.status_code == 200, f"Error al asociar user1: {response.json()}"
 
     await async_client.post('/group/1/2', headers=auth_headers)
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def test_create_project_init_for_tasks(async_client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
     print("Ejecutando test_create_project_init")
     
-    # Crear proyecto
     response = await async_client.post('/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
     assert response.status_code == 200, f"Error al crear proyecto: {response.json()}"
     print("Proyecto 1 creado")
 
-    # Verificar si el usuario 1 ya está asociado antes de intentar asociarlo
-    check_response = await async_client.get('/project/1/1/users', headers=auth_headers)
-    if check_response.status_code == 200:
-        print("Usuario 1 ya está asociado al proyecto 1")
-    else:
-        # Asociar user1 solo si no está ya asociado
+    response = await async_client.get('/project/1/1/users', headers=auth_headers)
+    if response.status_code != 200:
         response = await async_client.post('/project/1/1/1', headers=auth_headers)
         assert response.status_code == 200, f"Error al asociar user1: {response.json()}"
     

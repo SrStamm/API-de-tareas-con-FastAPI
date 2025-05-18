@@ -5,6 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from routers import group
 from fastapi import Request
 from core.utils import require_role
+from unittest.mock import AsyncMock
 
 @pytest.mark.asyncio
 async def test_create_group(async_client, auth_headers, test_user2):
@@ -313,35 +314,28 @@ async def test_delete_user_group_NotAuthorized_error(mocker):
         )
 
 @pytest.mark.asyncio
-async def test_update_user_group_error(mocker):
+async def test_update_user_group_error(mocker, clean_redis, test_create_group_init):
+    from sqlmodel.ext.asyncio.session import AsyncSession
     mock_user = mocker.Mock(spec=db_models.User)
     mock_user.user_id = 1
-
-    mock_delete_user = mocker.Mock(spec=db_models.group_user)
-    mock_delete_user.id = 2
-    mock_delete_user.role = 'editor'
-
-    db_session_mock = mocker.Mock()
-
+    mock_group_user = mocker.AsyncMock()
+    mock_group_user.user_id = 2
+    mock_group_user.role = 'editor'
+    db_session_mock = AsyncMock(spec=AsyncSession)
     mock_request = mocker.Mock(spec=Request)
-
-    mock_group = mocker.Mock()
+    mock_group = mocker.AsyncMock()
     mock_group.id = 1
-    mock_group.users = [mock_delete_user, mock_user]
-
-    # mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
 
     mock_auth_data = {'user': mock_user, 'role': 'admin'}
-
     mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
-
+    db_session_mock.exec.return_value.first.return_value = mock_group_user
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         await group.update_user_group(
             request=mock_request,
             group_id=1,
-            user_id=mock_delete_user.id,
+            user_id=2,
             update_role=schemas.UpdateRoleUser(role=db_models.Group_Role.ADMIN),
             auth_data=mock_auth_data,
             session=db_session_mock
