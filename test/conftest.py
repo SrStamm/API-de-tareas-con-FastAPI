@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from fastapi.testclient import TestClient
 from main import app
 from sqlmodel import SQLModel, create_engine, Session
-from db.database import get_session, select, redis_client
+from db.database import get_async_session, AsyncSession, get_session, select, redis_client
 from models import db_models
 from routers.auth import encrypt_password
 
@@ -32,6 +32,7 @@ def test_db():
         if e.errno != errno.ENOENT:
             print(f"Error al eliminar test.db: {e}")
             raise
+
 
 @pytest.fixture
 def test_session(test_db):
@@ -57,6 +58,8 @@ async def async_client(test_session):
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
     app.dependency_overrides.clear()
+
+
 
 @pytest_asyncio.fixture(scope="function")
 async def clean_redis():

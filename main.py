@@ -8,7 +8,7 @@ from time import time
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    create_db_and_tables()
+    await create_db_and_tables()
     yield
     logger.info({'Atencion':'La base de datos se encuentra desactivada'})
     logger.info({'Atencion':'El servidor no se encuentra disponible'})
