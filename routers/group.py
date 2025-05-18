@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
-from db.database import get_session, Session, select, selectinload, SQLAlchemyError, redis_client, get_async_session, AsyncSession, redis
+from db.database import get_session, Session, select, selectinload, SQLAlchemyError, redis_client, redis
 from typing import List
 from .auth import auth_user
 from core.utils import get_group_or_404, get_user_or_404, require_role, role_of_user_in_group
@@ -25,7 +25,7 @@ async def get_groups(
         request: Request,
         limit:int = 10,
         skip: int = 0,
-        session: AsyncSession = Depends(get_async_session)) -> List[schemas.ReadBasicDataGroup]:
+        session: Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]:
 
     try:
         key = f'groups:limit:{limit}:offset:{skip}'
@@ -41,9 +41,7 @@ async def get_groups(
                     .options(selectinload(db_models.Group.users))
                     .order_by(db_models.Group.group_id).limit(limit).offset(skip))
 
-        result = await session.exec(statement)
-
-        found_group = result.all()
+        found_group = session.exec(statement).all()
 
         # Cachea la respuesta
         to_cache = [
@@ -77,13 +75,13 @@ async def create_group(
         request: Request,
         new_group: schemas.CreateGroup,
         user: db_models.User = Depends(auth_user),
-        session: AsyncSession = Depends(get_async_session)):
+        session: Session = Depends(get_session)):
     try:
         # Crear el grupo con el usuario creador
         group = db_models.Group(**new_group.model_dump())
         session.add(group)
-        await session.commit()
-        await session.refresh(group)
+        session.commit()
+        session.refresh(group)
 
         # Agregar al usuario creador al grupo con el rol de administrador
         group_user = db_models.group_user(
@@ -92,14 +90,13 @@ async def create_group(
             role=db_models.Group_Role.ADMIN
         )
         session.add(group_user)
-        await session.commit()
+        session.commit()
 
         # Elimina cache existente
         try:
             await redis_client.delete(f'groups:limit:*:offset:*')
         except redis.RedisError as e:
             logger.warning(f'Error al eliminar cache en Redis: {e}')
-
 
         return {'detail': 'Se ha creado un nuevo grupo de forma exitosa'}
 
@@ -123,7 +120,7 @@ async def update_group(
         group_id: int,
         updated_group: schemas.UpdateGroup,
         auth_data: dict = Depends(require_role(roles=['admin', 'editor'])),
-        session: AsyncSession = Depends(get_async_session)):
+        session: Session = Depends(get_session)):
 
     try:
         found_group = get_group_or_404(group_id, session)
@@ -134,7 +131,7 @@ async def update_group(
         if updated_group.description and found_group.description != updated_group.description:
             found_group.description = updated_group.description
         
-        await session.commit()
+        session.commit()
 
         # Elimina cache existente
         try:
@@ -162,7 +159,7 @@ async def delete_group(
         request: Request,
         group_id: int,
         auth_data: dict = Depends(require_role(roles=['admin'])),
-        session: AsyncSession = Depends(get_async_session)):
+        session: Session = Depends(get_session)):
 
     try:
         # found_group = get_group_or_404(group_id, session)
@@ -170,7 +167,7 @@ async def delete_group(
         found_group = session.get(db_models.Group, group_id)
 
         session.delete(found_group)
-        await session.commit()
+        session.commit()
 
         # Elimina cache existente
         try:
@@ -217,7 +214,7 @@ async def get_groups_in_user(
                     .order_by(db_models.Group.group_id)
                     .limit(limit).offset(skip))
 
-        found_group = await session.exec(statement).all()
+        found_group = session.exec(statement).all()
 
         # Cachea la respuesta
         to_cache = [
@@ -251,7 +248,7 @@ async def append_user_group(
         group_id: int,
         user_id: int,
         auth_data: dict = Depends(require_role(roles=['admin', 'editor'])),
-        session: AsyncSession = Depends(get_async_session)):
+        session: Session = Depends(get_session)):
 
     try:
         actual_role = auth_data['role']
@@ -268,7 +265,7 @@ async def append_user_group(
 
         # Lo agrega al grupo
         found_group.users.append(new_user)
-        await session.commit()
+        session.commit()
 
         # Se crea la notificacion
         outgoing_payload = schemas.OutgoingNotificationPayload(
@@ -316,7 +313,7 @@ async def delete_user_group(
         group_id: int,
         user_id: int,
         auth_data: dict = Depends(require_role(roles=['admin', 'editor'])),
-        session: AsyncSession = Depends(get_async_session)):
+        session: Session = Depends(get_session)):
 
     try:
         actual_role = auth_data['role']
@@ -334,7 +331,7 @@ async def delete_user_group(
 
             if role_user in ['editor', 'member'] and actual_role == 'admin' or role_user == 'member' and actual_role == 'editor':            
                 found_group.users.remove(found_user)
-                await session.commit()
+                session.commit()
 
                 # Se crea la notificacion
                 outgoing_payload = schemas.OutgoingNotificationPayload(
@@ -391,7 +388,7 @@ async def update_user_group(
         user_id: int,
         update_role: schemas.UpdateRoleUser,
         auth_data: dict = Depends(require_role(roles=['admin'])),
-        session: AsyncSession = Depends(get_async_session)):
+        session: Session = Depends(get_session)):
 
     try:
         actual_user = auth_data['user']
@@ -403,7 +400,7 @@ async def update_user_group(
                     .join(db_models.Group, db_models.group_user.group_id == db_models.Group.group_id)
                     .where(db_models.group_user.user_id == user_id))
 
-        result = await session.exec(statement)
+        result = session.exec(statement)
         found_user = result.first()
 
         if not found_user:
@@ -412,8 +409,8 @@ async def update_user_group(
         
         found_user.role = update_role.role
         
-        await session.commit()
-        await session.refresh(found_user)
+        session.commit()
+        session.refresh(found_user)
 
         # Se crea la notificacion
         outgoing_payload = schemas.OutgoingNotificationPayload(
@@ -462,7 +459,7 @@ async def get_user_in_group(
         limit:int = 10,
         skip: int = 0,
         user: db_models.User = Depends(auth_user),
-        session:AsyncSession = Depends(get_async_session)) -> List[schemas.ReadGroupUser]:
+        session: Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
 
     try:
         key = f'groups:users:group_id:{group_id}:limit:{limit}:offset:{skip}'
@@ -481,7 +478,7 @@ async def get_user_in_group(
                     .where(db_models.group_user.group_id == group_id)
                     .limit(limit).offset(skip))
 
-        search = await session.exec(statement)
+        search = session.exec(statement)
         results = search.all()
 
         # Cachea la respuesta
