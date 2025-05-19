@@ -3,11 +3,12 @@ from models import db_models, schemas, exceptions
 from .auth import auth_user
 from db.database import get_session, Session, select, SQLAlchemyError, redis_client
 from typing import List
-from core.utils import found_task_or_404, get_user_or_404, found_user_in_task_or_404
+from core.utils import found_task_or_404, get_user_or_404, found_user_in_task_or_404, extract_valid_mentions, notify_users
 from core.logger import logger
 from core.limiter import limiter
+
 from routers.ws import manager
-import json
+import json, re
 
 router = APIRouter(prefix='/task/{task_id}', tags=['Comment'])
 
@@ -61,7 +62,7 @@ def get_all_comments(
         raise exceptions.DatabaseError(e, func='get_comments')
 
 @router.post('/comments')
-def create_comment(
+async def create_comment(
         task_id:int,
         new_comment:schemas.CreateComment,
         user: db_models.User = Depends(auth_user),
@@ -76,6 +77,17 @@ def create_comment(
 
         session.add(add_comment)
         session.commit()
+        session.refresh(add_comment)
+
+        found_users = extract_valid_mentions(add_comment.content, session)
+
+        if found_users:
+            payload = schemas.NotificationPayload(
+                notification_type='task_mention',
+                message=f'User {user.user_id} mentionated on comments in Task {task_id}: {add_comment.content}')
+
+            await notify_users(found_users, payload)
+            logger.info(f'Notificacion enviada: {payload}')
 
         return {'detail':'Nuevo comentario creado'}
 

@@ -90,7 +90,7 @@ class UserNotAuthorizedInCommentError(HTTPException):
         self.comment_id = comment_id
         super().__init__(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f'User with {user_id} is not authorized to edit this comment {comment_id}'
+            detail=f'User with user_id {user_id} is not authorized to edit this comment {comment_id}'
         )
 
 class UserInProjectError(HTTPException):

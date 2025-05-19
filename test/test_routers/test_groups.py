@@ -329,8 +329,6 @@ async def test_update_user_group_error(mocker):
     mock_group.id = 1
     mock_group.users = [mock_delete_user, mock_user]
 
-    # mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
-
     mock_auth_data = {'user': mock_user, 'role': 'admin'}
 
     mocker.patch('routers.group.get_group_or_404', return_value=mock_group)

@@ -204,7 +204,7 @@ class OutgoingNotificationPayload(BaseModel):
     notification_type: str # Por ejemplo: 'new_task', 'update_task'
     message: str
     related_entity_id: int | None = None # ID de la tarea, mencion, etc
-    timestamp: dt
+    timestamp: dt = Field(default_factory=lambda: dt.now(timezone.utc))
 
 class PersonalMessagePayload(BaseModel):
     content: str

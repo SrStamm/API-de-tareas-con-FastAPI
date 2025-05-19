@@ -1,11 +1,14 @@
 from fastapi import Depends
 from db.database import Session, select, selectinload
-from models import db_models, exceptions
-from core.logger import logger
+from models import db_models, exceptions, schemas
+from .logger import logger
+from .socket_manager import manager
 from typing import Callable
 from routers.auth import auth_user
-from db.database import select, get_session, Session
+from db.database import select, get_session, Session, select
 from typing import List
+import re
+
 
 def get_group_or_404(group_id: int, session: Session):
     statement = select(db_models.Group).where(db_models.Group.group_id == group_id)
@@ -172,3 +175,30 @@ def permission_of_user_in_project(user_id: int, project_id: int, session:Session
         raise exceptions.UserNotInProjectError(user_id=user_id, project_id=project_id)
 
     return found_user.permission.value
+
+def extract_valid_mentions(content: str, session: Session) -> List[db_models.User]:
+    mentions_raw = re.findall(r'@(\w+)', content)
+    mentions = list(set(mentions_raw))
+    
+    if not mentions:
+        return []
+    
+    stmt = select(db_models.User.username, db_models.User.user_id).where(db_models.User.username.in_(mentions))
+    return session.exec(stmt).all()
+
+async def notify_users(users: List[db_models.User], payload: schemas.NotificationPayload):
+    for user in users:
+        # Crea el evento ws
+        outgoing_event = schemas.WebSocketEvent(
+                type='notification',
+                payload=schemas.OutgoingNotificationPayload(
+                    notification_type=payload.notification_type,
+                    message=payload.message).model_dump()
+            )
+        
+        # Lo parsea
+        outgoing_event_json = outgoing_event.model_dump_json()
+
+        # Envia el evento
+        await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user.user_id)
+        logger.info(f'Notificacion enviada a User: {user.username}')

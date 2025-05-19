@@ -40,3 +40,149 @@ def test_get_all_comments(client, auth_headers):
     assert response.status_code == 200
     comments = response.json()
     assert len(comments) == 2
+
+def test_get_comment_error(mocker):
+    user_mock = mocker.Mock(spec=db_models.User)
+    session_mock = mocker.Mock()
+
+    mocker.patch('routers.comment.found_user_in_task_or_404')
+
+    session_mock.exec.return_value.all.return_value = None
+
+    with pytest.raises(exceptions.CommentNotFoundError):
+        comment.get_comments(
+            task_id=1,
+            user=user_mock,
+            session=session_mock
+        )
+
+    session_mock.exec.side_effect = SQLAlchemyError('Error en base de datos')
+
+    with pytest.raises(exceptions.DatabaseError):
+        comment.get_comments(
+            task_id=1,
+            user=user_mock,
+            session=session_mock
+        )
+
+def test_get_all_comment_error(mocker):
+    user_mock = mocker.Mock(spec=db_models.User)
+    session_mock = mocker.Mock()
+
+    mocker.patch('routers.comment.found_user_in_task_or_404')
+
+    session_mock.exec.return_value.all.return_value = None
+
+    with pytest.raises(exceptions.CommentNotFoundError):
+        comment.get_all_comments(
+            task_id=1,
+            user=user_mock,
+            session=session_mock
+        )
+
+    session_mock.exec.side_effect = SQLAlchemyError('Error en base de datos')
+
+    with pytest.raises(exceptions.DatabaseError):
+        comment.get_all_comments(
+            task_id=1,
+            user=user_mock,
+            session=session_mock
+        )
+
+async def test_create_comment_error(mocker):
+    user_mock = mocker.Mock(spec=db_models.User)
+    comment_mock = mocker.Mock(spec=schemas.CreateComment(content='probando'))
+    session_mock = mocker.Mock()
+
+    mocker.patch('routers.comment.found_user_in_task_or_404')
+
+    session_mock.commit.side_effect = SQLAlchemyError('Error en base de datos')
+
+    with pytest.raises(exceptions.DatabaseError):
+        await comment.create_comment(
+            task_id=1,
+            new_comment=comment_mock,
+            user=user_mock,
+            session=session_mock
+        )
+
+def test_update_comment_error(mocker):
+    user_mock = mocker.Mock(spec=db_models.User(user_id=1))
+    comment_mock = mocker.Mock(spec=db_models.Task_comments(user_id=1))
+    update_comment_mock = mocker.Mock(spec=schemas.UpdateComment(content='probando'))
+    session_mock = mocker.Mock()
+
+    mocker.patch('routers.comment.found_user_in_task_or_404')
+    session_mock.get.return_value = None
+
+    with pytest.raises(exceptions.CommentNotFoundError):
+        comment.update_comment(
+            task_id=1,
+            comment_id=1,
+            update_comment=update_comment_mock,
+            user=user_mock,
+            session=session_mock
+        )
+
+    session_mock.get.return_value = comment_mock
+    with pytest.raises(exceptions.UserNotAuthorizedInCommentError):
+        comment.update_comment(
+            task_id=1,
+            comment_id=1,
+            update_comment=update_comment_mock,
+            user=user_mock,
+            session=session_mock
+        )
+
+    user_mock.user_id = 1
+    comment_mock.user_id = 1
+
+    session_mock.commit.side_effect = SQLAlchemyError('Error en base de datos')
+    with pytest.raises(exceptions.DatabaseError):
+        comment.update_comment(
+            task_id=1,
+            comment_id=1,
+            update_comment=update_comment_mock,
+            user=user_mock,
+            session=session_mock
+        )
+
+def test_delete_comment_error(mocker):
+    user_mock = mocker.Mock(spec=db_models.User)
+    comment_mock = mocker.Mock(spec=schemas.CreateComment(content='probando'))
+    session_mock = mocker.Mock()
+
+    mocker.patch('routers.comment.found_user_in_task_or_404')
+    session_mock.get.return_value = None
+
+    with pytest.raises(exceptions.CommentNotFoundError):
+        comment.delete_comment(
+            task_id=1,
+            comment_id=1,
+            user=user_mock,
+            session=session_mock
+        )
+
+    user_mock.user_id = 2
+    comment_mock.user_id = 1
+    session_mock.get.return_value = comment_mock
+    
+    with pytest.raises(exceptions.UserNotAuthorizedInCommentError):
+        comment.delete_comment(
+            task_id=1,
+            comment_id=1,
+            user=user_mock,
+            session=session_mock
+        )
+
+    user_mock.user_id = 1
+    comment_mock.user_id = 1
+    session_mock.commit.side_effect = SQLAlchemyError('Error en base de datos')
+    
+    with pytest.raises(exceptions.DatabaseError):
+        comment.delete_comment(
+            task_id=1,
+            comment_id=1,
+            user=user_mock,
+            session=session_mock
+        )
