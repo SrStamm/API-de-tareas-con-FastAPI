@@ -304,7 +304,7 @@ async def add_user_to_project(
         outgoing_event_json = outgoing_event.model_dump_json()
 
         # Envia el evento
-        await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+        await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         # Elimina cache
         await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
@@ -370,7 +370,7 @@ async def remove_user_from_project(
             outgoing_event_json = outgoing_event.model_dump_json()
 
             # Envia el evento
-            await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+            await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
             # Elimina cache
             await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
@@ -440,7 +440,7 @@ async def update_user_permission_in_project(
         outgoing_event_json = outgoing_event.model_dump_json()
 
         # Envia el evento
-        await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+        await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         # Elimina cache
         await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')

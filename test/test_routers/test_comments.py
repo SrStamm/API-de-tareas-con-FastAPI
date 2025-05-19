@@ -1,19 +1,19 @@
 import pytest
-from conftest import auth_headers, auth_headers2, test_create_project_init_for_tasks
+from conftest import auth_headers, auth_headers2, test_create_project_init_for_tasks, async_client, client
 from models import schemas, db_models, exceptions
 from routers import comment
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
 
-def test_create_comment(client, auth_headers, test_create_project_init_for_tasks):
-    response = client.post(f'/task/1', headers=auth_headers, json={'description':'aaaaa', 'date_exp':'2030-12-30', 'user_ids':[1]})
+async def test_create_comment(async_client, auth_headers, test_create_project_init_for_tasks):
+    response = await async_client.post(f'/task/1', headers=auth_headers, json={'description':'aaaaa', 'date_exp':'2030-12-30', 'user_ids':[1]})
     assert response.status_code == 200
 
-    response = client.post(f'/task/1/comments', headers=auth_headers, json={'content':'esto es un comentario'})
+    response = await async_client.post(f'/task/1/comments', headers=auth_headers, json={'content':'esto es un comentario'})
     assert response.status_code == 200
     assert response.json() == {'detail': 'Nuevo comentario creado'}
 
-    response = client.post(f'/task/1/comments', headers=auth_headers, json={'content':'esto es otro comentario'})
+    response = await async_client.post(f'/task/1/comments', headers=auth_headers, json={'content':'esto es otro comentario'})
     assert response.status_code == 200
     assert response.json() == {'detail': 'Nuevo comentario creado'}
 

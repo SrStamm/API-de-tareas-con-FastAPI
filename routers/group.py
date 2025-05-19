@@ -283,7 +283,7 @@ async def append_user_group(
         outgoing_event_json = outgoing_event.model_dump_json()
 
         # Envia el evento
-        await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+        await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         # Elimina cache existente
         try:
@@ -349,7 +349,7 @@ async def delete_user_group(
                 outgoing_event_json = outgoing_event.model_dump_json()
 
                 # Envia el evento
-                await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+                await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
                 logger.info(f'User {user_id} eliminado del Group {group_id} por {actual_user.user_id}')
 
@@ -428,7 +428,7 @@ async def update_user_group(
         outgoing_event_json = outgoing_event.model_dump_json()
 
         # Envia el evento
-        await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+        await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         # Elimina cache existente
         try:

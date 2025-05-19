@@ -216,7 +216,7 @@ async def create_task(
             outgoing_event_json = outgoing_event.model_dump_json()
 
             # Envia el evento
-            await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+            await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         session.commit()
 
@@ -336,7 +336,7 @@ async def update_task(
                 outgoing_event_json = outgoing_event.model_dump_json()
 
                 # Envia el evento
-                await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+                await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         if update_task.exclude_user_ids:
             for user_id in update_task.exclude_user_ids:
@@ -356,7 +356,7 @@ async def update_task(
                 outgoing_event_json = outgoing_event.model_dump_json()
 
                 # Envia el evento
-                await manager.send_to_user(message_json_string=outgoing_event_json, user_id=user_id)
+                await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         await redis_client.delete(f'task:users:project_id:{project_id}:user_id:*:limit:*:offset:*')
 
