@@ -5,6 +5,7 @@ from uuid import uuid4
 import json
 from db.database import redis_client
 from redis.asyncio import Redis
+
 class ConnectionManager:
     # Crea una lista de conexiones activas
     def __init__(self):

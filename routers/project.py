@@ -132,7 +132,7 @@ async def create_project(
         auth_data: dict = Depends(require_role(roles=['admin'])),
         session:Session = Depends(get_session)):
     try:
-        user = auth_data['user']
+        actual_user = auth_data['user']
 
         found_group = get_group_or_404(group_id, session)
 
@@ -145,24 +145,26 @@ async def create_project(
         # Agregar al usuario creador al grupo con el rol de administrador
         project_user = db_models.project_user(
             project_id=project.project_id,
-            user_id=user.user_id,
+            user_id=actual_user.user_id,
             permission=db_models.Project_Permission.ADMIN
         )
+
         session.add(project_user)
 
         statement = (select(db_models.group_user).where(db_models.group_user.group_id == group_id))
         users_in_group = session.exec(statement).all()
 
         if users_in_group:
-            for group_id, user_id, role in users_in_group:
-                if role == db_models.Group_Role.ADMIN:
-                    
+            add_user_ids = [actual_user.user_id]
+            for group_user in users_in_group:
+                if group_user.role == 'admin' and group_user.user_id not in add_user_ids:
                     project_user = db_models.project_user(
-                    project_id=project.project_id,
-                    user_id=user_id,
-                    permission=db_models.Project_Permission.ADMIN
-                    )
-                session.add(project_user)
+                        project_id=project.project_id,
+                        user_id=group_user.user_id,
+                        permission='admin')
+
+                    session.add(project_user)
+                    add_user_ids.append(group_user.user_id)
 
         session.commit()
 

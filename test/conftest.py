@@ -162,14 +162,10 @@ async def test_create_project_init(async_client, auth_headers, test_user2, test_
 
 @pytest.fixture
 async def test_create_project_init_for_tasks(async_client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
-    print("Ejecutando test_create_project_init")
-    
     # Crear proyecto
     response = await async_client.post('/project/1', headers=auth_headers, json={'title': 'creando un proyecto'})
     assert response.status_code == 200, f"Error al crear proyecto: {response.json()}"
-    print("Proyecto 1 creado")
 
-    # Verificar si el usuario 1 ya está asociado antes de intentar asociarlo
     check_response = await async_client.get('/project/1/1/users', headers=auth_headers)
     if check_response.status_code == 200:
         print("Usuario 1 ya está asociado al proyecto 1")
