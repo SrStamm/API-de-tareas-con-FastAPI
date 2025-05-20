@@ -1,6 +1,6 @@
 import pytest
 from models import schemas, db_models, exceptions
-from routers import group, project
+from api.v1.routers import group, project
 from fastapi import Request
 import core.utils as utils
 
@@ -54,8 +54,8 @@ async def test_role_of_user_in_group(mocker):
 
     mock_auth_data = {'user': mock_user, 'role': 'editor'}
 
-    mocker.patch("routers.group.get_group_or_404", return_value=mock_group)
-    mocker.patch("routers.group.get_user_or_404", return_value=mock_user)
+    mocker.patch("api.v1.routers.group.get_group_or_404", return_value=mock_group)
+    mocker.patch("api.v1.routers.group.get_user_or_404", return_value=mock_user)
 
     with pytest.raises(exceptions.UserNotInGroupError):
         await group.delete_user_group(

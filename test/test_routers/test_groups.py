@@ -2,7 +2,7 @@ import pytest
 from conftest import auth_headers, auth_headers2, test_user2, async_client, clean_redis
 from models import db_models, exceptions, schemas
 from sqlalchemy.exc import SQLAlchemyError
-from routers import group
+from api.v1.routers import group
 from fastapi import Request
 from core.utils import require_role
 
@@ -159,7 +159,7 @@ async def test_update_group_error(mocker, clean_redis):
     # Configura los mocks para las funciones auxiliares
     mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
 
-    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+    mocker.patch('api.v1.routers.group.get_group_or_404', return_value=mock_group)
 
     # Simula un error al hacer commit
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
@@ -188,7 +188,7 @@ async def test_delete_group_error(mocker, clean_redis):
 
     mock_dependency = mocker.Mock(return_value={"user": mock_user, "role": "admin"})
 
-    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+    mocker.patch('api.v1.routers.group.get_group_or_404', return_value=mock_group)
 
     db_session_mock.delete.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -234,7 +234,7 @@ async def test_append_user_group_error(mocker):
 
     mock_auth_data = {'user': mock_user, 'role': 'admin'}
 
-    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+    mocker.patch('api.v1.routers.group.get_group_or_404', return_value=mock_group)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -264,9 +264,9 @@ async def test_delete_user_group_database_error(mocker):
 
     mock_auth_data = {'user': mock_user, 'role': 'admin'}
 
-    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
-    mocker.patch('routers.group.get_user_or_404', return_value=mock_delete_user)
-    mocker.patch('routers.group.role_of_user_in_group', return_value='editor')
+    mocker.patch('api.v1.routers.group.get_group_or_404', return_value=mock_group)
+    mocker.patch('api.v1.routers.group.get_user_or_404', return_value=mock_delete_user)
+    mocker.patch('api.v1.routers.group.role_of_user_in_group', return_value='editor')
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -298,9 +298,9 @@ async def test_delete_user_group_NotAuthorized_error(mocker):
 
     mock_auth_data = {'user': mock_user, 'role': 'editor'}
 
-    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
-    mocker.patch('routers.group.get_user_or_404', return_value=mock_delete_user)
-    mocker.patch('routers.group.role_of_user_in_group', return_value='editor')
+    mocker.patch('api.v1.routers.group.get_group_or_404', return_value=mock_group)
+    mocker.patch('api.v1.routers.group.get_user_or_404', return_value=mock_delete_user)
+    mocker.patch('api.v1.routers.group.role_of_user_in_group', return_value='editor')
 
 
     with pytest.raises(exceptions.NotAuthorized):
@@ -331,7 +331,7 @@ async def test_update_user_group_error(mocker):
 
     mock_auth_data = {'user': mock_user, 'role': 'admin'}
 
-    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+    mocker.patch('api.v1.routers.group.get_group_or_404', return_value=mock_group)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -360,7 +360,7 @@ async def test_get_user_in_group_error(mocker):
     mock_group.id = 1
     mock_group.users = [mock_delete_user, mock_user]
 
-    mocker.patch('routers.group.get_group_or_404', return_value=mock_group)
+    mocker.patch('api.v1.routers.group.get_group_or_404', return_value=mock_group)
 
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 

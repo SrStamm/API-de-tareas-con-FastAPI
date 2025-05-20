@@ -2,7 +2,7 @@ import pytest, json
 from conftest import auth_headers, client, test_create_project_init, select, db_models
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import WebSocketException, WebSocket
-from routers import ws
+from api.v1.routers import ws
 from models import exceptions, schemas
 from unittest.mock import AsyncMock
 from starlette.requests import Request
@@ -149,7 +149,7 @@ async def test_send_message_to_group(mocker, auth_headers):
     user_mock = mocker.Mock(spec=db_models.User)
     session_mock = mocker.Mock()
 
-    mocker.patch('routers.ws.found_user_in_project_or_404', return_value=1)
+    mocker.patch('api.v1.routers.ws.found_user_in_project_or_404', return_value=1)
 
     session_mock.add.side_effect = SQLAlchemyError('Error en base de datos')
 
@@ -235,10 +235,10 @@ async def test_websocket_endpoint_not_found_project_error(mocker):
     # Usuario simulado
     mock_user = mocker.Mock()
     mock_user.user_id = 1
-    mocker.patch('routers.ws.get_current_user_ws', return_value=mock_user)
+    mocker.patch('api.v1.routers.ws.get_current_user_ws', return_value=mock_user)
 
     # Forzar que verify_user_in_project lance la excepción
-    mocker.patch('routers.ws.verify_user_in_project', side_effect=exceptions.ProjectNotFoundError(project_id=999))
+    mocker.patch('api.v1.routers.ws.verify_user_in_project', side_effect=exceptions.ProjectNotFoundError(project_id=999))
 
     # Ejecutar el endpoint
     await ws.websocket_endpoint(websocket=ws_mock, project_id=999, session=session_mock)
@@ -259,10 +259,10 @@ async def test_websocket_endpoint_not_authorized_error(mocker):
     # Usuario simulado
     mock_user = mocker.Mock()
     mock_user.user_id = 1
-    mocker.patch('routers.ws.get_current_user_ws', return_value=mock_user)
+    mocker.patch('api.v1.routers.ws.get_current_user_ws', return_value=mock_user)
 
     # Forzar que verify_user_in_project lance la excepción
-    mocker.patch('routers.ws.verify_user_in_project', side_effect=exceptions.NotAuthorized(user_id=1))
+    mocker.patch('api.v1.routers.ws.verify_user_in_project', side_effect=exceptions.NotAuthorized(user_id=1))
 
     # Ejecutar el endpoint
     await ws.websocket_endpoint(websocket=ws_mock, project_id=999, session=session_mock)

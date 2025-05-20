@@ -1,7 +1,7 @@
 import pytest
 from conftest import auth_headers, client, async_client, clean_redis
 from models import schemas, db_models, exceptions
-from routers import user
+from api.v1.routers import user
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
 

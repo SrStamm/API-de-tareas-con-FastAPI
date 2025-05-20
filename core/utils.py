@@ -3,9 +3,8 @@ from db.database import Session, select, selectinload
 from models import db_models, exceptions, schemas
 from .logger import logger
 from .socket_manager import manager
-# from routers.ws import manager
 from typing import Callable
-from routers.auth import auth_user
+from api.v1.routers.auth import auth_user
 from db.database import select, get_session, Session, select
 from typing import List
 import re

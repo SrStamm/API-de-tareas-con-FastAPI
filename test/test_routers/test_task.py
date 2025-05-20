@@ -1,7 +1,7 @@
 import pytest
 from conftest import auth_headers, auth_headers2, test_create_project_init_for_tasks, async_client, clean_redis
 from models import schemas, db_models, exceptions
-from routers import task
+from api.v1.routers import task
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
 
@@ -187,7 +187,7 @@ async def test_update_task_error(mocker):
     # Patches necesarios
     mock_db_task = mocker.Mock(spec=db_models.Task)
     
-    mocker.patch('routers.task.found_task_or_404', return_value=mock_db_task)
+    mocker.patch('api.v1.routers.task.found_task_or_404', return_value=mock_db_task)
 
     mock_auth_data = {'user': mock_user, 'permission': 'write'}
 
@@ -215,7 +215,7 @@ async def test_update_task_error_NotAuthorized(mocker):
     # Patches necesarios
     mock_db_task = mocker.Mock(spec=db_models.Task)
     
-    mocker.patch('routers.task.found_task_or_404', return_value=mock_db_task)
+    mocker.patch('api.v1.routers.task.found_task_or_404', return_value=mock_db_task)
 
     mock_auth_data = {'user': mock_user, 'permission': 'write'}
 
@@ -259,7 +259,7 @@ async def test_delete_task_error(mocker):
 
     session_mock.delete.side_effect = SQLAlchemyError("Error en base de datos")
 
-    mocker.patch('routers.task.found_task_or_404')
+    mocker.patch('api.v1.routers.task.found_task_or_404')
 
     with pytest.raises(exceptions.DatabaseError):
         await task.delete_task(

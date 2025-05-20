@@ -3,9 +3,9 @@ import pytest
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
 from models import exceptions, db_models
-from routers import auth
+from api.v1.routers import auth
 from datetime import datetime, timezone, timedelta
-from routers.auth import SECRET, ALGORITHM, JWTError
+from api.v1.routers.auth import SECRET, ALGORITHM, JWTError
 
 def test_root(client):
     response = client.get('/')
@@ -55,9 +55,9 @@ async def test_auth_user_success(mocker):
     }
 
     # Mockea jwt.decode DENTRO del módulo 'auth' donde se usa
-    mock_jwt_decode = mocker.patch('routers.auth.jwt.decode', return_value=mock_payload)
+    mock_jwt_decode = mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
 
-    mocker.patch('routers.auth.datetime')
+    mocker.patch('api.v1.routers.auth.datetime')
 
     auth.datetime.now.return_value = current_time
     
@@ -85,7 +85,7 @@ async def test_auth_user_jwt_error(mocker):
     mock_session = mocker.Mock()
 
     # Mockea jwt.decode para que lance un JWTError
-    mock_jwt_decode = mocker.patch('routers.auth.jwt.decode', side_effect=JWTError("Invalid signature"))
+    mock_jwt_decode = mocker.patch('api.v1.routers.auth.jwt.decode', side_effect=JWTError("Invalid signature"))
     test_token = "invalid.token"
 
     with pytest.raises(exceptions.InvalidToken):
@@ -100,8 +100,8 @@ async def test_auth_user_no_sub(mocker):
     expiration_time = datetime.now(timezone.utc) + timedelta(hours=1)
 
     # Payload sin 'sub'
-    mock_payload = {"exp": expiration_time.timestamp(), "sub":''}
-    mocker.patch('routers.auth.jwt.decode', return_value=mock_payload)
+    mock_payload = {"exp": expiration_time.timestamp(), "sub":None}
+    mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
     test_token = "token.without.sub"
 
     with pytest.raises(exceptions.InvalidToken):
@@ -125,8 +125,8 @@ async def test_auth_user_not_found_in_db(mocker):
         "scope": 'api_access'
     }
 
-    mocker.patch('routers.auth.jwt.decode', return_value=mock_payload)
-    mocker.patch('routers.auth.datetime')
+    mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
+    mocker.patch('api.v1.routers.auth.datetime')
 
     auth.datetime.now.return_value = current_time
     auth.datetime.fromtimestamp = datetime.fromtimestamp
@@ -146,7 +146,7 @@ async def test_auth_user_no_exp(mocker):
 
     # Payload sin 'exp'
     mock_payload = {"sub": expected_user_id, "scope": 'api_access'}
-    mocker.patch('routers.auth.jwt.decode', return_value=mock_payload)
+    mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
 
     test_token = "token.without.exp"
 
@@ -172,10 +172,10 @@ async def test_auth_user_expired_token(mocker):
         "scope": 'api_access'
     }
 
-    mocker.patch('routers.auth.jwt.decode', return_value=mock_payload)
+    mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
 
     # Mockea datetime.now para devolver la hora actual
-    mocker.patch('routers.auth.datetime')
+    mocker.patch('api.v1.routers.auth.datetime')
     auth.datetime.now.return_value = current_time
 
     # Asegúrate de que fromtimestamp siga funcionando
@@ -194,7 +194,7 @@ async def test_auth_user_expired_token(mocker):
 
     # Payload sin 'sub'
     mock_payload = {"exp": expiration_time.timestamp()}
-    mocker.patch('routers.auth.jwt.decode', return_value=mock_payload)
+    mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
     test_token = "token.without.sub"
 
     with pytest.raises(exceptions.InvalidToken):

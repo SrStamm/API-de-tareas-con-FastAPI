@@ -6,7 +6,7 @@ from .auth import auth_user
 from core.utils import get_group_or_404, get_user_or_404, found_project_or_404, require_permission, require_role
 from core.logger import logger
 from core.limiter import limiter
-from routers.ws import manager
+from .ws import manager
 from datetime import datetime
 import json
 

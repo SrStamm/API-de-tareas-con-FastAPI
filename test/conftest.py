@@ -11,7 +11,7 @@ from main import app
 from sqlmodel import SQLModel, create_engine, Session
 from db.database import get_session, select, redis_client
 from models import db_models
-from routers.auth import encrypt_password
+from api.v1.routers.auth import encrypt_password
 
 from httpx import AsyncClient, ASGITransport
 

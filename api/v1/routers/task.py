@@ -6,7 +6,7 @@ from typing import List
 from core.utils import found_task_or_404, get_user_or_404, found_user_in_project_or_404, require_permission
 from core.logger import logger
 from core.limiter import limiter
-from routers.ws import manager
+from .ws import manager
 from datetime import datetime
 import json
 

@@ -1,7 +1,7 @@
 import pytest
 from conftest import auth_headers, auth_headers2, test_create_project_init_for_tasks, async_client, client
 from models import schemas, db_models, exceptions
-from routers import comment
+from api.v1.routers import comment
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
 
@@ -45,7 +45,7 @@ def test_get_comment_error(mocker):
     user_mock = mocker.Mock(spec=db_models.User)
     session_mock = mocker.Mock()
 
-    mocker.patch('routers.comment.found_user_in_task_or_404')
+    mocker.patch('api.v1.routers.comment.found_user_in_task_or_404')
 
     session_mock.exec.return_value.all.return_value = None
 
@@ -69,7 +69,7 @@ def test_get_all_comment_error(mocker):
     user_mock = mocker.Mock(spec=db_models.User)
     session_mock = mocker.Mock()
 
-    mocker.patch('routers.comment.found_user_in_task_or_404')
+    mocker.patch('api.v1.routers.comment.found_user_in_task_or_404')
 
     session_mock.exec.return_value.all.return_value = None
 
@@ -94,7 +94,7 @@ async def test_create_comment_error(mocker):
     comment_mock = mocker.Mock(spec=schemas.CreateComment(content='probando'))
     session_mock = mocker.Mock()
 
-    mocker.patch('routers.comment.found_user_in_task_or_404')
+    mocker.patch('api.v1.routers.comment.found_user_in_task_or_404')
 
     session_mock.commit.side_effect = SQLAlchemyError('Error en base de datos')
 
@@ -112,7 +112,7 @@ def test_update_comment_error(mocker):
     update_comment_mock = mocker.Mock(spec=schemas.UpdateComment(content='probando'))
     session_mock = mocker.Mock()
 
-    mocker.patch('routers.comment.found_user_in_task_or_404')
+    mocker.patch('api.v1.routers.comment.found_user_in_task_or_404')
     session_mock.get.return_value = None
 
     with pytest.raises(exceptions.CommentNotFoundError):
@@ -152,7 +152,7 @@ def test_delete_comment_error(mocker):
     comment_mock = mocker.Mock(spec=schemas.CreateComment(content='probando'))
     session_mock = mocker.Mock()
 
-    mocker.patch('routers.comment.found_user_in_task_or_404')
+    mocker.patch('api.v1.routers.comment.found_user_in_task_or_404')
     session_mock.get.return_value = None
 
     with pytest.raises(exceptions.CommentNotFoundError):

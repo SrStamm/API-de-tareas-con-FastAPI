@@ -1,7 +1,7 @@
 import pytest
 from conftest import auth_headers, auth_headers2, test_create_group_init, async_client, clean_redis
 from models import db_models, schemas, exceptions
-from routers import project
+from api.v1.routers import project
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
 from core.utils import require_permission
@@ -105,7 +105,7 @@ async def test_update_project_error_database(mocker):
 
     mock_auth_data = {'user': mock_user, 'permission': 'write'}
 
-    mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
+    mocker.patch('api.v1.routers.project.found_project_or_404', return_value=mock_project)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -242,7 +242,7 @@ async def test_delete_project_error(mocker):
     mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
     mock_project.id = 1
 
-    mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
+    mocker.patch('api.v1.routers.project.found_project_or_404', return_value=mock_project)
 
     db_session_mock.delete.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -273,9 +273,9 @@ async def test_add_user_to_project_error(mocker):
     mock_project.id = 1
     mock_project.users = []
 
-    mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
-    mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
-    mocker.patch('routers.project.get_user_or_404', return_value=mock_append_user)
+    mocker.patch('api.v1.routers.project.found_project_or_404', return_value=mock_project)
+    mocker.patch('api.v1.routers.project.get_group_or_404', return_value=mock_group)
+    mocker.patch('api.v1.routers.project.get_user_or_404', return_value=mock_append_user)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -307,9 +307,9 @@ async def test_remove_user_from_project_error(mocker):
     mock_project.id = 1
     mock_project.users = [mock_append_user, mock_user]
 
-    mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
-    mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
-    mocker.patch('routers.project.get_user_or_404', return_value=mock_append_user)
+    mocker.patch('api.v1.routers.project.found_project_or_404', return_value=mock_project)
+    mocker.patch('api.v1.routers.project.get_group_or_404', return_value=mock_group)
+    mocker.patch('api.v1.routers.project.get_user_or_404', return_value=mock_append_user)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -341,9 +341,9 @@ async def test_update_user_permission_in_project_error(mocker):
     mock_project.id = 1
     mock_project.users = [mock_append_user, mock_user]
 
-    mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
-    mocker.patch('routers.project.get_group_or_404', return_value=mock_group)
-    mocker.patch('routers.project.get_user_or_404', return_value=mock_append_user)
+    mocker.patch('api.v1.routers.project.found_project_or_404', return_value=mock_project)
+    mocker.patch('api.v1.routers.project.get_group_or_404', return_value=mock_group)
+    mocker.patch('api.v1.routers.project.get_user_or_404', return_value=mock_append_user)
 
     db_session_mock.commit.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -371,7 +371,7 @@ async def test_get_user_in_project_error(mocker):
     mock_project = mocker.Mock(spec=db_models.Project(title='hello world'))
     mock_project.id = 1
     
-    mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
+    mocker.patch('api.v1.routers.project.found_project_or_404', return_value=mock_project)
 
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
@@ -397,7 +397,7 @@ async def test_get_user_in_project_not_results_error(mocker):
     
     db_session_mock.exec.return_value.all.return_value = None
 
-    mocker.patch('routers.project.found_project_or_404', return_value=mock_project)
+    mocker.patch('api.v1.routers.project.found_project_or_404', return_value=mock_project)
 
     with pytest.raises(exceptions.UsersNotFoundInProjectError):
         await project.get_user_in_project(

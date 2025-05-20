@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from routers import group, project, task, user, auth, ws, comment
+from api.v1.routers import group, project, task, user, auth, ws, comment
 from db.database import create_db_and_tables
 from contextlib import asynccontextmanager
 from core.logger import logger

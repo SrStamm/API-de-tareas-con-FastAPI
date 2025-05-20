@@ -1,10 +1,12 @@
 #! /bin/bash 
 echo "Iniciando cov"
 
+rm -r htmlcov/
+
 echo "Iniciando Redis:"
 docker start redis-stack
 
-pytest --cov=./routers --cov-report=html
+pytest --cov=./api/v1 --cov-report=html
 
 echo "Test terminado"
 echo "Cerrando Redis:"

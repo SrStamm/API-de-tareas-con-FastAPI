@@ -7,7 +7,7 @@ from core.utils import found_task_or_404, get_user_or_404, found_user_in_task_or
 from core.logger import logger
 from core.limiter import limiter
 
-from routers.ws import manager
+from .ws import manager
 import json, re
 
 router = APIRouter(prefix='/task/{task_id}', tags=['Comment'])
