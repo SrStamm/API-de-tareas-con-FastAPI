@@ -3,8 +3,11 @@ from fastapi import WebSocket
 from .logger import logger
 from uuid import uuid4
 import json
-from db.database import redis_client
+from db.database import redis_client, redis
+from models import schemas
+from datetime import datetime
 from redis.asyncio import Redis
+import asyncio
 
 class ConnectionManager:
     # Crea una lista de conexiones activas
@@ -63,68 +66,99 @@ class ConnectionManager:
 
 class RedisConnectionManager:
     def __init__(self, redis: Redis):
-        self.redis: Redis = redis
-        self.local_Ws: Dict[int, WebSocket] = {}
-
-    async def connect(self, websocket: WebSocket, user_id:int, project_id: int):
+        self.redis = redis
+        self.pubsub_tasks: Dict[str, asyncio.Task] = {}
+    
+    async def connect(self, websocket: WebSocket, user_id: int, project_id: int):
+        # Acepta la conexion
         await websocket.accept()
-        
-        # Crear un ID de conexión
+
+        # Crea el ID connection
         connection_id = str(uuid4())
         
-        # Creando el JSON que contiene la información
+        # Crea metadata
         metadata = {
-            "connection_id":connection_id,
-            "user_id":user_id,
-            "project_id":project_id,
-            }
+            "connection_id": connection_id,
+            "user_id": user_id,
+            "project_id": project_id,
+        }
 
-        # 1. Guardar en Redis
+        # Asigna el hash y set
         await self.redis.set(f"connection:{connection_id}", json.dumps(metadata))
         await self.redis.sadd(f"user_connections:{user_id}", connection_id)
         await self.redis.sadd(f"project_connections:{project_id}", connection_id)
-
-        # 2. Guardar localmente
-        self.local_Ws[connection_id] = websocket
-
         logger.info(f"[CONNECTED] user={user_id} project={project_id} conn={connection_id}")
+
+        event_connected = schemas.WebSocketEvent(
+            type='user_connected',
+            payload=schemas.Message(
+                user_id=user_id,
+                project_id=project_id,
+                timestamp=datetime.now(),
+                content=f'El usuario {user_id} se ha conectado al projecto {project_id}'
+                ).model_dump()
+        ).model_dump_json()
+
+        await websocket.send_json(event_connected)
+
+        # Iniciar la subscripción a canales
+        await self._subscribe(websocket, user_id, project_id, connection_id)
         return connection_id
 
-    async def disconnect(self, connection_id: str):
-        # 1. Eliminar de redis
-        raw = await self.redis.get(f"connection:{connection_id}")
+    async def _subscribe(self, websocket: WebSocket, user_id: int, project_id: int, connection_id: str):
+        # Subscribe a los canales
+        pubsub = self.redis.pubsub()
+        await pubsub.subscribe(f"user:{user_id}", f"project:{project_id}")
+        logger.info(f"Subscribed user={user_id} to channels user:{user_id} and project:{project_id}")
+
+        async def reader():
+            try:
+                while True:
+                    message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                    if message and message.get("data"):
+                        data = message["data"].decode()
+                        try:
+                            await websocket.send_text(data)
+                            logger.info(f"Sent message to WebSocket user={user_id} conn={connection_id}: {data}")
+                        except Exception as e:
+                            logger.error(f"Failed to send message to WebSocket user={user_id} conn={connection_id}: {str(e)}")
+            except Exception as e:
+                logger.error(f"Error in Pub/Sub reader for user={user_id} conn={connection_id}: {str(e)}")
+            finally:
+                await pubsub.unsubscribe(f"user:{user_id}", f"project:{project_id}")
+                logger.info(f"Unsubscribed user={user_id} conn={connection_id} from Pub/Sub")
         
+        # Iniciar tarea de lectura en segundo plano
+        self.pubsub_tasks[connection_id] = asyncio.create_task(reader())
+
+    async def disconnect(self, connection_id: str):
+        # Obtiene la conexion
+        raw = await self.redis.get(f"connection:{connection_id}")
         if raw:
+            # Desencripta y obtiene sus datos
             metadata = json.loads(raw)
             user_id = metadata["user_id"]
             project_id = metadata["project_id"]
 
+            # Elimina las conexiones
             await self.redis.delete(f"connection:{connection_id}")
-            await self.redis.srem(f"user_connections:{user_id}")
-            await self.redis.srem(f"project_connections:{project_id}")
+            await self.redis.srem(f"user_connections:{user_id}", connection_id)
+            await self.redis.srem(f"project_connections:{project_id}", connection_id)
+            logger.info(f"Removed from Redis: conn={connection_id}, user={user_id}, project={project_id}")
         
-        # 2. Eliminar de local
-        self.local_Ws.pop[connection_id, None]
+        # Cancelar la subscripcion si existe
+        if connection_id in self.pubsub_tasks:
+            self.pubsub_tasks[connection_id].cancel()
+            del self.pubsub_tasks[connection_id]
+            logger.info(f"Cancelled Pub/Sub task for conn={connection_id}")
         logger.info(f"[DISCONNECTED] conn={connection_id}")
 
     async def send_to_user(self, user_id: int, message: str):
-        conn_ids = await self.redis.smembers(f"user_connections:{user_id}")
-        for conn_id in conn_ids:
-            ws = self.local_Ws.get(conn_id)
-            if ws:
-                try:
-                    await ws.send_text(message)
-                except Exception:
-                    logger.error(f"Fallo al enviar mensaje a {conn_id} (user={user_id})")
+        await self.redis.publish(f"user:{user_id}", message)
+        logger.info(f"Published message to user:{user_id}: {message}")
 
     async def broadcast(self, project_id: int, message: str):
-        conn_ids = await self.redis.smembers(f"project_connections:{project_id}")
-        for conn_id in conn_ids:
-            ws = self.local_Ws.get(conn_id)
-            if ws:
-                try:
-                    await ws.send_text(message)
-                except Exception:
-                    logger.error(f"Fallo al enviar broadcast a {conn_id} (project={project_id})")
+        await self.redis.publish(f"project:{project_id}", message)
+        logger.info(f"Published broadcast to project:{project_id}: {message}")
 
 manager = RedisConnectionManager(redis_client)

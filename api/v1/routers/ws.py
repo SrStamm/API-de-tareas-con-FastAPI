@@ -8,7 +8,7 @@ from core.logger import logger
 from core.limiter import limiter
 from core.socket_manager import manager
 import json
-from core.utils import found_user_in_project_or_404, found_project_or_404
+from core.utils import found_user_in_project_or_404
 
 router = APIRouter(tags=['WebSocket'])
 
@@ -71,7 +71,7 @@ def verify_user_in_project(user_id: int, project_id: int, session: Session = Dep
 async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Session = Depends(get_session)):
     # Obtiene el usuario actual
     user = await get_current_user_ws(session, websocket)
-    
+
     try:
         # Verifica que el usuario exista en el proyecto
         verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
@@ -79,33 +79,17 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
     except exceptions.ProjectNotFoundError as e:
         await websocket.close(code=1008, reason=f"Proyecto {project_id} no encontrado")
         return
-    
+
     except exceptions.NotAuthorized as e:
         await websocket.close(code=1008, reason=f"Usuario no autorizado para proyecto {project_id}")
         return
-    
+
     except Exception as e:
         await websocket.close(code=1008, reason=f"Error interno: {str(e)}")
         return
 
     # Conecta el usario a websocket
-    await manager.connect(websocket=websocket, project_id=project_id, user_id=user.user_id)
-    
-    msg_connect = schemas.Message(
-        user_id=user.user_id,
-        project_id=project_id,
-        timestamp=datetime.now(),
-        content=f'El usuario {user.user_id} se ha conectado al projecto {project_id}'
-    )
-
-    outgoing_event = schemas.WebSocketEvent(
-        type='user_connected',
-        payload=msg_connect.model_dump()
-    )
-
-    outgoing_event_json = outgoing_event.model_dump_json()
-
-    await manager.broadcast(outgoing_event_json, project_id)
+    conn_id = await manager.connect(websocket=websocket, project_id=project_id, user_id=user.user_id)
 
     try:
         while True:
@@ -200,8 +184,8 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
                     outgoing_event_json = outgoing_event.model_dump_json()
 
                     # Envia la notificacion
-                    await manager.broadcast(outgoing_event_json, project_id)
-                    logger.info(f'Broadcast notification for project {project_id}')
+                    await manager.send_to_user(outgoing_event_json, user.user_id)
+                    logger.info(f'Notification sent to user {user.user_id} for project {project_id}')
 
                 else:
                     # Manejar tipos de eventos desconocidos
@@ -222,9 +206,8 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
                 await websocket.send_json({"type": "error", "payload": {"message": "Internal server error processing message."}})
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket, project_id, user.user_id)
+        await manager.disconnect(conn_id)  # Usa await para asegurar que se ejecute
         logger.info(f'El usuario con ID {user.user_id} se desconecto')
-
         msg_disconnect = schemas.Message(
             user_id=user.user_id,
             project_id=project_id,

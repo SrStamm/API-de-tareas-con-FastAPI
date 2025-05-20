@@ -4,7 +4,7 @@ from models import db_models, exceptions, schemas
 from sqlalchemy.exc import SQLAlchemyError
 from api.v1.routers import group
 from fastapi import Request
-from core.utils import require_role
+from core.permission import require_role
 
 @pytest.mark.asyncio
 async def test_create_group(async_client, auth_headers, test_user2):

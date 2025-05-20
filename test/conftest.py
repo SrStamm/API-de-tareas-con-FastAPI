@@ -125,6 +125,12 @@ def auth_headers(client, test_user):
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture
+def auth_tokens(client, test_user):
+    response = client.post("/login", data={"username": 'mirko', "password": PASSWORD})
+    assert response.status_code == 200, f"Error en login: {response.json()}"
+    return response.json()
+
+@pytest.fixture
 def auth_headers2(client, test_user2):
     response = client.post("/login", data={"username":'moure', "password":PASSWORD})
     assert response.status_code == 200

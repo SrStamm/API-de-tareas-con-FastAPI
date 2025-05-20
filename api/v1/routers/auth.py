@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
-from db.database import get_session, Session, select
+from db.database import get_session, Session, select, or_
 from passlib.context import CryptContext
 from sqlalchemy.exc import SQLAlchemyError
 from models import db_models, schemas, exceptions, responses
@@ -106,7 +106,7 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
         if not user_found:
             logger.error('NO se encontro el usuario')
             raise exceptions.UserNotFoundInLogin()
-        
+
         if not crypt.verify(form.password, user_found.password):
             logger.error('Contraseña incorrecta')
             raise exceptions.LoginError(user_id=user_found.user_id)
@@ -116,7 +116,7 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
 
         access_token = {
             "sub": str(user_found.user_id),
-            "exp": access_expires.timestamp(),
+            "exp": int(access_expires.timestamp()),
             "scope": "api_access"
         }
 
@@ -132,17 +132,17 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
         session.add(new_session)
         session.commit()
         session.refresh(new_session)
-        
+
         refresh_token = {
             "jti":new_session.jti,
             "sub":new_session.sub,
-            "exp":new_session.expires_at.timestamp(),
+            "exp":int(new_session.expires_at.timestamp()),
             "scope":'token_refresh'}
 
         encoded_refresh_token = jwt.encode(refresh_token, SECRET, algorithm=ALGORITHM)
 
         return {"access_token" : encoded_access_token, "token_type" : "bearer", 'refresh_token': encoded_refresh_token}
-    
+
     except SQLAlchemyError as e:
         logger.error('Error al iniciar sesion {e}')
         session.rollback()
@@ -159,10 +159,9 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
             })
 @limiter.limit("5/minute")
 async def refresh(
-        refresh: str,
+        refresh: schemas.RefreshTokenRequest,
         request: Request,
-        session : Session = Depends(get_session),
-        user: db_models.User = Depends(auth_user)) -> schemas.Token:
+        session : Session = Depends(get_session)) -> schemas.Token:
     try:
         # Desencripta el token
         unverified_payload = jwt.get_unverified_claims(refresh)
@@ -175,7 +174,7 @@ async def refresh(
         actual_session = session.exec(stmt).first()
 
         if not actual_session:
-            logger.error('Refresh token revocado o no existe')
+            logger.error(f'No se encontró sesión activa para jti={jti}')
             raise exceptions.InvalidToken()
         
         payload = jwt.decode(refresh, SECRET, algorithms=ALGORITHM)
@@ -184,24 +183,24 @@ async def refresh(
         scope = payload.get("scope")
 
         if not scope:
-            logger.error('Token invalido')
+            logger.error('No tiene Scope')
             raise exceptions.InvalidToken()
 
         if scope != 'token_refresh':
-            logger.error('No es un token de refresco')
+            logger.error(f'Scope inválido: {scope}')
             raise exceptions.InvalidToken()
 
         # Obtiene user_id,  si no existe o no encuentra usuario, lanza error
         user_id = payload.get("sub")
-
+        
         if not user_id:
-            logger.error('Token invalido')
+            logger.error('No tiene ID de Usuario')
             raise exceptions.InvalidToken()
 
         user = session.get(db_models.User, user_id)
 
         if not user:
-            logger.error(f'No se encontro el user {user_id}')
+            logger.error(f'Usuario con ID {user_id} no encontrado')
             raise exceptions.UserNotFoundError(user_id)
 
         # Obtiene la expiracion, si no tiene o ya expiro, lanza error 
@@ -251,8 +250,8 @@ async def refresh(
 
         return {"access_token" : encoded_access_token, "token_type" : "bearer", "refresh_token": encoded_refresh_token}
     
-    except JWTError:
-        logger.error('Token invalido')
+    except JWTError as e:
+        logger.error(f'Token invalido: {str(e)}')
         raise exceptions.InvalidToken()
     
     except SQLAlchemyError as e:
@@ -297,3 +296,21 @@ async def logout(
         logger.error(f'Error al cerrar sesion: {str(e)}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='logout')
+
+
+@router.get('/expired')
+def get_expired_sessions(
+        session: Session = Depends(get_session)):
+    try:
+        stmt = (select(db_models.Session)
+                .where(or_(db_models.Session.is_active == False,
+                            db_models.Session.expires_at < datetime.now(timezone.utc))))
+
+        results = session.exec(stmt).all()
+
+        if results:
+            return results
+        
+        return {'detail':'No hay sesiones expiradas'}
+    except SQLAlchemyError as e:
+        raise exceptions.DatabaseError(e, func='get_expired_sessions')

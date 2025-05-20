@@ -3,7 +3,8 @@ from models import db_models, schemas, exceptions, responses
 from .auth import auth_user
 from db.database import get_session, Session, select, SQLAlchemyError, joinedload, redis_client
 from typing import List
-from core.utils import found_task_or_404, get_user_or_404, found_user_in_project_or_404, require_permission
+from core.utils import found_task_or_404, get_user_or_404, found_user_in_project_or_404
+from core.permission import require_permission
 from core.logger import logger
 from core.limiter import limiter
 from .ws import manager

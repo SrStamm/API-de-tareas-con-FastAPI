@@ -4,7 +4,7 @@ from models import db_models, schemas, exceptions
 from api.v1.routers import project
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
-from core.utils import require_permission
+from core.permission import require_permission
 
 @pytest.mark.asyncio
 async def test_get_projects(async_client, test_create_group_init, auth_headers):

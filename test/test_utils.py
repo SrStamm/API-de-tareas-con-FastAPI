@@ -3,6 +3,7 @@ from models import schemas, db_models, exceptions
 from api.v1.routers import group, project
 from fastapi import Request
 import core.utils as utils
+import core.permission as permission
 
 @pytest.mark.asyncio
 async def test_get_group_or_404_error(mocker):
@@ -81,7 +82,7 @@ def test_permission_of_user_in_project(mocker):
     session_mock.exec.return_value.first.return_value = None
 
     with pytest.raises(exceptions.UserNotInProjectError):
-        utils.permission_of_user_in_project(
+        permission.permission_of_user_in_project(
             user_id=1,
             project_id=1,
             session=session_mock

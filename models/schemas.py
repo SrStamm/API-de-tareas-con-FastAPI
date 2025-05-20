@@ -166,6 +166,9 @@ class Access_Token(BaseModel):
     access_token: str = Field(examples=[])
     token_type: str = Field(examples=['bearer'])
 
+class RefreshTokenRequest(BaseModel):
+    refresh: str
+
 # Mensaje y WebSocket
 
 class Message(BaseModel):
@@ -204,7 +207,7 @@ class OutgoingNotificationPayload(BaseModel):
     notification_type: str # Por ejemplo: 'new_task', 'update_task'
     message: str
     related_entity_id: int | None = None # ID de la tarea, mencion, etc
-    timestamp: dt = Field(default_factory=lambda: dt.now(timezone.utc))
+    timestamp: dt = Field(default_factory=lambda: dt.now())
 
 class PersonalMessagePayload(BaseModel):
     content: str

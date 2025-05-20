@@ -3,7 +3,8 @@ from models import db_models, schemas, exceptions, responses
 from db.database import get_session, Session, select, selectinload, SQLAlchemyError, redis_client, redis
 from typing import List
 from .auth import auth_user
-from core.utils import get_group_or_404, get_user_or_404, require_role, role_of_user_in_group
+from core.utils import get_group_or_404, get_user_or_404
+from core.permission import require_role, role_of_user_in_group
 from core.logger import logger
 from core.limiter import limiter
 from .ws import manager

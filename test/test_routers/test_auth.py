@@ -1,4 +1,4 @@
-from conftest import client, test_user
+from conftest import client, test_user, async_client, auth_headers, auth_tokens, PASSWORD
 import pytest
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi import Request
@@ -6,6 +6,7 @@ from models import exceptions, db_models
 from api.v1.routers import auth
 from datetime import datetime, timezone, timedelta
 from api.v1.routers.auth import SECRET, ALGORITHM, JWTError
+from jose import jwt
 
 def test_root(client):
     response = client.get('/')
@@ -238,3 +239,25 @@ async def test_logout_error(mocker):
         )
     
     session_mock.rollback.assert_called_once()
+
+
+def test_refresh_token(client):
+    login_response = client.post("/login", data={"username": 'mirko', "password": PASSWORD})
+    tokens = login_response.json()
+    refresh_token = tokens["refresh_token"]
+
+    response = client.post("/refresh", json={"refresh": refresh_token})
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
+
+
+def test_refresh_token_format(client):
+    login_response = client.post("/login", data={"username": 'mirko', "password": PASSWORD})
+    tokens = login_response.json()
+    refresh_token = tokens["refresh_token"]
+
+    # Verifica el contenido del refresh token
+    claims = jwt.get_unverified_claims(refresh_token)
+    print("Refresh token payload:", claims)

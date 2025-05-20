@@ -1,19 +1,18 @@
 from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions
 from .auth import auth_user
-from db.database import get_session, Session, select, SQLAlchemyError, redis_client
+from db.database import get_session, Session, select, SQLAlchemyError
 from typing import List
-from core.utils import found_task_or_404, get_user_or_404, found_user_in_task_or_404, extract_valid_mentions, notify_users
+from core.utils import found_user_in_task_or_404, extract_valid_mentions, notify_users, validate_in_task
 from core.logger import logger
 from core.limiter import limiter
-
-from .ws import manager
-import json, re
 
 router = APIRouter(prefix='/task/{task_id}', tags=['Comment'])
 
 @router.get('/comments')
+@limiter.limit("100/minute")
 def get_comments(
+        request:Request,
         task_id:int,
         user: db_models.User = Depends(auth_user),
         session:Session = Depends(get_session)) -> List[schemas.ReadComment]:
@@ -39,7 +38,9 @@ def get_comments(
         raise exceptions.DatabaseError(e, func='get_comments')
 
 @router.get('/comments/all')
+@limiter.limit("100/minute")
 def get_all_comments(
+        request:Request,
         task_id:int,
         user: db_models.User = Depends(auth_user),
         session:Session = Depends(get_session)) -> List[schemas.ReadComment]:
@@ -62,7 +63,9 @@ def get_all_comments(
         raise exceptions.DatabaseError(e, func='get_comments')
 
 @router.post('/comments')
+@limiter.limit("30/minute")
 async def create_comment(
+        request:Request,
         task_id:int,
         new_comment:schemas.CreateComment,
         user: db_models.User = Depends(auth_user),
@@ -82,12 +85,15 @@ async def create_comment(
         found_users = extract_valid_mentions(add_comment.content, session)
 
         if found_users:
-            payload = schemas.NotificationPayload(
-                notification_type='task_mention',
-                message=f'User {user.user_id} mentionated on comments in Task {task_id}: {add_comment.content}')
+            users_validated = validate_in_task(found_users, task_id, session)
+            
+            if users_validated: 
+                payload = schemas.NotificationPayload(
+                    notification_type='task_mention',
+                    message=f'User {user.user_id} mentionated on comments in Task {task_id}: {add_comment.content}')
 
-            await notify_users(found_users, payload)
-            logger.info(f'Notificacion enviada: {payload}')
+                await notify_users(users_validated, payload)
+                logger.info(f'Notificacion enviada: {payload}')
 
         return {'detail':'Nuevo comentario creado'}
 
@@ -96,7 +102,9 @@ async def create_comment(
         raise exceptions.DatabaseError(e, func='create_comment')
 
 @router.patch('/comments/{comment_id}')
+@limiter.limit("30/minute")
 def update_comment(
+        request:Request,
         task_id:int,
         comment_id:int,
         update_comment:schemas.UpdateComment,
@@ -130,7 +138,9 @@ def update_comment(
         raise exceptions.DatabaseError(e, func='update_comment')
 
 @router.delete('/comments/{comment_id}')
+@limiter.limit("30/minute")
 def delete_comment(
+        request:Request,
         task_id:int,
         comment_id:int,
         user: db_models.User = Depends(auth_user),
