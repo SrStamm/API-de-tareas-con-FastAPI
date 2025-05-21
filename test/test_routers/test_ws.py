@@ -103,7 +103,7 @@ def test_websocket_connection(client, auth_headers, test_create_project_init, te
         print(f"An unexpected error occurred during the test: {e}")
         pytest.fail(f"Test failed due to unexpected exception: {e}", pytrace=True) # pytrace=True muestra el traceback del test
 
-def test_get_chat(client, auth_headers, test_create_project_init):
+def test_get_chat(client, auth_headers):
     response = client.get('/chat/1', headers=auth_headers)
     assert response.status_code == 200
     messages = response.json()

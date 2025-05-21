@@ -4,15 +4,25 @@ from db.database import create_db_and_tables
 from contextlib import asynccontextmanager
 from core.logger import logger
 from core.limiter import limiter, _rate_limit_exceeded_handler, RateLimitExceeded
+from core.auto import run_scheduler_job
 from time import time
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+scheduler = AsyncIOScheduler()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+
+    scheduler.add_job(run_scheduler_job, trigger=IntervalTrigger(hours=5), max_instances=1)
+    scheduler.start()
+
     yield
+
+    scheduler.shutdown()
     logger.info({'Atencion':'La base de datos se encuentra desactivada'})
     logger.info({'Atencion':'El servidor no se encuentra disponible'})
-    
 
 app = FastAPI(lifespan=lifespan)
 
