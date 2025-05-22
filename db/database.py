@@ -12,8 +12,9 @@ user = os.environ.get('POSTGRES_USER')
 db_name = os.environ.get('POSTGRES_DB')
 password = os.environ.get('POSTGRES_PASSWORD')
 
-url = f'postgresql+psycopg2://{user}:{password}@localhost:5432/{db_name}'
+# url = f'postgresql+psycopg2://{user}:{password}@localhost:5432/{db_name}'
 
+url = os.environ.get('DATABASE_URL')
 engine = create_engine(url) # echo=True, pool_pre_ping=True 
 
 def create_db_and_tables():
@@ -36,4 +37,4 @@ def get_session():
 
 import redis.asyncio as redis
 
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
+redis_client = redis.Redis(host='redis', port=6379, db=0)
