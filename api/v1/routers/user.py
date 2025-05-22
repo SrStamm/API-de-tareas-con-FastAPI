@@ -11,11 +11,11 @@ router = APIRouter(prefix='/user', tags=['User'])
 
 @router.get(
         '',
-        description=""" Obtiene los usuarios.
-                    'skip' recibe un int que saltea el resultado obtenido.
-                    'limit' recibe un int para limitar los resultados obtenidos.""",
-        responses={ 200: {'description':'Usuarios encontrados','model':schemas.ReadUser},
-                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+        description=""" Obtain all of users.
+                    'skip' receives an "int" that skips the result obtained.
+                    'limit' receives an "int" that limits the result obtained.""",
+        responses={ 200: {'description':'Users obtained','model':schemas.ReadUser},
+                    500: {'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
 async def get_users(
         request:Request,
@@ -31,8 +31,8 @@ async def get_users(
             logger.info(f'Redis Cached {key}')
             return decoded
 
-        statement = select(db_models.User.user_id, db_models.User.username).limit(limit).offset(skip)
-        found_users = session.exec(statement).all()
+        stmt = select(db_models.User.user_id, db_models.User.username).limit(limit).offset(skip)
+        found_users = session.exec(stmt).all()
 
         to_cache = [
             schemas.ReadUser(user_id=user_id, username=username)
@@ -50,18 +50,18 @@ async def get_users(
 
 @router.post(
         '',
-        description="""Crea un nuevo usuario. Se necesita un username, un email y un password""",
-        responses={ 200: {'description':'Usuario creado', 'model':responses.UserCreateSucces},
-                    406: {'description':'Conflicto de datos', 'model':responses.UserConflictError},
-                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}}) 
+        description="""Create a new user. Nedd a username, an email and a password""",
+        responses={ 200: {'description':'User created', 'model':responses.UserCreateSucces},
+                    406: {'description':'Data conflict', 'model':responses.UserConflictError},
+                    500: {'description':'Internal error', 'model':responses.DatabaseErrorResponse}}) 
 @limiter.limit("5/minute")
 async def create_user(
         request:Request,
         new_user: schemas.CreateUser,
         session:Session = Depends(get_session)):
     try:
-        statement = select(db_models.User).where(or_(db_models.User.email == new_user.email, db_models.User.username == new_user.username))
-        found_user = session.exec(statement).first()
+        stmt = select(db_models.User).where(or_(db_models.User.email == new_user.email, db_models.User.username == new_user.username))
+        found_user = session.exec(stmt).first()
 
         if found_user:
             if found_user.username == new_user.username:
@@ -89,9 +89,9 @@ async def create_user(
 
 @router.get(
         '/me',
-        description='Obtiene informacion del usuario actual',
-        responses={ 200: {'description':'Obtenido usuario actual','model':schemas.ReadUser},
-                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+        description='Obtain current user information',
+        responses={ 200: {'description':'Obtained current user','model':schemas.ReadUser},
+                    500: {'description':'Internal errro', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
 def get_user_me(request:Request, user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
@@ -102,9 +102,9 @@ def get_user_me(request:Request, user: db_models.User = Depends(auth_user)) -> s
 
 @router.patch(
         '/me',
-        description='Actualiza el usuario actual',
-        responses={ 200: {'description':'Usuario actualizado', 'model': responses.UserUpdateSucces},
-                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+        description='Update current user',
+        responses={ 200: {'description':'Current user updated', 'model': responses.UserUpdateSucces},
+                    500: {'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
 async def update_user_me(
         request:Request,
@@ -132,9 +132,9 @@ async def update_user_me(
 
 @router.delete(
         '/me',
-        description='Elimina el usuario actual',
-        responses= {200: {'description':'Usuario actual eliminado', 'model':responses.UserDeleteSucces},
-                    500: {'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+        description='Delete current user',
+        responses= {200: {'description':'Current user deleted', 'model':responses.UserDeleteSucces},
+                    500: {'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
 async def delete_user_me(
         request:Request,

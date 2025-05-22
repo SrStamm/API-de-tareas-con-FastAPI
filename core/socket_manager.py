@@ -1,13 +1,12 @@
 from typing import Dict, List
 from fastapi import WebSocket
 from .logger import logger
-from uuid import uuid4
-import json
-from db.database import redis_client, redis
+import uuid
+from db.database import redis_client
+from redis.asyncio import Redis
 from models import schemas
 from datetime import datetime
-from redis.asyncio import Redis
-import asyncio
+import asyncio, json
 
 class ConnectionManager:
     # Crea una lista de conexiones activas
@@ -74,7 +73,7 @@ class RedisConnectionManager:
         await websocket.accept()
 
         # Crea el ID connection
-        connection_id = str(uuid4())
+        connection_id = str(uuid.uuid4())
         
         # Crea metadata
         metadata = {

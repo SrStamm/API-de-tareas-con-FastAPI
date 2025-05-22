@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
-from db.database import get_session, Session, select, selectinload, SQLAlchemyError, redis_client
+from db.database import get_session, Session, select, selectinload, SQLAlchemyError, redis_client, redis
 from typing import List
 from .auth import auth_user
 from core.utils import get_group_or_404, get_user_or_404, found_project_or_404
@@ -15,12 +15,12 @@ router = APIRouter(prefix='/project', tags=['Project'])
 
 @router.get(
         '/me',
-        description="""  Obtiene todos los proyectos existentes donde el usuario es miembro de este.
-                    'skip' recibe un int que saltea el resultado obtenido.
-                    'limit' recibe un int para limitar los resultados obtenidos.""",
+        description="""  Obtained all projects where user is part.
+                    'skip' receives an "int" that skips the result obtained.
+                    'limit' receives an "int" that limits the result obtained.""",
         responses={
-            200:{'description':'Projectos donde esta el usuario obtenidos', 'model':schemas.ReadBasicProject},
-            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+            200:{'description':'Projects where user is part obtained', 'model':schemas.ReadBasicProject},
+            500:{'description':'Internal error','model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
 async def get_projects_iam(
         request:Request,
@@ -40,12 +40,12 @@ async def get_projects_iam(
             decoded = json.loads(cached)
             return decoded
 
-        statement = (select(db_models.Project.project_id, db_models.Project.group_id, db_models.Project.title)
+        stmt = (select(db_models.Project.project_id, db_models.Project.group_id, db_models.Project.title)
                     .where( db_models.Project.project_id == db_models.project_user.project_id,
                             db_models.project_user.user_id == user.user_id)
                     .limit(limit).offset(skip))
 
-        found_projects = session.exec(statement).all()
+        found_projects = session.exec(stmt).all()
 
         # Cachea la respuesta
         to_cache = [
@@ -54,7 +54,10 @@ async def get_projects_iam(
             ]
 
         # Guarda la respuesta
-        await redis_client.setex(key, 6000, json.dumps([project_.model_dump() for project_ in to_cache], default=str))
+        try:
+            await redis_client.setex(key, 6000, json.dumps([project_.model_dump() for project_ in to_cache], default=str))
+        except redis.RedisError as e:
+            logger.warning(f'Error al cachear en Redis: {e}')
 
         return to_cache
 
@@ -64,13 +67,13 @@ async def get_projects_iam(
 
 @router.get(
         '/{group_id}',
-        description=""" Obtiene todos los proyectos existentes de un grupo.
-                        'skip' recibe un int que saltea el resultado obtenido.
-                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        description=""" Obtained all of projects of the group.
+                        'skip' receives an "int" that skips the result obtained.
+                        'limit' receives an "int" that limits the result obtained.""",
         responses={
-            200:{'description':'Projectos de un grupo obtenidos', 'model':schemas.ReadProject},
-            404:{'description':'Grupo o proyectos no encontrados','model':responses.NotFound},
-            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+            200:{'description':'Projects of the group obtained', 'model':schemas.ReadProject},
+            404:{'description':'Group or proyects not found','model':responses.NotFound},
+            500:{'description':'Internal error','model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
 async def get_projects(
         request:Request,
@@ -93,12 +96,12 @@ async def get_projects(
         
         get_group_or_404(group_id=group_id, session=session)
 
-        statement = (select(db_models.Project)
+        stmt = (select(db_models.Project)
                     .options(selectinload(db_models.Project.users))
                     .where(db_models.Project.group_id == group_id)
                     .limit(limit).offset(skip))
 
-        found_projects = session.exec(statement).all()
+        found_projects = session.exec(stmt).all()
         
         # Cachea la respuesta
         to_cache = [
@@ -119,12 +122,12 @@ async def get_projects(
 
 @router.post(
         '/{group_id}',
-        description= """Permite crear un nuevo proyecto en un grupo al usuario autenticado.
-                        Para crearlo se necesita un 'title', opcional 'description'""",
+        description= """Allows create an new proyect on the group to authenticated user.
+                        To create it, you need an 'title', optional 'description'""",
         responses={
-            200:{'description':'Projecto creado', 'model':responses.ProjectCreateSucces},
-            404:{'description':'Grupo no encontrado','model':responses.NotFound},
-            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+            200:{'description':'Project created', 'model':responses.ProjectCreateSucces},
+            404:{'description':'Group not found','model':responses.NotFound},
+            500:{'description':'Internal error','model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
 async def create_project(
         request:Request,
@@ -152,8 +155,8 @@ async def create_project(
 
         session.add(project_user)
 
-        statement = (select(db_models.group_user).where(db_models.group_user.group_id == group_id))
-        users_in_group = session.exec(statement).all()
+        stmt = (select(db_models.group_user).where(db_models.group_user.group_id == group_id))
+        users_in_group = session.exec(stmt).all()
 
         if users_in_group:
             add_user_ids = [actual_user.user_id]
@@ -169,7 +172,10 @@ async def create_project(
 
         session.commit()
 
-        await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+        try:
+            await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+        except redis.RedisError as e:
+            logger.warning(f'Error al cachear en Redis {e}')
 
         return {'detail':'Se ha creado un nuevo proyecto de forma exitosa'}
 
@@ -180,13 +186,13 @@ async def create_project(
 
 @router.patch(
         '/{group_id}/{project_id}',
-        description= """ Permite modificar un proyecto de un grupo si tiene permiso de Administrador en el proyecto.
-                        Se puede modificar 'title' y 'description' """,
+        description= """Allows update an proyect of the grupo if user has Administrator permissions on the proyect.
+                        Allows modificate 'title' and 'description' """,
         responses={
-            200:{'description':'Projecto actualizado', 'model':responses.ProjectUpdateSucces},
-            401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
-            404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+            200:{'description':'Project updated', 'model':responses.ProjectUpdateSucces},
+            401:{'description':'User not authorized','model':responses.NotAuthorized},
+            404:{'description':'Group or project not found','model':responses.NotFound},
+            500:{'description':'Internal error','model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
 async def update_project(
         request:Request,
@@ -198,17 +204,20 @@ async def update_project(
 
     try:
         found_project = found_project_or_404(group_id=group_id, project_id=project_id, session=session)
-                
+
         if found_project.title != updated_project.title and updated_project.title is not None:
             found_project.title = updated_project.title
-            
+
         if found_project.description != updated_project.description and updated_project.description is not None:
             found_project.description = updated_project.description
-        
+
         session.commit()
         session.refresh(found_project)
 
-        await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+        try:
+            await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+        except redis.RedisError as e:
+            logger.warning(f'Error al cachear en Redis {e}')
 
         return {'detail':'Se ha actualizado la informacion del projecto'}
     
@@ -219,12 +228,12 @@ async def update_project(
 
 @router.delete(
         '/{group_id}/{project_id}',
-        description="""Permite eliminar un proyecto de un grupo si el usuario autenticado tiene permiso de Administrador en el proyecto""",
+        description="""Allows remove an project of the group if an authenticated user has Administrator permissions on the proyect""",
         responses={
-            200:{'description':'Projecto eliminado', 'model':responses.ProjectDeleteSucces},
-            401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
-            404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+            200:{'description':'Proyect deleted', 'model':responses.ProjectDeleteSucces},
+            401:{'description':'User not authorized','model':responses.NotAuthorized},
+            404:{'description':'Group or project not found','model':responses.NotFound},
+            500:{'description':'Internal error','model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
 async def delete_project(
         request:Request,
@@ -234,14 +243,17 @@ async def delete_project(
         session: Session = Depends(get_session)):
 
     try:
-        found_project = found_project_or_404(group_id=group_id, project_id=project_id, session=session)
-
+        # found_project = found_project_or_404(group_id=group_id, project_id=project_id, session=session)
+        found_project = session.get(db_models.Project, project_id)
         session.delete(found_project)
         session.commit()
 
         # Elimina cache
-        await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
-        await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+        try:
+            await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+            await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+        except redis.RedisError as e:
+            logger.warning(f'Error al eliminar cache de Redis {e}')
 
         return {'detail':'Se ha eliminado el proyecto'}
 
@@ -252,14 +264,14 @@ async def delete_project(
 
 @router.post(
         '/{group_id}/{project_id}/{user_id}',
-        description= """ Permite al usuario autenticado con permiso de Administrador
-                        el agregar un usuario al proyecto si este existe en el grupo.""",
+        description= """Allows an authenticated user with Administrator permissions
+                        to add a new user to the proyect if it exists in the group.""",
         responses={
-            200:{'description':'Usuario agregado al projecto', 'model':responses.ProjectAppendUserSucces},
-            400:{'description':'Error en request', 'model':responses.ErrorInRequest},
-            401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
-            404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+            200:{'description':'User added to project', 'model':responses.ProjectAppendUserSucces},
+            400:{'description':'Error in request', 'model':responses.ErrorInRequest},
+            401:{'description':'User not authorized','model':responses.NotAuthorized},
+            404:{'description':'Group or project not found','model':responses.NotFound},
+            500:{'description':'Internal error','model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
 async def add_user_to_project(
         request:Request,
@@ -310,8 +322,11 @@ async def add_user_to_project(
         await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         # Elimina cache
-        await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
-        await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+        try:
+            await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+            await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+        except redis.RedisError as e:
+            logger.warning(f'Error al eliminar cache en Redis {e}')
 
         return {'detail':'El usuario ha sido agregado al proyecto'}
     
@@ -322,14 +337,14 @@ async def add_user_to_project(
 
 @router.delete(
         '/{group_id}/{project_id}/{user_id}',
-        description="""Permite al usuario autenticado con permiso de Administrador
-                        el eliminar un usuario del proyecto""",
+        description="""Allow an authenticated user with Administrator permission
+                        to remove an user of the proyect""",
         responses={
-            200:{'description':'Usuario eliminado del projecto', 'model':responses.ProjectDeleteUserSucces},
-            400:{'description':'Error en request', 'model':responses.ErrorInRequest},
-            401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
-            404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+            200:{'description':'User removed of the project', 'model':responses.ProjectDeleteUserSucces},
+            400:{'description':'Error in request', 'model':responses.ErrorInRequest},
+            401:{'description':'User not authenticated','model':responses.NotAuthorized},
+            404:{'description':'Group or project not found','model':responses.NotFound},
+            500:{'description':'Internal error','model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
 async def remove_user_from_project(
         request:Request,
@@ -376,8 +391,11 @@ async def remove_user_from_project(
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
             # Elimina cache
-            await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
-            await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+            try:
+                await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+                await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+            except redis.RedisError as e:
+                logger.warning(f'Error al eliminar cache en Redis {e}')
 
             return {'detail':'El usuario ha sido eliminado del proyecto'}
         else:
@@ -391,14 +409,14 @@ async def remove_user_from_project(
 
 @router.patch(
         '/{group_id}/{project_id}/{user_id}',
-        description= """Permite al usuario autenticado con permiso de Administrador
-                        el modificar el rol de un usuario en un proyecto""",
+        description= """Allow an authenticated user whit Administrator permission
+                        to update a user's permission on a project""",
         responses={
-            200:{'description':'Permisos del usuario sobre el projecto actualizado', 'model':responses.ProjectUPdateUserSucces},
-            400:{'description':'Error en request', 'model':responses.ErrorInRequest},
-            401:{'description':'El usuario no esta autorizado','model':responses.NotAuthorized},
-            404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-            500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+            200:{'description':"User's permission on a project updated", 'model':responses.ProjectUPdateUserSucces},
+            400:{'description':'Error in request', 'model':responses.ErrorInRequest},
+            401:{'description':'User not authorized','model':responses.NotAuthorized},
+            404:{'description':'Group or porject not found','model':responses.NotFound},
+            500:{'description':'Internal error','model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
 async def update_user_permission_in_project(
         request:Request,
@@ -413,10 +431,10 @@ async def update_user_permission_in_project(
         project = found_project_or_404(group_id, project_id, session)
 
         # Busca el usuario
-        statement = (select(db_models.project_user)
+        stmt = (select(db_models.project_user)
                     .where(db_models.project_user.user_id == user_id, db_models.project_user.project_id == project.project_id))
 
-        user = session.exec(statement).first()
+        user = session.exec(stmt).first()
 
         if not user:
             logger.error(f'El user {user_id} no existe en el proyecto {project_id}')
@@ -446,8 +464,10 @@ async def update_user_permission_in_project(
         await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         # Elimina cache
-        await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
-
+        try:
+            await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+        except redis.RedisError as e:
+            logger.warning(f'Error al eliminar cache en Redis {e}')
         return {'detail':'Se ha cambiado los permisos del usuario en el proyecto'}
 
     except SQLAlchemyError as e:
@@ -457,14 +477,14 @@ async def update_user_permission_in_project(
 
 @router.get(
         '/{group_id}/{project_id}/users',
-        description=""" Obtiene todos los usuarios de un proyecto.
-                    'skip' recibe un int que saltea el resultado obtenido.
-                    'limit' recibe un int para limitar los resultados obtenidos.""",
+        description=""" Obtained all users of the project.
+                    'skip' receives an "int" that skips the result obtained.
+                    'limit' receives an "int" that limits the result obtained.""",
         responses={
-                200:{'description':'Usuarios del proyecto obtenidos', 'model':schemas.ReadProjectUser},
-                400:{'description':'Error en request', 'model':responses.ErrorInRequest},
-                404:{'description':'Grupo o proyecto no encontrados','model':responses.NotFound},
-                500:{'description':'error interno','model':responses.DatabaseErrorResponse}})
+                200:{'description':'Users from the project obtained', 'model':schemas.ReadProjectUser},
+                400:{'description':'Error in request', 'model':responses.ErrorInRequest},
+                404:{'description':'Group or project not obtained','model':responses.NotFound},
+                500:{'description':'Internal error','model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
 async def get_user_in_project(
         request:Request,
@@ -486,24 +506,27 @@ async def get_user_in_project(
 
         found_project_or_404(group_id, project_id, session)
 
-        statement = (select(db_models.User.user_id, db_models.User.username, db_models.project_user.permission)
+        stmt = (select(db_models.User.user_id, db_models.User.username, db_models.project_user.permission)
                     .join(db_models.project_user, db_models.project_user.user_id == db_models.User.user_id)
                     .where(db_models.project_user.project_id == project_id)
                     .limit(limit).offset(skip))
-        
-        results = session.exec(statement).all()
+
+        results = session.exec(stmt).all()
 
         if not results:
             logger.error(f'No se encontraron los usuarios en el proyecto {project_id}')
             raise exceptions.UsersNotFoundInProjectError(project_id=project_id)
-        
+
         # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
         to_cache = [
             schemas.ReadProjectUser(user_id=user_id, username=username, permission=permission)
             for user_id, username, permission in results
         ]
 
-        await redis_client.setex(key, 600, json.dumps([project.model_dump() for project in to_cache], default=str))
+        try:
+            await redis_client.setex(key, 600, json.dumps([project.model_dump() for project in to_cache], default=str))
+        except redis.RedisError as e:
+            logger.warning(f'Error al cachear en Redis {e}')
 
         return to_cache
 

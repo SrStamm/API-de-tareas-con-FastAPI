@@ -1,10 +1,8 @@
-# from __future__ import annotations # Comentado temporalmente para diagnóstico
-
 from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy.orm import Mapped
 from datetime import datetime as dt, timezone
 from enum import Enum
-from typing import Optional, List # Asegúrate que List está importado
+from typing import Optional, List
 from pydantic import EmailStr
 
 class State(str, Enum):

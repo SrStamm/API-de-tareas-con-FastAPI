@@ -87,3 +87,31 @@ def test_permission_of_user_in_project(mocker):
             project_id=1,
             session=session_mock
         )
+
+def test_found_user_in_task_or_404(mocker):
+    user_mock = mocker.Mock(spec=db_models.User)
+    user_mock.user_id = 1
+
+    task_mock = mocker.Mock(spec=db_models.Task)
+    task_mock.task_id = 1
+    task_mock.asigned = []
+    
+    session_mock = mocker.Mock()
+    session_mock.exec.return_value.first.return_value = None
+    
+    with pytest.raises(exceptions.TaskErrorNotFound):
+        utils.found_user_in_task_or_404(
+            user_id=1,
+            task_id=1,
+            session=session_mock
+        )
+
+    session_mock.exec.return_value.first.return_value = task_mock
+    session_mock.get.return_value = user_mock
+
+    with pytest.raises(exceptions.TaskIsNotAssignedError):
+        utils.found_user_in_task_or_404(
+            user_id=1,
+            task_id=1,
+            session=session_mock
+        )

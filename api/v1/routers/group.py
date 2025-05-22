@@ -15,12 +15,12 @@ router = APIRouter(prefix='/group', tags=['Group'])
 
 @router.get(
         '',
-        description=""" Obtiene todos los grupos con informacion limitada.
-                        'skip' recibe un int que saltea el resultado obtenido.
-                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        description=""" Read all groups with limited data.
+                        'skip' receives an "int" that skips the result obtained.
+                        'limit' receives an "int" that limits the result obtained.""",
         responses={
-            200:{'description':'Grupos obtenidos', 'model':schemas.ReadBasicDataGroup},
-            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+            200:{'description':'Groups obtained', 'model':schemas.ReadBasicDataGroup},
+            500:{'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("60/minute")
 async def get_groups(
         request: Request,
@@ -38,11 +38,11 @@ async def get_groups(
             decoded = json.loads(cached)
             return decoded
 
-        statement = (select(db_models.Group)
+        stmt = (select(db_models.Group)
                     .options(selectinload(db_models.Group.users))
                     .order_by(db_models.Group.group_id).limit(limit).offset(skip))
 
-        found_group = session.exec(statement).all()
+        found_group = session.exec(stmt).all()
 
         # Cachea la respuesta
         to_cache = [
@@ -56,7 +56,7 @@ async def get_groups(
         try:
             await redis_client.setex(key, 300, json.dumps(to_cache, default=str))
         except redis.RedisError as e:
-            logger.warning(f'Error al cachear en Redis: {e}')
+            logger.warning(f'Error al cachear en Redis: {e}') 
 
         return to_cache
 
@@ -66,11 +66,11 @@ async def get_groups(
 
 @router.post(
         '',
-        description=""" El usuario autenticado crea un nuevo grupo, necesita un 'name', y opcional 'description'.
-                        El usuario se agrega de forma automatica como Administrador""",
+        description=""" The authenticated user creates a new group, needs a 'name' string, and an optional 'description' string.
+                        The user is automatically part of the group """,
         responses={
-            200:{'description':'Grupo creado', 'model':responses.GroupCreateSucces},
-            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+            200:{'description':'Group created', 'model':responses.GroupCreateSucces},
+            500:{'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
 async def create_group(
         request: Request,
@@ -108,13 +108,14 @@ async def create_group(
 
 @router.patch(
         '/{group_id}',
-        description=""" Permite al usuario autenticado con rol Administrador el cambiar informacion del grupo,
-                        puede ser el 'name' o 'description'.""",
+        description="""
+        Allows an authenticated user with Administrator or Editor rol to change group information,
+        such as 'name' or 'description'""",
         responses={
-            200:{'description':'Grupo actualizado', 'model':responses.GroupUpdateSucces},
-            401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
-            404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
-            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+            200:{'description':'Group updated', 'model':responses.GroupUpdateSucces},
+            401:{'description':'User not authorized', 'model':responses.NotAuthorized},
+            404:{'description':'Group not Found', 'model':responses.NotFound},
+            500:{'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
 async def update_group(
         request: Request,
@@ -149,12 +150,12 @@ async def update_group(
 
 @router.delete(
         '/{group_id}',
-        description='Permite al usuario autenticado con rol Administrador el eliminar al grupo.',
+        description='Allows an authenticated user with Administrator or Editor rol to delete the group.',
         responses={
-            200:{'description':'Grupo actualizado', 'model':responses.GroupDeleteSucces},
-            401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
-            404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
-            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+            200:{'description':'Group deleted', 'model':responses.GroupDeleteSucces},
+            401:{'description':'User not authorized', 'model':responses.NotAuthorized},
+            404:{'description':'Group not found', 'model':responses.NotFound},
+            500:{'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
 async def delete_group(
         request: Request,
@@ -185,12 +186,12 @@ async def delete_group(
 
 @router.get(
         '/me',
-        description=""" Obtiene todos los grupos a los que pertenece el usuario con informacion limitada.
-                        'skip' recibe un int que saltea el resultado obtenido.
-                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        description=""" Read all groups where user is part with limit information.
+                        'skip' receives an "int" that skips the result obtained.
+                        'limit' receives an "int" that limits the result obtained.""",
         responses={
-            200:{'description':'Grupo donde esta el usuario obtenidos', 'model':schemas.ReadGroup},
-            500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+            200:{'description':'Groups to which the user belongs obtained', 'model':schemas.ReadGroup},
+            500:{'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("60/minute")
 async def get_groups_in_user(
         request: Request,
@@ -209,13 +210,13 @@ async def get_groups_in_user(
             decoded = json.loads(cached)
             return decoded
 
-        statement = (select(db_models.Group)
+        stmt = (select(db_models.Group)
                     .join(db_models.group_user, db_models.group_user.group_id == db_models.Group.group_id)
                     .where(db_models.group_user.user_id == user.user_id)
                     .order_by(db_models.Group.group_id)
                     .limit(limit).offset(skip))
 
-        found_group = session.exec(statement).all()
+        found_group = session.exec(stmt).all()
 
         # Cachea la respuesta
         to_cache = [
@@ -236,13 +237,13 @@ async def get_groups_in_user(
 
 @router.post(
         '/{group_id}/{user_id}',
-        description='Permite al usuario autenticado con rol Administrador el agregar un nuevo usuario al grupo',
+        description='Allows an authenticated user with Administrator or Editor rol to append a new user to group.',
         responses={
-                200:{'description':'Usuario agregado al grupo', 'model':responses.GroupAppendUserSucces},
+                200:{'description':'User added to group', 'model':responses.GroupAppendUserSucces},
                 400:{'description':'request error', 'model':responses.ErrorInRequest},
-                401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
-                404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
-                500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+                401:{'description':'User not authorized', 'model':responses.NotAuthorized},
+                404:{'description':'Group not found', 'model':responses.NotFound},
+                500:{'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("20/minute")
 async def append_user_group(
         request: Request,
@@ -301,13 +302,13 @@ async def append_user_group(
 
 @router.delete(
         '/{group_id}/{user_id}',
-        description='Permite al usuario autenticado con rol Administrador el eliminar un usuario del grupo',
+        description='Allows an authenticated user with Administrator or Editor role to remove a user from a group.',
         responses={
-                200:{'description':'Usuario eliminado del Grupo', 'model':responses.GroupDeleteUserSucces},
+                200:{'description':'User removed from the group', 'model':responses.GroupDeleteUserSucces},
                 400:{'description':'request error', 'model':responses.ErrorInRequest},
-                401:{'description':'Usuario no autorizado', 'model':responses.NotAuthorized},
-                404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
-                500:{'description':'error interno', 'model':responses.DatabaseErrorResponse}})
+                401:{'description':'User not authorized', 'model':responses.NotAuthorized},
+                404:{'description':'Group not found', 'model':responses.NotFound},
+                500:{'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
 async def delete_user_group(  
         request: Request,
@@ -397,11 +398,11 @@ async def update_user_group(
         get_group_or_404(group_id, session)
 
         # Busca el usuario
-        statement = (select(db_models.group_user)
+        stmt = (select(db_models.group_user)
                     .join(db_models.Group, db_models.group_user.group_id == db_models.Group.group_id)
                     .where(db_models.group_user.user_id == user_id))
 
-        result = session.exec(statement)
+        result = session.exec(stmt)
         found_user = result.first()
 
         if not found_user:
@@ -446,9 +447,9 @@ async def update_user_group(
 
 @router.get(
         '/{group_id}/users',
-        description=""" Obtiene todos los usuarios de un grupo.
-                        'skip' recibe un int que saltea el resultado obtenido.
-                        'limit' recibe un int para limitar los resultados obtenidos.""",
+        description=""" Obtained all the users of the group.
+                        'skip' receives an "int" that skips the result obtained.
+                        'limit' receives an "int" that limits the result obtained.""",
         responses={
                 200:{'description':'Usuarios del Grupo obtenidos', 'model':schemas.ReadGroupUser},
                 404:{'description':'Grupo no encontrado', 'model':responses.NotFound},
@@ -474,12 +475,12 @@ async def get_user_in_group(
 
         get_group_or_404(group_id, session)
 
-        statement = (select(db_models.User.username, db_models.User.user_id, db_models.group_user.role)
+        stmt = (select(db_models.User.username, db_models.User.user_id, db_models.group_user.role)
                     .join(db_models.group_user, db_models.group_user.user_id == db_models.User.user_id)
                     .where(db_models.group_user.group_id == group_id)
                     .limit(limit).offset(skip))
 
-        search = session.exec(statement)
+        search = session.exec(stmt)
         results = search.all()
 
         # Cachea la respuesta

@@ -94,14 +94,14 @@ async def auth_user_ws(token: str, session: Session):
         
         return None
 
-@router.post("/login", description='Endpoint para logearse. Se necesita username y password.')
+@router.post("/login", description='Login path. You need a username and password. First need to create a user')
 # @limiter.limit("5/minute")
 async def login(form: OAuth2PasswordRequestForm = Depends(),
                 session : Session = Depends(get_session)) -> schemas.Token:
     
     try:
-        statement = select(db_models.User).where(db_models.User.username == form.username)
-        user_found = session.exec(statement).first()
+        stmt = select(db_models.User).where(db_models.User.username == form.username)
+        user_found = session.exec(stmt).first()
 
         if not user_found:
             logger.error('NO se encontro el usuario')
@@ -150,12 +150,12 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
 
 @router.post(
             "/refresh",
-            description='Endpoint para obtener un nuevo token. Se necesita refresh token.',
+            description='Refresh path for obtain a new token. You need a refresh token.',
             responses={
-                200:{'detail':'Nuevo access_token y refresh_token obtenidos', 'model':schemas.Token},
-                401:{'detail':'Token incorrecto', 'model':responses.InvalidToken},
-                404:{'detail':'User no encontrado', 'model':responses.NotFound},
-                500:{'detail':'Error interno', 'model': responses.DatabaseErrorResponse}
+                200:{'detail':'New access_token and refresh_token obtained', 'model':schemas.Token},
+                401:{'detail':'Token incorrect', 'model':responses.InvalidToken},
+                404:{'detail':'User not found', 'model':responses.NotFound},
+                500:{'detail':'Internal error', 'model': responses.DatabaseErrorResponse}
             })
 @limiter.limit("5/minute")
 async def refresh(
@@ -263,10 +263,10 @@ async def refresh(
 
 @router.post(
             "/logout",
-            description='Endpoint para cerrar sesion. Se cierran todas las sesiones',
+            description='Logout path to close session. Close all user sessions ',
             responses={
-                200: {'description':'Todas las sesiones estan cerradas.'},
-                500:{'detail':'Error interno', 'model':responses.DatabaseErrorResponse}
+                200: {'description':'All user sesisons are closed.'},
+                500:{'detail':'Internal error', 'model':responses.DatabaseErrorResponse}
             })
 @limiter.limit("5/minute")
 async def logout(

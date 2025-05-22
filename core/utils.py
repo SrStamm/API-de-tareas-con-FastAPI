@@ -1,22 +1,19 @@
-from fastapi import Depends
 from db.database import Session, select, selectinload
 from models import db_models, exceptions, schemas
 from .logger import logger
 from .socket_manager import manager
-from typing import Callable
-from api.v1.routers.auth import auth_user
-from db.database import select, get_session, Session, select
+from db.database import select, Session, select
 from typing import List
 import re
 
 def get_group_or_404(group_id: int, session: Session):
-    statement = select(db_models.Group).where(db_models.Group.group_id == group_id)
-    group = session.exec(statement).first() 
-        
+    stmt = select(db_models.Group).where(db_models.Group.group_id == group_id)
+    group = session.exec(stmt).first() 
+
     if not group:
         logger.error(f'Group {group_id} no encontrado')
         raise exceptions.GroupNotFoundError(group_id)
-    
+
     return group
 
 def found_project_or_404(group_id:int, project_id:int, session: Session):
@@ -44,9 +41,8 @@ def found_project_for_task_or_404(project_id:int, session: Session):
     return founded_project
 
 def get_user_or_404(user_id: int, session: Session):
-    statement = (select(db_models.User).where(db_models.User.user_id == user_id))
-        
-    user = session.exec(statement).first()
+    stmt = (select(db_models.User).where(db_models.User.user_id == user_id))
+    user = session.exec(stmt).first()
 
     if not user:
         logger.error(f'User {user_id} no encontrado')
@@ -98,7 +94,6 @@ def found_user_in_task_or_404(user_id:int, task_id: int, session: Session):
             return
     
     raise exceptions.TaskIsNotAssignedError(task_id, user_id)
-
 
 def extract_valid_mentions(content: str, session: Session) -> List[db_models.User]:
     mentions_raw = re.findall(r'@(\w+)', content)
