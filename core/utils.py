@@ -87,7 +87,7 @@ def found_user_in_task_or_404(user_id:int, task_id: int, session: Session):
 
     found_users_assigned = session.exec(stmt).first()
 
-    if not found_users_assigned:
+    if not found_users_assigned: 
         logger.error(f'Task {task_id} no encontrado')
         raise exceptions.TaskErrorNotFound(task_id)
 

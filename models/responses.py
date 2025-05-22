@@ -77,6 +77,15 @@ class GroupDeleteUserSucces(BaseModel):
 class GroupUPdateUserSucces(BaseModel):
     detail: str = Field(examples=['Se ha cambiado los permisos del usuario en el grupo'])
 
+class CommentCreateSucces(BaseModel):
+    detail: str = Field(examples=['New comment created'])
+
+class CommentUpdateSucces(BaseModel):
+    detail: str = Field(examples=['Comment successfully updated'])
+
+class CommentDeleteSucces(BaseModel):
+    detail: str = Field(examples=['Comment successfully deleted'])
+
 class NotFound(BaseModel):
     detail: str = Field(examples=[
             [

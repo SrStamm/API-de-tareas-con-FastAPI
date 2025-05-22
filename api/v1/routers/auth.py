@@ -247,11 +247,13 @@ async def refresh(
             "scope":'token_refresh'}
 
         encoded_refresh_token = jwt.encode(refresh_token, SECRET, algorithm=ALGORITHM)
-
-        return {"access_token" : encoded_access_token, "token_type" : "bearer", "refresh_token": encoded_refresh_token}
+        token_data = {"access_token" : encoded_access_token, "token_type" : "bearer", "refresh_token": encoded_refresh_token}
+        return schemas.Token(**token_data)
     
     except JWTError as e:
-        logger.error(f'Token invalido: {str(e)}')
+        logger.error(f'Token invalido durante refresh: Error message: {str(e)}')
+        if hasattr(e, 'claims'):
+            logger.error(f'Problematic claims: {e.claims}')
         raise exceptions.InvalidToken()
     
     except SQLAlchemyError as e:
@@ -297,12 +299,11 @@ async def logout(
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='logout')
 
-
 @router.get('/expired')
 def get_expired_sessions(
         session: Session = Depends(get_session)):
     try:
-        stmt = (select(db_models.Session)
+        stmt = (select(db_models.Session.sub, db_models.Session.is_active, db_models.Session.expires_at)
                 .where(or_(db_models.Session.is_active == False,
                             db_models.Session.expires_at < datetime.now(timezone.utc))))
 
