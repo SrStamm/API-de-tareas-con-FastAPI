@@ -26,7 +26,7 @@ async def get_groups(
         request: Request,
         limit:int = 10,
         skip: int = 0,
-        session: Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]:
+        session: Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]: 
 
     try:
         key = f'groups:limit:{limit}:offset:{skip}'

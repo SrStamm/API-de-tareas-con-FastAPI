@@ -5,6 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv
 import os
 from models.db_models import Group, Project, User, Task
+import redis.asyncio as redis
 
 load_dotenv()
 
@@ -26,7 +27,6 @@ def create_db_and_tables():
     except Exception as e:
         raise Exception(f"Error al conectar a la base de datos: {e}, {e.args}")
 
-
 def get_session():
     session = Session(engine)
     try:
@@ -34,7 +34,8 @@ def get_session():
     finally:
         session.close()
 
-
-import redis.asyncio as redis
-
+# Usar para Docker
 redis_client = redis.Redis(host='redis', port=6379, db=0)
+
+# Usar para Testing
+# redis_client = redis.Redis(host='localhost', port=6379, db=0)
