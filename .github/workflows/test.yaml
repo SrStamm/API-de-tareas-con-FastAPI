@@ -12,14 +12,14 @@ jobs:
     env:
       ALGORITHM: HS256
       SECRET_KEY: MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr
-      # AÑADE ESTA LÍNEA para configurar el host de Redis
-      REDIS_HOST: redis 
-      # Si también usas PostgreSQL, es buena idea definirlo:
-      # DB_HOST: postgres
-      # DB_PORT: 5432
-      # DB_USER: postgres
-      # DB_PASSWORD: amaterasu
-      # DB_NAME: database
+      # Asegúrate de que estas variables estén presentes:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      DATABASE_URL: postgresql+psycopg2://postgres:amaterasu@postgres:5432/database # <-- Esto es importante para database.py
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: amaterasu
+      POSTGRES_DB: database
 
     services:
       # Configuración para PostgreSQL
