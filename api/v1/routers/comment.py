@@ -80,7 +80,7 @@ def get_all_comments(
         description='Create a new comment on a specific task. Need "content" data string',
         response_model=responses.CommentCreateSucces,
         responses={
-            200:{'detail':'Comment successfully created', 'model':schemas.CreateComment},
+            201:{'detail':'Comment successfully created', 'model':schemas.CreateComment},
             404:{'detail':'Comments in Task not found', 'model':responses.NotFound},
             500:{'detail':'Internal error', 'model':responses.DatabaseErrorResponse}
         })

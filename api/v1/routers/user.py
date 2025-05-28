@@ -51,9 +51,10 @@ async def get_users(
 @router.post(
         '',
         description="""Create a new user. Nedd a username, an email and a password""",
-        responses={ 200: {'description':'User created', 'model':responses.UserCreateSucces},
-                    406: {'description':'Data conflict', 'model':responses.UserConflictError},
-                    500: {'description':'Internal error', 'model':responses.DatabaseErrorResponse}}) 
+        responses={
+            201: {'description':'User created', 'model':responses.UserCreateSucces},
+            406: {'description':'Data conflict', 'model':responses.UserConflictError},
+            500: {'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("5/minute")
 async def create_user(
         request:Request,

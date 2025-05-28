@@ -2,9 +2,8 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
-from db.database import get_session, Session, select, or_
+from db.database import get_session, Session, select, or_, SQLAlchemyError
 from passlib.context import CryptContext
-from sqlalchemy.exc import SQLAlchemyError
 from models import db_models, schemas, exceptions, responses
 import os
 from core.logger import logger

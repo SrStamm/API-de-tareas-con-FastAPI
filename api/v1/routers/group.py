@@ -69,7 +69,7 @@ async def get_groups(
         description=""" The authenticated user creates a new group, needs a 'name' string, and an optional 'description' string.
                         The user is automatically part of the group """,
         responses={
-            200:{'description':'Group created', 'model':responses.GroupCreateSucces},
+            201:{'description':'Group created', 'model':responses.GroupCreateSucces},
             500:{'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
 async def create_group(
@@ -239,7 +239,7 @@ async def get_groups_in_user(
         '/{group_id}/{user_id}',
         description='Allows an authenticated user with Administrator or Editor rol to append a new user to group.',
         responses={
-                200:{'description':'User added to group', 'model':responses.GroupAppendUserSucces},
+                201:{'description':'User added to group', 'model':responses.GroupAppendUserSucces},
                 400:{'description':'request error', 'model':responses.ErrorInRequest},
                 401:{'description':'User not authorized', 'model':responses.NotAuthorized},
                 404:{'description':'Group not found', 'model':responses.NotFound},

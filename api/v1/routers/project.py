@@ -125,7 +125,7 @@ async def get_projects(
         description= """Allows create an new proyect on the group to authenticated user.
                         To create it, you need an 'title', optional 'description'""",
         responses={
-            200:{'description':'Project created', 'model':responses.ProjectCreateSucces},
+            201:{'description':'Project created', 'model':responses.ProjectCreateSucces},
             404:{'description':'Group not found','model':responses.NotFound},
             500:{'description':'Internal error','model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
@@ -267,7 +267,7 @@ async def delete_project(
         description= """Allows an authenticated user with Administrator permissions
                         to add a new user to the proyect if it exists in the group.""",
         responses={
-            200:{'description':'User added to project', 'model':responses.ProjectAppendUserSucces},
+            201:{'description':'User added to project', 'model':responses.ProjectAppendUserSucces},
             400:{'description':'Error in request', 'model':responses.ErrorInRequest},
             401:{'description':'User not authorized','model':responses.NotAuthorized},
             404:{'description':'Group or project not found','model':responses.NotFound},

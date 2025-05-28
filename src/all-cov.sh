@@ -6,6 +6,7 @@ rm -r htmlcov/
 echo "Iniciando Redis:"
 docker start redis-stack
 
+source env/bin/activate
 pytest --cov=. --cov-report=html
 
 echo "Test terminado"

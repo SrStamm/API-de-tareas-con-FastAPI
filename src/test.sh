@@ -1,4 +1,6 @@
 #! /bin/bash
+source env/bin/activate
+
 echo "Iniciando Test"
 echo "Iniciando Redis:"
 docker start redis-stack task-db

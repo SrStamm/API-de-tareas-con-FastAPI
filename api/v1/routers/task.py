@@ -176,9 +176,10 @@ async def get_task_in_project(
 @router.post(
         '/{project_id}',
         description='Create a new task from the proyect',
-        responses={ 200: {'description':'Task created', 'model':responses.TaskCreateSucces},
-                    404: {'description':'Data not found', 'model':responses.DataNotFound},
-                    500: {'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
+        responses={
+            201: {'description':'Task created', 'model':responses.TaskCreateSucces},
+            404: {'description':'Data not found', 'model':responses.DataNotFound},
+            500: {'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
 async def create_task(
         request:Request,
