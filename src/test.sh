@@ -7,7 +7,7 @@ source env/bin/activate || echo "No se pudo activar el entorno virtual, probable
 echo "🚀 Iniciando tests..."
 
 echo "📦 Levantando contenedores de Redis y PostgreSQL"
-docker start redis-stack task-db || docker-compose -f docker-compose.test.yml up -d
+docker start redis-stack task-db
 
 echo "🔍 Ejecutando Pytest"
 pytest -q --disable-warnings
