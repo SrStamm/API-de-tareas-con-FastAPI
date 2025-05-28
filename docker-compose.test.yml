@@ -1,0 +1,21 @@
+services:
+  task-db:
+    image: postgres:13
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-amaterasu}
+      POSTGRES_DB: ${POSTGRES_DB:-database}
+    ports:
+      - "5432:5432"
+    env_file: .env
+
+  redis:
+    image: redis/redis-stack:latest
+    restart: always
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-sasaki19}
+    ports:
+      - "6379:6379"
+      - "8001:8001"
+    env_file: .env
