@@ -9,6 +9,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      ALGORITHM: HS256
+      SECRET_KEY: MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr
 
     services:
       # Configuración para PostgreSQL
