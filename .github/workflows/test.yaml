@@ -12,6 +12,14 @@ jobs:
     env:
       ALGORITHM: HS256
       SECRET_KEY: MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr
+      # AÑADE ESTA LÍNEA para configurar el host de Redis
+      REDIS_HOST: redis 
+      # Si también usas PostgreSQL, es buena idea definirlo:
+      # DB_HOST: postgres
+      # DB_PORT: 5432
+      # DB_USER: postgres
+      # DB_PASSWORD: amaterasu
+      # DB_NAME: database
 
     services:
       # Configuración para PostgreSQL
@@ -59,11 +67,7 @@ jobs:
         run: flake8 ./src --count --exit-zero --max-line-length=127 --statistics
 
       - name: Wait for services to be ready
-        # Aunque los health checks de 'services' ayudan, esta espera adicional
-        # puede ser útil para asegurar que las bases de datos estén completamente inicializadas.
         run: sleep 10
 
       - name: Run tests with test.sh
-        # Asegúrate de que tu script ci-test.sh y tu código Python
-        # usen 'postgres' como host para PostgreSQL y 'redis' para Redis.
         run: bash ./src/ci-test.sh

@@ -33,8 +33,40 @@ def test_db():
             print(f"Error al eliminar test.db: {e}")
             raise
 
+@pytest_asyncio.fixture(scope="function")
+async def redis_client():
+    # Lee el host de Redis de la variable de entorno REDIS_HOST
+    # Si no está definida (ej. en desarrollo local), usa 'localhost' como fallback
+    redis_host = os.getenv("REDIS_HOST", "localhost")
+    client = redis.Redis(host=redis_host, port=6379, db=0)
+    try:
+        await client.ping()
+        print(f"Conexión a Redis ({redis_host}:6379) establecida y verificada.")
+    except redis.exceptions.ConnectionError as e:
+        print(f"ERROR: No se pudo conectar a Redis ({redis_host}:6379) al inicio del test: {e}")
+        raise
+    yield client
+    try:
+        await client.close()
+        print(f"Conexión a Redis ({redis_host}:6379) cerrada.")
+    except Exception as e:
+        print(f"ADVERTENCIA: Error al cerrar la conexión de Redis ({redis_host}:6379): {e}")
+
+# Asegúrate de que tu fixture clean_redis use el redis_client inyectado
+@pytest_asyncio.fixture(scope="function")
+async def clean_redis(redis_client): # Depende de redis_client
+    yield
+    try:
+        await redis_client.flushdb() # Limpieza completa para CI/CD
+        print("Redis flushed successfully during teardown.")
+    except redis.exceptions.ConnectionError as e:
+        print(f"ADVERTENCIA: Error al limpiar Redis en teardown (probablemente cierre de red): {e}")
+    except Exception as e:
+        print(f"ADVERTENCIA: Error inesperado al limpiar Redis en teardown: {e}")
+
+# Asegúrate de que test_session también inyecte redis_client y no intente cerrarlo
 @pytest.fixture
-def test_session(test_db):
+def test_session(test_db, redis_client):
     session = Session(test_db)
     try:
         yield session
@@ -56,49 +88,6 @@ async def async_client(test_session):
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client
     app.dependency_overrides.clear()
-
-# Asegúrate de tener un fixture 'redis_client' que configure la conexión a Redis.
-# Si tu redis_client ya existe, este fixture lo usará.
-# Si no lo tienes, aquí tienes un ejemplo de cómo podría verse:
-@pytest.fixture(scope="function") # 'function' para asegurar limpieza por cada test
-async def redis_client():
-    # Asegúrate de que el host y puerto coincidan con tu configuración de GitHub Actions services
-    client = redis.Redis(host='redis', port=6379, db=0)
-    try:
-        # Intenta un ping para verificar la conexión al inicio del test
-        await client.ping()
-        print("Conexión a Redis establecida y verificada.")
-    except ConnectionError as e:
-        print(f"ERROR: No se pudo conectar a Redis al inicio del test: {e}")
-        # Considera levantar una excepción aquí si la conexión a Redis es crítica
-        raise
-    yield client
-    # El teardown se ejecuta después del test/función
-    try:
-        await client.close() # Cierra la conexión
-        print("Conexión a Redis cerrada.")
-    except Exception as e:
-        # Manejo básico de errores si el cierre falla (poco probable)
-        print(f"ADVERTENCIA: Error al cerrar la conexión de Redis: {e}")
-
-@pytest.fixture(scope="function") # Mantener 'function' para aislamiento de tests
-async def clean_redis(redis_client): # Este fixture ahora depende de redis_client
-    # El código dentro de 'yield' se ejecuta ANTES de cada test que lo use.
-    # Aquí puedes hacer alguna configuración si es necesario.
-    yield
-
-    # El código después de 'yield' se ejecuta como TEARDOWN después de cada test.
-    try:
-        # Para CI/CD, la limpieza completa es lo más fiable.
-        await redis_client.flushdb()
-        print("Redis flushed successfully during teardown.")
-    except ConnectionError as e:
-        # Capturamos específicamente el error de conexión de Redis
-        print(f"ADVERTENCIA: Error al limpiar Redis en teardown (probablemente cierre de red): {e}")
-    except Exception as e:
-        # Captura cualquier otra excepción inesperada
-        print(f"ADVERTENCIA: Error inesperado al limpiar Redis en teardown: {e}")
-
 
 
 @pytest.fixture
