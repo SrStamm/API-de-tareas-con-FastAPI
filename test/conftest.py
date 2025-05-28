@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from fastapi.testclient import TestClient
 from main import app
 from sqlmodel import SQLModel, create_engine, Session
-from db.database import get_session, select, redis
+from db.database import get_session, select, redis, redis_basic
 from models import db_models
 from api.v1.routers.auth import encrypt_password
 
@@ -42,7 +42,7 @@ async def redis_client():
     try:
         await client.ping()
         print(f"Conexión a Redis ({redis_host}:6379) establecida y verificada.")
-    except redis.exceptions.ConnectionError as e:
+    except redis_basic.ConnectionError as e:
         print(f"ERROR: No se pudo conectar a Redis ({redis_host}:6379) al inicio del test: {e}")
         raise
     yield client
@@ -59,7 +59,7 @@ async def clean_redis(redis_client): # Depende de redis_client
     try:
         await redis_client.flushdb() # Limpieza completa para CI/CD
         print("Redis flushed successfully during teardown.")
-    except redis.exceptions.ConnectionError as e:
+    except redis_basic.ConnectionError as e:
         print(f"ADVERTENCIA: Error al limpiar Redis en teardown (probablemente cierre de red): {e}")
     except Exception as e:
         print(f"ADVERTENCIA: Error inesperado al limpiar Redis en teardown: {e}")
