@@ -13,8 +13,8 @@ import uuid
 router = APIRouter(tags=['Login'])
 
 # Duracion de los tokens
-ACCESS_TOKEN_DURATION = int(os.environ.get('ACCESS_TOKEN_DURATION'), 15)
-REFRESH_TOKEN_DURATION = int(os.environ.get('REFRESH_TOKEN_DURATION'), 7)
+ACCESS_TOKEN_DURATION = int(os.environ.get('ACCESS_TOKEN_DURATION', '15'))
+REFRESH_TOKEN_DURATION = int(os.environ.get('REFRESH_TOKEN_DURATION' '7'))
 
 ALGORITHM = os.environ.get('ALGORITHM')
 
