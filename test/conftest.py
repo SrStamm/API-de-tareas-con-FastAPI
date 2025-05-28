@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from fastapi.testclient import TestClient
 from main import app
 from sqlmodel import SQLModel, create_engine, Session
-from db.database import get_session, select, redis_client
+from db.database import get_session, select, redis
 from models import db_models
 from api.v1.routers.auth import encrypt_password
 
@@ -40,7 +40,6 @@ def test_session(test_db):
         yield session
     finally:
         session.close()
-        redis_client.aclose()
 
 @pytest.fixture
 def client(test_session):
@@ -58,44 +57,49 @@ async def async_client(test_session):
         yield client
     app.dependency_overrides.clear()
 
-@pytest_asyncio.fixture(scope="function")
-async def clean_redis():
-    # Limpia Redis con keys especificas
+# Asegúrate de tener un fixture 'redis_client' que configure la conexión a Redis.
+# Si tu redis_client ya existe, este fixture lo usará.
+# Si no lo tienes, aquí tienes un ejemplo de cómo podría verse:
+@pytest.fixture(scope="function") # 'function' para asegurar limpieza por cada test
+async def redis_client():
+    # Asegúrate de que el host y puerto coincidan con tu configuración de GitHub Actions services
+    client = redis.Redis(host='redis', port=6379, db=0)
+    try:
+        # Intenta un ping para verificar la conexión al inicio del test
+        await client.ping()
+        print("Conexión a Redis establecida y verificada.")
+    except ConnectionError as e:
+        print(f"ERROR: No se pudo conectar a Redis al inicio del test: {e}")
+        # Considera levantar una excepción aquí si la conexión a Redis es crítica
+        raise
+    yield client
+    # El teardown se ejecuta después del test/función
+    try:
+        await client.close() # Cierra la conexión
+        print("Conexión a Redis cerrada.")
+    except Exception as e:
+        # Manejo básico de errores si el cierre falla (poco probable)
+        print(f"ADVERTENCIA: Error al cerrar la conexión de Redis: {e}")
+
+@pytest.fixture(scope="function") # Mantener 'function' para aislamiento de tests
+async def clean_redis(redis_client): # Este fixture ahora depende de redis_client
+    # El código dentro de 'yield' se ejecuta ANTES de cada test que lo use.
+    # Aquí puedes hacer alguna configuración si es necesario.
     yield
-    async for key in redis_client.scan_iter('groups:limit:*:offset:*'):
-        await redis_client.delete(key)
 
-    async for key in redis_client.scan_iter('groups:user_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
+    # El código después de 'yield' se ejecuta como TEARDOWN después de cada test.
+    try:
+        # Para CI/CD, la limpieza completa es lo más fiable.
+        await redis_client.flushdb()
+        print("Redis flushed successfully during teardown.")
+    except ConnectionError as e:
+        # Capturamos específicamente el error de conexión de Redis
+        print(f"ADVERTENCIA: Error al limpiar Redis en teardown (probablemente cierre de red): {e}")
+    except Exception as e:
+        # Captura cualquier otra excepción inesperada
+        print(f"ADVERTENCIA: Error inesperado al limpiar Redis en teardown: {e}")
 
-    async for key in redis_client.scan_iter('groups:users:group_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
 
-    async for key in redis_client.scan_iter('projects:group_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('project:user:user_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('project:users:group_id:*:project_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('users:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('task:user:user_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('task:users:project_id:*:user_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-    async for key in redis_client.scan_iter('task:users:task_id:*:limit:*:offset:*'):
-        await redis_client.delete(key)
-
-@pytest_asyncio.fixture(autouse=True)
-async def close_redis_after_tests():
-    yield
-    await redis_client.aclose()
 
 @pytest.fixture
 def test_user(test_session):
