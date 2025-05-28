@@ -1,15 +1,21 @@
-#! /bin/bash
-source env/bin/activate
+#!/bin/bash
+set -e  # <- 🔒 Termina el script si ocurre un error
 
-echo "Iniciando Test"
-echo "Iniciando Redis:"
-docker start redis-stack task-db
+# Activar entorno virtual (opcional en CI si usás containers o poetry/pipx)
+source env/bin/activate || echo "No se pudo activar el entorno virtual, probablemente en CI"
 
+echo "🚀 Iniciando tests..."
+
+echo "📦 Levantando contenedores de Redis y PostgreSQL"
+docker start redis-stack task-db || docker-compose -f docker-compose.test.yml up -d
+
+echo "🔍 Ejecutando Pytest"
 pytest -q --disable-warnings
 
-echo "Test terminado"
-echo "Cerrando Redis:"
+echo "✅ Test finalizados correctamente"
+
+echo "🛑 Deteniendo contenedores"
 docker stop redis-stack task-db
 
-echo "Eliminado cache de tests"
+echo "🧹 Eliminando cachés de tests"
 find . -type d -name "__pycache__" -exec rm -r {} + && rm -rf .pytest_cache

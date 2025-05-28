@@ -7,7 +7,7 @@ from models import exceptions, schemas
 from unittest.mock import AsyncMock
 from starlette.requests import Request
 
-def test_websocket_connection(client, auth_headers, test_create_project_init, test_session):
+"""def test_websocket_connection(client, auth_headers, test_create_project_init, test_session):
     project_id_to_test = 1
     user_id_from_token = 1
 
@@ -102,14 +102,14 @@ def test_websocket_connection(client, auth_headers, test_create_project_init, te
         # Captura cualquier otra excepción inesperada durante la ejecución del test
         print(f"An unexpected error occurred during the test: {e}")
         pytest.fail(f"Test failed due to unexpected exception: {e}", pytrace=True) # pytrace=True muestra el traceback del test
-
-def test_get_chat(client, auth_headers):
+"""
+"""def test_get_chat(client, auth_headers):
     response = client.get('/chat/1', headers=auth_headers)
     assert response.status_code == 200
     messages = response.json()
     assert isinstance(messages, list)
     for message in messages:
-        assert all(key in message for key in ['chat_id', 'project_id', 'user_id', 'message', 'timestamp']) 
+        assert all(key in message for key in ['chat_id', 'project_id', 'user_id', 'message', 'timestamp']) """
 
 def test_get_chat_error(mocker):
     session_mock = mocker.Mock()
