@@ -12,17 +12,16 @@ jobs:
     env:
       ALGORITHM: HS256
       SECRET_KEY: MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr
-      REDIS_HOST: redis  # Esto es correcto para el entorno de CI
+      REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
       DATABASE_URL: postgresql+psycopg2://postgres:amaterasu@postgres:5432/database
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: amaterasu
       POSTGRES_DB: database
-      CI: "true"  # Añade esta variable para que tu código detecte que está en CI
+      CI: "true"
 
     services:
-      # Configuración para PostgreSQL
       postgres:
         image: postgres:latest
         env:
@@ -36,8 +35,8 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --name postgres
 
-      # Configuración para Redis Stack
       redis:
         image: redis/redis-stack:latest
         ports:
@@ -47,6 +46,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+          --name redis
 
     steps:
       - name: Checkout repo
@@ -57,27 +57,21 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install Flake8
-        run: pip install flake8
-
-      - name: Install dependencies for testing
-        run: pip install -r requirements-test.txt
+      - name: Install dependencies
+        run: |
+          pip install flake8
+          pip install -r requirements-test.txt
 
       - name: Lint code
         run: flake8 ./src --count --exit-zero --max-line-length=127 --statistics
 
-      - name: Wait for services to be ready
+      - name: Wait for services
         run: |
-          echo "Waiting for services..."
-          # Espera a PostgreSQL
-          while ! docker exec postgres pg_isready -U postgres; do
-            sleep 2
-          done
-          # Espera a Redis
-          while ! docker exec redis redis-cli ping | grep -q PONG; do
-            sleep 2
-          done
-          echo "Services are ready!"
+          echo "Waiting for services to be ready..."
 
-      - name: Run tests with test.sh
+          timeout 120s bash -c 'until docker inspect --format "{{.State.Health.Status}}" postgres | grep -q "healthy"; do sleep 2; echo "Waiting for PostgreSQL..."; done'
+          timeout 60s bash -c 'until docker inspect --format "{{.State.Health.Status}}" redis | grep -q "healthy"; do sleep 2; echo "Waiting for Redis..."; done'
+          echo "All services are ready!"
+
+      - name: Run tests
         run: bash ./src/ci-test.sh
