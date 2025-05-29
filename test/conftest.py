@@ -12,10 +12,10 @@ from sqlmodel import SQLModel, create_engine, Session
 from db.database import get_session, select
 from models import db_models
 from api.v1.routers.auth import encrypt_password
+from core.logger import logger
+import asyncio
 
-from redis.asyncio import Redis as AsyncRedis
-from redis import Redis as SyncRedis
-import redis
+import redis.asyncio as redis
 
 from httpx import AsyncClient, ASGITransport
 
@@ -43,28 +43,16 @@ def redis_host():
 
 # Fixture para tests asíncronos
 @pytest_asyncio.fixture(scope="function")
-async def async_redis_client(redis_host):
-    client = AsyncRedis(host='localhost', port=6379, db=0)
-    try:
-        await client.ping()
-        yield client
-    finally:
-        await client.close()
+async def async_redis_client():
+    client = await redis.Redis(host='localhost', port=6379, db=0)
+    yield client
 
-# Fixture para tests síncronos
-@pytest.fixture(scope="function")
-def sync_redis_client(redis_host):
-    client = SyncRedis(host='localhost', port=6379, db=0)
-    try:
-        client.ping()
-        yield client
-    finally:
-        client.close()
-
+    await client.flushdb()
+    await client.close()
 
 # Actualiza tus fixtures que dependen de Redis
 @pytest.fixture
-def test_session(test_db, sync_redis_client):  # Usa la versión síncrona
+def test_session(test_db):  # Usa la versión síncrona
     session = Session(test_db)
     try:
         yield session
@@ -83,7 +71,7 @@ async def clean_redis(async_redis_client):  # Cambia de redis_client a async_red
     except Exception as e:
         print(f"ADVERTENCIA: Error inesperado al limpiar Redis en teardown: {e}")
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def async_client(test_session, async_redis_client):
     app.dependency_overrides[get_session] = lambda: test_session
     
@@ -140,7 +128,10 @@ def auth_headers2(client, test_user2):
 
 @pytest_asyncio.fixture(scope="function")
 async def test_create_group_init(async_client, auth_headers, test_user2):
+    loop = asyncio.get_running_loop()
+    logger.debug(f"Event loop running: {loop.is_running()}, closed: {loop.is_closed()}")
     response = await async_client.post('/group', headers=auth_headers, json={'name': 'probando'})
+    logger.debug(f"After POST, loop closed: {loop.is_closed()}")
     assert response.status_code == 200
     await async_client.post('/group/1/2', headers=auth_headers)
 
