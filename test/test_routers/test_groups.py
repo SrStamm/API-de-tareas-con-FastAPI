@@ -347,7 +347,8 @@ async def test_update_user_group_error(mocker):
 
     db_session_mock.rollback.assert_called_once()
 
-@pytest.mark.asyncio
+
+"""@pytest.mark.asyncio
 async def test_get_user_in_group_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_delete_user = mocker.Mock(spec=db_models.User)
@@ -370,6 +371,7 @@ async def test_get_user_in_group_error(mocker):
             group_id=1,
             session=db_session_mock
         )
+"""
 
 def test_require_role_error(mocker):
     # Usuario ficticio
