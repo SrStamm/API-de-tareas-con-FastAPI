@@ -41,9 +41,8 @@ redis_port = int(os.getenv("REDIS_PORT", 6379))
 redis_db = int(os.getenv("REDIS_DB", 0))
 
 # En CI, usa una conexión síncrona para simplificar
-if os.getenv("CI") == "true":
-    import redis as redis_sync
-    redis_client = redis_sync.Redis(host=redis_host, port=redis_port, db=redis_db)
-else:
-    import redis.asyncio as redis
-    redis_client = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
+import redis.asyncio as redis
+redis_client = redis.Redis(
+        host=os.getenv("REDIS_HOST", "localhost"), 
+        port=int(os.getenv("REDIS_PORT", 6379)), 
+        db=int(os.getenv("REDIS_DB", 0)))

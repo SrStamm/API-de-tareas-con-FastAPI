@@ -13,14 +13,14 @@ jobs:
     env:
       ALGORITHM: HS256
       SECRET_KEY: MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr
-      REDIS_HOST: localhost  # Cambiado a localhost
+      REDIS_HOST: localhost
       REDIS_PORT: 6379
       REDIS_DB: 0
       DATABASE_URL: postgresql+psycopg2://postgres:amaterasu@postgres:5432/database
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: amaterasu
       POSTGRES_DB: database
-      CI: "true"
+      CI: "false"
 
     services:
       postgres:

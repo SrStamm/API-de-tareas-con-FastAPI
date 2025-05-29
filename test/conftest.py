@@ -44,7 +44,7 @@ def redis_host():
 # Fixture para tests asíncronos
 @pytest_asyncio.fixture(scope="function")
 async def async_redis_client(redis_host):
-    client = AsyncRedis(host=redis_host, port=6379, db=0)
+    client = AsyncRedis(host='localhost', port=6379, db=0)
     try:
         await client.ping()
         yield client
@@ -54,7 +54,7 @@ async def async_redis_client(redis_host):
 # Fixture para tests síncronos
 @pytest.fixture(scope="function")
 def sync_redis_client(redis_host):
-    client = SyncRedis(host=redis_host, port=6379, db=0)
+    client = SyncRedis(host='localhost', port=6379, db=0)
     try:
         client.ping()
         yield client
