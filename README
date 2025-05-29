@@ -100,18 +100,5 @@ REFRESH_TOKEN_DURATION=60
 - Swagger UI: [`http://localhost:8000/docs']
 - Redoc: [`http://localhost:8000/redoc']
 
-## Testing
-
-Para correr los test:
-```bash
-pytest -q
-
-# o
-
-pytest -v
-```
-
-También se podrían usar los bash scripts que se encuentran en la carpeta 'src'.
-
 ### Licencia
 Este proyecto está bajo la licencia MIT.
