@@ -38,7 +38,7 @@ jobs:
           --name postgres
 
       redis:
-        image: redis/redis-stack:latest
+        image: redis:6
         ports:
           - 6379:6379
         options: >-
@@ -68,10 +68,20 @@ jobs:
       - name: Wait for services
         run: |
           echo "Waiting for services to be ready..."
-
           timeout 120s bash -c 'until docker inspect --format "{{.State.Health.Status}}" postgres | grep -q "healthy"; do sleep 2; echo "Waiting for PostgreSQL..."; done'
           timeout 60s bash -c 'until docker inspect --format "{{.State.Health.Status}}" redis | grep -q "healthy"; do sleep 2; echo "Waiting for Redis..."; done'
           echo "All services are ready!"
+
+      - name: Test Redis connection
+        run: |
+          docker exec redis redis-cli ping
+
+      - name: Check Redis logs
+        run: docker logs redis
+
+      - name: Test DNS resolution
+        run: |
+          docker run --rm --network container:redis alpine nslookup redis
 
       - name: Run tests
         run: bash ./src/ci-test.sh
