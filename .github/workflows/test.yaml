@@ -5,6 +5,7 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -12,7 +13,7 @@ jobs:
     env:
       ALGORITHM: HS256
       SECRET_KEY: MW6mdMOU8Ga58KSty8BYakM185zW857fZlTBqdmp1JkVih3qqr
-      REDIS_HOST: localhost
+      REDIS_HOST: localhost  # Cambiado a localhost
       REDIS_PORT: 6379
       REDIS_DB: 0
       DATABASE_URL: postgresql+psycopg2://postgres:amaterasu@postgres:5432/database
@@ -72,6 +73,9 @@ jobs:
           timeout 60s bash -c 'until docker inspect --format "{{.State.Health.Status}}" redis | grep -q "healthy"; do sleep 2; echo "Waiting for Redis..."; done'
           echo "All services are ready!"
 
+      - name: Configure vm.overcommit_memory
+        run: sudo sysctl vm.overcommit_memory=1
+
       - name: Test Redis connection
         run: |
           docker exec redis redis-cli ping
@@ -79,14 +83,9 @@ jobs:
       - name: Check Redis logs
         run: docker logs redis
 
-      - name: Test DNS resolution
+      - name: Inspect Redis container network
         run: |
-          docker run --rm --network container:redis alpine nslookup redis
+          docker inspect redis --format '{{json .NetworkSettings.Networks }}'
 
       - name: Run tests
-        run: |
-          docker run --rm --network container:redis \
-            -v $(pwd):/app \
-            -w /app \
-            python:3.12-slim \
-            bash -c "pip install -r requirements-test.txt && bash ./src/ci-test.sh"
+        run: bash ./src/ci-test.sh
