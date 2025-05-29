@@ -73,18 +73,18 @@ def test_session(test_db, sync_redis_client):  # Usa la versión síncrona
 
 # Asegúrate de que tu fixture clean_redis use el redis_client inyectado
 @pytest_asyncio.fixture(scope="function")
-async def clean_redis(redis_client): # Depende de redis_client
+async def clean_redis(async_redis_client):  # Cambia de redis_client a async_redis_client
     yield
     try:
-        await redis_client.flushdb() # Limpieza completa para CI/CD
+        await async_redis_client.flushdb()
         print("Redis flushed successfully during teardown.")
     except redis.ConnectionError as e:
-        print(f"ADVERTENCIA: Error al limpiar Redis en teardown (probablemente cierre de red): {e}")
+        print(f"ADVERTENCIA: Error al limpiar Redis en teardown: {e}")
     except Exception as e:
         print(f"ADVERTENCIA: Error inesperado al limpiar Redis en teardown: {e}")
 
 @pytest_asyncio.fixture
-async def async_client(test_session, async_redis_client):  # Añade la dependencia
+async def async_client(test_session, async_redis_client):
     app.dependency_overrides[get_session] = lambda: test_session
     
     transport = ASGITransport(app=app)
@@ -97,17 +97,6 @@ def client(test_session):
     app.dependency_overrides[get_session] = lambda: test_session
     yield TestClient(app)
     app.dependency_overrides.clear()
-
-@pytest_asyncio.fixture
-async def async_client(test_session):
-    app.dependency_overrides[get_session] = lambda: test_session
-    
-    transport = ASGITransport(app=app) # Se usa esto para transportar la app, ya que no sabe como manejar FastAPI
-
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
-        yield client
-    app.dependency_overrides.clear()
-
 
 @pytest.fixture
 def test_user(test_session):
