@@ -31,7 +31,7 @@ async def test_get_groups(async_client, auth_headers, clean_redis):
     assert response.status_code == 200
 
 @pytest.mark.asyncio
-async def test_get_groups_error(mocker, clean_redis):
+async def test_get_groups_error(mocker):
     db_session_mock = mocker.Mock()
     mock_request = mocker.Mock(spec=Request)
 
@@ -61,13 +61,13 @@ async def test_get_groups_in_user(async_client, auth_headers):
             (2, 2, 200, 'El usuario ha sido agregado al grupo')
         ]
 )
-async def test_append_user_group(async_client, auth_headers, group_id, user_id, status, respuesta, clean_redis):
+async def test_append_user_group(async_client, auth_headers, group_id, user_id, status, respuesta):
     response = await async_client.post(f'/group/{group_id}/{user_id}', headers=auth_headers)
     assert response.status_code == status
     assert response.json() == {'detail':respuesta}
 
 @pytest.mark.asyncio
-async def test_get_user_in_group(async_client, auth_headers, clean_redis):
+async def test_get_user_in_group(async_client, auth_headers):
     response = await async_client.get('/group/1/users', headers=auth_headers)
     assert response.status_code == 200
     groups = response.json()
@@ -143,7 +143,7 @@ async def test_create_group_error(mocker):
     db_session_mock.rollback.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_update_group_error(mocker, clean_redis):
+async def test_update_group_error(mocker):
     # Simula un usuario y una session
     mock_user = mocker.Mock(spec=db_models.User)
     mock_user.user_id = 1
@@ -177,7 +177,7 @@ async def test_update_group_error(mocker, clean_redis):
     db_session_mock.rollback.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_delete_group_error(mocker, clean_redis):
+async def test_delete_group_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     db_session_mock = mocker.Mock()
 
@@ -370,8 +370,6 @@ async def test_get_user_in_group_error(mocker):
             group_id=1,
             session=db_session_mock
         )
-
-    # db_session_mock.rollback.assert_called_once()
 
 def test_require_role_error(mocker):
     # Usuario ficticio

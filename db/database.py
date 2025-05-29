@@ -35,12 +35,12 @@ def get_session():
 
 # Usar para Docker
 redis_host = os.getenv("REDIS_HOST", "localhost")
-redis_port = int(os.getenv("REDIS_PORT", 6379))
-redis_db = int(os.getenv("REDIS_DB", 0))
+redis_port = int(os.getenv("REDIS_PORT", '6379'))
+redis_db = int(os.getenv("REDIS_DB", '0'))
 
 # En CI, usa una conexión síncrona para simplificar
 import redis.asyncio as redis
 redis_client = redis.Redis(
         host=os.getenv("REDIS_HOST", "localhost"), 
-        port=int(os.getenv("REDIS_PORT", 6379)), 
-        db=int(os.getenv("REDIS_DB", 0)))
+        port=int(os.getenv("REDIS_PORT", '6379')), 
+        db=int(os.getenv("REDIS_DB", '0')))

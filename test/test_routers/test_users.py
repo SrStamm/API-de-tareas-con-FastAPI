@@ -49,7 +49,11 @@ async def test_update_user(async_client, auth_headers2):
     assert response.json() == {'detail':'Se ha actualizado el usuario con exito'}
 
 @pytest.mark.asyncio
-async def test_delete_user(async_client, auth_headers):
+async def test_delete_user(async_client, auth_headers, mocker):
+    redis_client_mock = mocker.AsyncMock()
+    redis_client_mock.delete.return_value = None
+    mocker.patch("api.v1.routers.user.redis_client", redis_client_mock)
+    
     response = await async_client.delete('/user/me', headers=auth_headers)
     assert response.status_code == 200
     assert response.json() == {'detail':'Se ha eliminado el usuario'}

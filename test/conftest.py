@@ -24,6 +24,12 @@ engine = create_engine("sqlite:///./test/test.db")
 
 PASSWORD='0000'
 
+@pytest_asyncio.fixture(scope="session")
+def event_loop():
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
 @pytest.fixture(scope="module")
 def test_db():
     SQLModel.metadata.create_all(engine)
@@ -50,7 +56,6 @@ async def async_redis_client():
     await client.flushdb()
     await client.close()
 
-# Actualiza tus fixtures que dependen de Redis
 @pytest.fixture
 def test_session(test_db):  # Usa la versión síncrona
     session = Session(test_db)
@@ -59,9 +64,8 @@ def test_session(test_db):  # Usa la versión síncrona
     finally:
         session.close()
 
-# Asegúrate de que tu fixture clean_redis use el redis_client inyectado
 @pytest_asyncio.fixture(scope="function")
-async def clean_redis(async_redis_client):  # Cambia de redis_client a async_redis_client
+async def clean_redis(async_redis_client):
     yield
     try:
         await async_redis_client.flushdb()
@@ -70,13 +74,15 @@ async def clean_redis(async_redis_client):  # Cambia de redis_client a async_red
         print(f"ADVERTENCIA: Error al limpiar Redis en teardown: {e}")
     except Exception as e:
         print(f"ADVERTENCIA: Error inesperado al limpiar Redis en teardown: {e}")
+    finally:
+        await async_redis_client.close()
 
 @pytest_asyncio.fixture(scope="function")
-async def async_client(test_session, async_redis_client):
+async def async_client(test_session):
     app.dependency_overrides[get_session] = lambda: test_session
     
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+    # Explicitly set base_url to ensure scheme is included
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
         yield client
     app.dependency_overrides.clear()
 
@@ -134,7 +140,6 @@ async def test_create_group_init(async_client, auth_headers, test_user2):
     logger.debug(f"After POST, loop closed: {loop.is_closed()}")
     assert response.status_code == 200
     await async_client.post('/group/1/2', headers=auth_headers)
-
 
 @pytest_asyncio.fixture
 async def test_create_project_init(async_client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):

@@ -24,6 +24,8 @@ async def get_users(
         session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     try:
         key = f'users:limit:{limit}:offset:{skip}'
+        if not key:
+            logger.error(f'[get_users] Redis Key Error | Key Empty')
         cached = await redis_client.get(key)
 
         if cached:

@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from api.v1.routers import group, project, task, user, auth, ws, comment
 from db.database import create_db_and_tables
 from contextlib import asynccontextmanager
-from core.logger import logger
+from core.logger import logger, register_exceptions_handlers
 from core.limiter import limiter, _rate_limit_exceeded_handler, RateLimitExceeded
 from core.auto import run_scheduler_job
 from time import time
@@ -26,6 +26,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+register_exceptions_handlers(app)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -47,6 +49,12 @@ async def log_requests(request: Request, call_next):
     response = await call_next(request)
     duration = time() - start_time
     user = request.state.user if hasattr(request.state, 'user') else 'anonymous'
+    
+    # Use request.url.scheme instead of request.scope["scheme"]
+    scheme = request.url.scheme or "http"  # Fallback to 'http' if scheme is empty
+    if not scheme:
+        logger.warning(f"Invalid scheme in request URL: {request.url}")
+    
     logger.info(
         f"method={request.method} path={request.url.path} user={user} duration={duration:.3f}s status={response.status_code}"
     )

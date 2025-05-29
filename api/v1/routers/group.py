@@ -34,7 +34,7 @@ async def get_groups(
         cached = await redis_client.get(key)
 
         if cached:
-            logger.info(f'Redis Cache: {key}')
+            logger.info(f'[get_groups] Cache HIT - Key: {key}')
             decoded = json.loads(cached)
             return decoded
 
@@ -55,14 +55,18 @@ async def get_groups(
         # Guarda la respuesta
         try:
             await redis_client.setex(key, 300, json.dumps(to_cache, default=str))
+            logger.info(f'[get_groups] Cache SET - Key: {key}')
         except redis.RedisError as e:
-            logger.warning(f'Error al cachear en Redis: {e}') 
+            logger.warning(f'[get_groups] Redis Cache FAIL - Key: {key} | Error: {e}') 
 
         return to_cache
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al obtener los grupos {e}')
+        logger.error(f'[get_groups] Database Error:  {str(e)}')
         raise exceptions.DatabaseError(error=e, func='get_groups')
+    except Exception as e:
+        logger.error(f'[get_groups] Unexpected Error:  {str(e)}')
+        raise
 
 @router.post(
         '',
@@ -93,18 +97,24 @@ async def create_group(
         session.add(group_user)
         session.commit()
 
+
         # Elimina cache existente
         try:
             await redis_client.delete(f'groups:limit:*:offset:*')
+            logger.info(f'[create_group] Redis Cache Delete - Key: groups:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'Error al eliminar cache en Redis: {e}')
+            logger.warning(f'[create_group] Redis Cache Delete Error | Error: {str(e)}')
 
+        logger.info(f'[create_group] Group Create Success')
         return {'detail': 'Se ha creado un nuevo grupo de forma exitosa'}
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al crear un grupo {e}')
+        logger.error(f'[create_group] Database Error:  {str(e)}')
         session.rollback()
-        raise exceptions.DatabaseError(error=e, func='create_group')
+        raise exceptions.DatabaseError(error=e, func='get_groups')
+    except Exception as e:
+        logger.error(f'[create_group] Unexpected Error:  {str(e)}')
+        raise
 
 @router.patch(
         '/{group_id}',
@@ -126,27 +136,32 @@ async def update_group(
 
     try:
         found_group = get_group_or_404(group_id, session)
-        
+
         if updated_group.name and found_group.name != updated_group.name:
             found_group.name = updated_group.name
-            
+
         if updated_group.description and found_group.description != updated_group.description:
             found_group.description = updated_group.description
-        
+
         session.commit()
 
         # Elimina cache existente
         try:
             await redis_client.delete(f'groups:limit:*:offset:*')
+            logger.info(f'[update_group] Redis Cache Delete - Key: groups:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'Error al eliminar cache en Redis: {e}')
+            logger.warning(f'[update_group] Redis Cache Delete Error | Error: {str(e)}')
 
+        logger.info(f'[update_group] Group Create Success')
         return {'detail':'Se ha actualizado la informacion del grupo'}
-    
+
     except SQLAlchemyError as e:
-        logger.error(f'Error al actualizar el grupo {e}')
+        logger.error(f'[update_group] Database Error:  {str(e)}')
         session.rollback()
-        raise exceptions.DatabaseError(error=e, func='update_group')
+        raise exceptions.DatabaseError(error=e, func='get_groups')
+    except Exception as e:
+        logger.error(f'[update_group] Unexpected Error:  {str(e)}')
+        raise
 
 @router.delete(
         '/{group_id}',
@@ -174,15 +189,19 @@ async def delete_group(
         # Elimina cache existente
         try:
             await redis_client.delete(f'groups:limit:*:offset:*')
+            logger.info(f'[delete_group] Redis Cache Delete - Key: groups:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'Error al eliminar cache en Redis: {e}')
+            logger.warning(f'[delete_group] Redis Cache Delete Error | Error: {str(e)}')
 
         return {'detail':'Se ha eliminado el grupo'}
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al eliminar el grupo {e}')
+        logger.error(f'[delete_group] Database Error:  {str(e)}')
         session.rollback()
-        raise exceptions.DatabaseError(error=e, func='delete_group')
+        raise exceptions.DatabaseError(error=e, func='get_groups')
+    except Exception as e:
+        logger.error(f'[delete_group] Unexpected Error:  {str(e)}')
+        raise
 
 @router.get(
         '/me',
@@ -206,7 +225,7 @@ async def get_groups_in_user(
         cached = await redis_client.get(key)
 
         if cached:
-            logger.info(f'Redis Cache {key}')
+            logger.info(f'[get_groups_in_user] Cache Hit - Key: {str(key)}')
             decoded = json.loads(cached)
             return decoded
 
@@ -227,13 +246,20 @@ async def get_groups_in_user(
             for group in found_group]
 
         # Guarda la respuesta
-        await redis_client.setex(key, 600, json.dumps(to_cache, default=str))
+        try:
+            await redis_client.setex(key, 600, json.dumps(to_cache, default=str))
+            logger.info(f'[get_groups_in_user] Redis Cache Set - Key: {str(key)}')
+        except redis.RedisError as e:
+            logger.warning(f'[get_groups_in_user] Redis Cache Set Error | Error: {str(e)}')
 
         return to_cache
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al obtener los grupos donde pertenece el usuario {e}')
-        raise exceptions.DatabaseError(error=e, func='get_groups_in_user')
+        logger.error(f'[get_groups_in_user] Database Error:  {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='get_groups')
+    except Exception as e:
+        logger.error(f'[get_groups_in_user] Unexpected Error:  {str(e)}')
+        raise
 
 @router.post(
         '/{group_id}/{user_id}',
@@ -262,7 +288,7 @@ async def append_user_group(
         new_user = get_user_or_404(user_id, session)
 
         if new_user in found_group.users:
-            logger.error(f'El user {user_id} ya existe en el grupo {group_id}')
+            logger.error(f'[append_user_group] User {user_id} Append to Group {group_id} Error')
             raise exceptions.UserInGroupError(user_id=new_user.user_id, group_id=found_group.group_id)
 
         # Lo agrega al grupo
@@ -290,15 +316,20 @@ async def append_user_group(
         # Elimina cache existente
         try:
             await redis_client.delete(f'groups:user_id:{actual_user.user_id}:limit:*:offset:*')
+            logger.info(f'[append_user_group] Redis Cache Delete - Key: groups:user_id:{actual_user.user_id}:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'Error al eliminar cache en Redis: {e}')
+            logger.warning(f'[append_user_group] Redis Cache Delete Error | Error: {str(e)}')
 
+        logger.info(f'[append_user_group] User {user_id} Append to Group {group_id} Success')
         return {'detail':'El usuario ha sido agregado al grupo'}
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al agregar un usuario al grupo {e}')
+        logger.error(f'[append_user_group] Database Error:  {str(e)}')
         session.rollback()
-        raise exceptions.DatabaseError(error=e, func='append_user_group')
+        raise exceptions.DatabaseError(error=e, func='get_groups')
+    except Exception as e:
+        logger.error(f'[append_user_group] Unexpected Error:  {str(e)}')
+        raise
 
 @router.delete(
         '/{group_id}/{user_id}',
@@ -370,9 +401,12 @@ async def delete_user_group(
             raise exceptions.UserNotFoundError(user_id)
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al eliminar un usuario del grupo {e}')
+        logger.error(f'[delete_user_group] Database Error:  {str(e)}')
         session.rollback()
-        raise exceptions.DatabaseError(error=e, func='delete_user_group')
+        raise exceptions.DatabaseError(error=e, func='get_groups')
+    except Exception as e:
+        logger.error(f'[delete_user_group] Unexpected Error:  {str(e)}')
+        raise
 
 @router.patch(
         '/{group_id}/{user_id}',
@@ -441,9 +475,12 @@ async def update_user_group(
         return {'detail':'Se ha cambiado los permisos del usuario en el grupo'}
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al actualizar el usuario en el grupo')
+        logger.error(f'[update_user_group] Database Error:  {str(e)}')
         session.rollback()
-        raise exceptions.DatabaseError(error=e, func='update_user_group')
+        raise exceptions.DatabaseError(error=e, func='get_groups')
+    except Exception as e:
+        logger.error(f'[update_user_group] Unexpected Error:  {str(e)}')
+        raise
 
 @router.get(
         '/{group_id}/users',
@@ -465,7 +502,6 @@ async def get_user_in_group(
 
     try:
         key = f'groups:users:group_id:{group_id}:limit:{limit}:offset:{skip}'
-        # Busca si existe una respuesta guardada y la busca
         cached = await redis_client.get(key)
 
         if cached:
@@ -480,16 +516,13 @@ async def get_user_in_group(
                     .where(db_models.group_user.group_id == group_id)
                     .limit(limit).offset(skip))
 
-        search = session.exec(stmt)
-        results = search.all()
+        results = session.exec(stmt).all()
 
-        # Cachea la respuesta
         to_cache = [
             schemas.ReadGroupUser(user_id=user_id, username=username, role=role.value)
             for username, user_id, role in results
             ]
 
-        # Guarda la respuesta
         try:
             await redis_client.setex(key, 600, json.dumps([user_.model_dump() for user_ in to_cache], default=str))
         except redis.RedisError as e:
@@ -498,6 +531,8 @@ async def get_user_in_group(
         return to_cache
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al obtener los usuarios del grupo {e}')
-        session.rollback()
-        raise exceptions.DatabaseError(error=e, func='get_user_in_group')
+        logger.error(f'[get_user_in_group] Database Error:  {str(e)}')
+        raise exceptions.DatabaseError(error=e, func='get_groups')
+    except Exception as e:
+        logger.error(f'[get_user_in_group] Unexpected Error:  {str(e)}')
+        raise
