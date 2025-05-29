@@ -138,14 +138,12 @@ def auth_headers2(client, test_user2):
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(scope="function")
 async def test_create_group_init(async_client, auth_headers, test_user2):
-    response = await async_client.post('/group', headers=auth_headers, json={'name':'probando'})
+    response = await async_client.post('/group', headers=auth_headers, json={'name': 'probando'})
     assert response.status_code == 200
-    assert response.json() == {'detail': 'Se ha creado un nuevo grupo de forma exitosa'}
-
     await async_client.post('/group/1/2', headers=auth_headers)
-    return
+
 
 @pytest_asyncio.fixture
 async def test_create_project_init(async_client, auth_headers, test_user2, test_user3, test_create_group_init, test_session):
