@@ -84,4 +84,9 @@ jobs:
           docker run --rm --network container:redis alpine nslookup redis
 
       - name: Run tests
-        run: bash ./src/ci-test.sh
+        run: |
+          docker run --rm --network container:redis \
+            -v $(pwd):/app \
+            -w /app \
+            python:3.12-slim \
+            bash -c "pip install -r requirements-test.txt && bash ./src/ci-test.sh"
