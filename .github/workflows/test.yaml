@@ -88,4 +88,4 @@ jobs:
           docker inspect redis --format '{{json .NetworkSettings.Networks }}'
 
       - name: Run tests
-        run: bash ./src/ci-test.sh
+        run: pytest -q --disable-warnings
