@@ -5,8 +5,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from dotenv import load_dotenv
 import os
 from models.db_models import Group, Project, User, Task
-import redis.asyncio as redis
-import redis.exceptions as redis_basic
 
 load_dotenv()
 
