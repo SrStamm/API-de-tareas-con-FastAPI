@@ -67,7 +67,17 @@ jobs:
         run: flake8 ./src --count --exit-zero --max-line-length=127 --statistics
 
       - name: Wait for services to be ready
-        run: sleep 10
+        run: |
+          echo "Waiting for services..."
+          # Espera a PostgreSQL
+          while ! docker exec postgres pg_isready -U postgres; do
+            sleep 2
+          done
+          # Espera a Redis
+          while ! docker exec redis redis-cli ping | grep -q PONG; do
+            sleep 2
+          done
+          echo "Services are ready!"
 
       - name: Run tests with test.sh
         run: bash ./src/ci-test.sh
