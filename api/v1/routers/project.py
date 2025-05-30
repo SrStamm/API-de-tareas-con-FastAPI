@@ -7,6 +7,7 @@ from core.utils import get_group_or_404, get_user_or_404, found_project_or_404
 from core.permission import require_permission, require_role
 from core.logger import logger
 from core.limiter import limiter
+from core.event_ws import format_notification
 from .ws import manager
 from datetime import datetime
 import json
@@ -31,12 +32,11 @@ async def get_projects_iam(
 
     try:
         key = f'project:user:user_id:{user.user_id}:limit:{limit}:offset:{skip}'
-        # Busca si existe una respuesta cacheada
         cached = await redis_client.get(key)
 
         # Devuelve si es verdad
         if cached:
-            logger.info(f'Redis Cache: {key}')
+            logger.info(f'[get_projects_iam] Redis Cache HIT - Key: {key}')
             decoded = json.loads(cached)
             return decoded
 
@@ -56,13 +56,14 @@ async def get_projects_iam(
         # Guarda la respuesta
         try:
             await redis_client.setex(key, 6000, json.dumps([project_.model_dump() for project_ in to_cache], default=str))
+            logger.info(f'[get_projects_iam] Redis Cache Success - Key {key}')
         except redis.RedisError as e:
-            logger.warning(f'Error al cachear en Redis: {e}')
+            logger.warning(f'[get_projects_iam] Redis Cache Error | Error: {e}')
 
         return to_cache
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al obtener los proyectos a los que pertenece el user {user.user_id}: {e}')
+        logger.error(f'[get_projects_iam] Database Error for user {user.user_id} | Error: {e}')
         raise exceptions.DatabaseError(error=e, func='get_projects_iam')
 
 @router.get(
@@ -90,7 +91,7 @@ async def get_projects(
 
         # Devuelve si es verdad
         if cached:
-            logger.info(f'Redis Cache: {key}')
+            logger.info(f'[get_projects] Redis Cache Hit - Key: {key}')
             decoded = json.loads(cached)
             return decoded
         
@@ -111,13 +112,15 @@ async def get_projects(
             }
             for project in found_projects]
 
-        # Guarda la respuesta
-        await redis_client.setex(key, 6000, json.dumps(to_cache, default=str))
+        try:
+            await redis_client.setex(key, 6000, json.dumps(to_cache, default=str))
+        except redis.RedisError as e:
+            logger.error(f'[get_projects] Redis Cache Error | Error: {str(e)}')
 
         return to_cache
     
     except SQLAlchemyError as e:
-        logger.error(f'Error al obtener todos los proyectos del grupo {group_id}: {e}')
+        logger.error(f'[get_projects] Database Error Group:{group_id} | Error: {str(e)}')
         raise exceptions.DatabaseError(error=e, func='get_projects')
 
 @router.post(
@@ -200,13 +203,14 @@ async def update_project(
 
         try:
             await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+            logger.info(f'[update_project] Redis Cache Delete - Key: projects:group_id:{group_id}:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'Error al cachear en Redis {e}')
+            logger.error(f'[update_project] Redis Cache Delete Error | Error: {str(e)}')
 
         return {'detail':'Se ha actualizado la informacion del projecto'}
     
     except SQLAlchemyError as e:
-        logger.error(f'Error al actualizar el proyecto {project_id} en el grupo {group_id}: {e}')
+        logger.error(f'[update_project] Database Error | Error: {e}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_project')
 
@@ -236,13 +240,16 @@ async def delete_project(
         try:
             await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
             await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+            
+            logger.info(f'[delete_project] Redis Cache Delete Succes - Key: projects:group_id:{group_id}:limit:*:offset:*')
+            logger.info(f'[delete_project] Redis Cache Delete Succes - Key: project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'Error al eliminar cache de Redis {e}')
+            logger.warning(f'[delete_project] Redis Cache Delete Error | Error: {str(e)}')
 
         return {'detail':'Se ha eliminado el proyecto'}
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al eliminar el proyecto {project_id} en el grupo {group_id}: {e}')
+        logger.error(f'[delete_project] Database Error | Error: {str(e)}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_project')
 
@@ -275,11 +282,11 @@ async def add_user_to_project(
         group = get_group_or_404(group_id=group_id, session=session)
 
         if not user in group.users:
-            logger.error(f'El user {user_id} no existe en el grupo {group_id}')
+            logger.error(f'[add_user_to_project] Add user to Project Error | Error User {user_id} not exist in Group {group_id}')
             raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
 
         if user in found_project.users:
-            logger.error(f'El user {user_id} ya existe en el proyecto {project_id}')
+            logger.error(f'[add_user_to_project] Add user to Project Error | Error User {user_id} exists in Proyect {project_id}')
             raise exceptions.UserInProjectError(user_id=user_id, project_id=project_id)
 
         # Lo agrega al grupo
@@ -287,20 +294,9 @@ async def add_user_to_project(
 
         session.commit()
 
-        # Se crea la notificacion
-        outgoing_payload = schemas.OutgoingNotificationPayload(
-            notification_type='add_user_to_project',
-            message=f'Fuiste agregagdo al project {project_id}',
-            timestamp=datetime.now())
-
-        # Crea el evento
-        outgoing_event = schemas.WebSocketEvent(
-            type='notification',
-            payload=outgoing_payload.model_dump()
-        )
-
-        # Parsea el evento
-        outgoing_event_json = outgoing_event.model_dump_json()
+        outgoing_event_json = format_notification(
+                notification_type='add_user_to_project',
+                message=f'Fuiste agregagdo al project {project_id}')
 
         # Envia el evento
         await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
@@ -309,13 +305,16 @@ async def add_user_to_project(
         try:
             await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
             await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+        
+            logger.info(f'[add_user_to_project] Redis Cache Delete Success - Key: project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+            logger.info(f'[add_user_to_project] Redis Cache Delete Success - Key: projects:group_id:{group_id}:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'Error al eliminar cache en Redis {e}')
+            logger.warning(f'[add_user_to_project] Redis Cache Delete Error | Error: {str(e)}')
 
         return {'detail':'El usuario ha sido agregado al proyecto'}
     
     except SQLAlchemyError as e:
-        logger.error(f'Error al agregar al user {user_id} al proyecto {project_id}: {e}')
+        logger.error(f'[add_user_to_project] Database Error | Error: {str(e)}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='add_user_to_project')
 
@@ -348,7 +347,7 @@ async def remove_user_from_project(
         group = get_group_or_404(group_id=group_id, session=session)
         
         if not user in group.users:
-            logger.error(f'El user {user_id} no existe en el grupo {group_id}')
+            logger.error(f'[remove_user_from_project] Remove User to Project Error | User {user_id} not exist in Group {group_id}')
             raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
 
         if user in found_project.users:
@@ -356,20 +355,10 @@ async def remove_user_from_project(
             found_project.users.remove(user)
             session.commit()
 
-            # Se crea la notificacion
-            outgoing_payload = schemas.OutgoingNotificationPayload(
+            outgoing_event_json = format_notification(
                 notification_type='delete_user_from_project',
-                message=f'Fuiste eliminado del project {project_id}',
-                timestamp=datetime.now())
-
-            # Crea el evento
-            outgoing_event = schemas.WebSocketEvent(
-                type='notification',
-                payload=outgoing_payload.model_dump()
-            )
-
-            # Parsea el evento
-            outgoing_event_json = outgoing_event.model_dump_json()
+                message='Fuiste eliminado del project {project_id}'
+                )
 
             # Envia el evento
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
@@ -378,16 +367,19 @@ async def remove_user_from_project(
             try:
                 await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
                 await redis_client.delete('projects:group_id:{group_id}:limit:*:offset:*')
+
+                logger.info(f'[remove_user_from_project] Redis Cache Delete Success - Key: project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+                logger.info(f'[remove_user_from_project] Redis Cache Delete Success - Key: projects:group_id:{group_id}:limit:*:offset:*')
             except redis.RedisError as e:
-                logger.warning(f'Error al eliminar cache en Redis {e}')
+                logger.warning(f'[remove_user_from_project] Redis Cache Delete Error | Error: {str(e)}')
 
             return {'detail':'El usuario ha sido eliminado del proyecto'}
         else:
-            logger.error(f'El user {user_id} no existe en el proyecto {project_id}')
+            logger.error(f'[remove_user_from_project] Delete User to Project Error | User {user_id} not exists in Project {project_id}')
             raise exceptions.UserNotInProjectError(user_id=user_id, project_id=project_id)
     
     except SQLAlchemyError as e:
-        logger.error(f'Error al remover al user {user_id} del proyecto {project_id}: {e}')
+        logger.error(f'[remove_user_from_project] Database Error | Error: {str(e)}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='remove_user_from_project')
 
@@ -421,7 +413,7 @@ async def update_user_permission_in_project(
         user = session.exec(stmt).first()
 
         if not user:
-            logger.error(f'El user {user_id} no existe en el proyecto {project_id}')
+            logger.error(f'[update_user_permission_in_project] User {user_id} not exists in proyect {project_id}')
             raise exceptions.UserNotInProjectError(project_id=project_id, user_id=user_id)
 
         user.permission = update_role.permission
@@ -429,20 +421,10 @@ async def update_user_permission_in_project(
         session.commit()
         session.refresh(user)
 
-        # Se crea la notificacion
-        outgoing_payload = schemas.OutgoingNotificationPayload(
-            notification_type='permission_update',
-            message=f'Tus permisos en project {project_id} fue actualizado a {user.permission.value}',
-            timestamp=datetime.now())
-
-        # Crea el evento
-        outgoing_event = schemas.WebSocketEvent(
-            type='notification',
-            payload=outgoing_payload.model_dump()
-        )
-
-        # Parsea el evento
-        outgoing_event_json = outgoing_event.model_dump_json()
+        outgoing_event_json = format_notification(
+                notification_type='permission_update',
+                message=f'Tus permisos en project {project_id} fue actualizado a {user.permission.value}'
+                )
 
         # Envia el evento
         await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
@@ -450,12 +432,14 @@ async def update_user_permission_in_project(
         # Elimina cache
         try:
             await redis_client.delete('project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
+            logger.info(f'[update_user_permission_in_project] Redis Cache Delete Success - Key: project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'Error al eliminar cache en Redis {e}')
+            logger.warning(f'[update_user_permission_in_project] Redis Cache Delete Error | Error {str(e)}')
+
         return {'detail':'Se ha cambiado los permisos del usuario en el proyecto'}
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al actualizar permisos del user {user_id} del proyecto {project_id}: {e}')
+        logger.error(f'[update_user_permission_in_project] Database Error | Error: {str(e)}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_user_permission_in_project')
 
@@ -484,7 +468,7 @@ async def get_user_in_project(
         cached = await redis_client.get(key)
 
         if cached:
-            logger.info(f'Redis Cache: {key}')
+            logger.info(f'[get_user_in_project] Redis Cache Hit - Key: {key}')
             decoded = json.loads(cached)
             return decoded
 
@@ -498,7 +482,7 @@ async def get_user_in_project(
         results = session.exec(stmt).all()
 
         if not results:
-            logger.error(f'No se encontraron los usuarios en el proyecto {project_id}')
+            logger.error(f'[get_user_in_project] Users in Project {project_id} Error | Users not found in Project')
             raise exceptions.UsersNotFoundInProjectError(project_id=project_id)
 
         # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
@@ -509,11 +493,12 @@ async def get_user_in_project(
 
         try:
             await redis_client.setex(key, 600, json.dumps([project.model_dump() for project in to_cache], default=str))
+            logger.info(f'[get_user_in_project] Redis Cache Set - Key: {key}')
         except redis.RedisError as e:
-            logger.warning(f'Error al cachear en Redis {e}')
+            logger.warning(f'[get_user_in_project] Redis Cache Set Error | Error: {str(e)}')
 
         return to_cache
 
     except SQLAlchemyError as e:
-        logger.error(f'Error al obtener los usuarios del proyecto {project_id}: {e}')
+        logger.error(f'[get_user_in_project] Database Error | Error: {str(e)}')
         raise exceptions.DatabaseError(error=e, func='get_user_in_project')

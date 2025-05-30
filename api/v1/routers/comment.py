@@ -3,9 +3,11 @@ from models import db_models, schemas, exceptions, responses
 from .auth import auth_user
 from db.database import get_session, Session, select, SQLAlchemyError
 from typing import List
-from core.utils import found_user_in_task_or_404, extract_valid_mentions, notify_users, validate_in_task
+from core.utils import found_user_in_task_or_404, extract_valid_mentions, validate_in_task
 from core.logger import logger
 from core.limiter import limiter
+from core.event_ws import format_notification
+from .ws import manager
 
 router = APIRouter(prefix='/task/{task_id}', tags=['Comment'])
 
@@ -34,13 +36,13 @@ def get_comments(
         comments_found = session.exec(stmt).all()
 
         if not comments_found:
-            logger.error(f'Comments not found in Task {task_id}')
+            logger.error(f'[get_comments] Not found Error | Comments not found in Task {task_id}')
             raise exceptions.CommentNotFoundError(task_id)
 
         return comments_found
 
     except SQLAlchemyError as e:
-        logger.error(f'Internal error: {e}')
+        logger.error(f'[get_comments] Database error | Error: {str(e)}')
         raise exceptions.DatabaseError(e, func='get_comments')
 
 @router.get(
@@ -66,14 +68,14 @@ def get_all_comments(
         comments_found = session.exec(stmt).all()
 
         if not comments_found:
-            logger.error(f'Comments not found in Task {task_id}')
+            logger.error(f'[get_all_comments] Not found Error | Comments not found in Task {task_id}')
             raise exceptions.CommentNotFoundError(task_id)
 
         return comments_found
 
     except SQLAlchemyError as e:
-        logger.error('Internal error: {e}')
-        raise exceptions.DatabaseError(e, func='get_comments')
+        logger.error(f'[get_all_comments] Database Error | Error: {str(e)}')
+        raise exceptions.DatabaseError(e, func='get_all_comments')
 
 @router.post(
         '/comments',
@@ -107,19 +109,19 @@ async def create_comment(
 
         if found_users:
             users_validated = validate_in_task(found_users, task_id, session)
-            
-            if users_validated: 
-                payload = schemas.NotificationPayload(
-                    notification_type='task_mention',
-                    message=f'User {user.user_id} mentionated on comments in Task {task_id}: {add_comment.content}')
 
-                await notify_users(users_validated, payload)
-                logger.info(f'Notificacion enviada: {payload}')
+            if users_validated:
+                payload = format_notification(
+                        notification_type='task_mention',
+                        message=f'User {user.user_id} mentionated on comments in Task {task_id}: {add_comment.content}'
+                    )
+
+                await manager.send_to_user(message=payload, user_id=user.user_id)
 
         return {'detail':'New comment created'}
 
     except SQLAlchemyError as e:
-        logger.error('Error interno: {e}')
+        logger.error(f'[create_comment] Dabasae Error | Error: {str(e)}')
         raise exceptions.DatabaseError(e, func='create_comment')
 
 @router.patch(
@@ -145,11 +147,11 @@ def update_comment(
         comment_found = session.get(db_models.Task_comments, comment_id)
 
         if not comment_found:
-            logger.error(f'Comentario no encontrado en {task_id}')
+            logger.error(f'[update_comment] Not Found Error | Comment not found in Task {task_id}')
             raise exceptions.CommentNotFoundError(task_id)
 
         if comment_found.user_id != user.user_id:
-            logger.error(f'User {user.user_id} no autorizado')
+            logger.error(f'[update_comment] Unauthorized Error | User {user.user_id} not authorized')
             raise exceptions.UserNotAuthorizedInCommentError(user.user_id, comment_id)
 
         if update_comment.content:
@@ -163,7 +165,7 @@ def update_comment(
         return {'detail':'Comment successfully updated'}
 
     except SQLAlchemyError as e:
-        logger.error('Error interno: {e}')
+        logger.error(f'[update_comment] Database Error | Error: {str(e)}')
         raise exceptions.DatabaseError(e, func='update_comment')
 
 @router.delete(
@@ -188,11 +190,11 @@ def delete_comment(
         comment_found = session.get(db_models.Task_comments, comment_id)
 
         if not comment_found:
-            logger.error(f'Comment not found in Task {task_id}')
+            logger.error(f'[delete_comment] Not Found Error | Comment not found in Task {task_id}')
             raise exceptions.CommentNotFoundError(task_id)
 
         if comment_found.user_id != user.user_id:
-            logger.error(f'User {user.user_id} not authorized')
+            logger.error(f'[delete_comment] Unauthorized Error| User {user.user_id} not authorized')
             raise exceptions.UserNotAuthorizedInCommentError(user.user_id, comment_id)
 
         # Actualizando el estado
@@ -203,5 +205,5 @@ def delete_comment(
         return {'detail':'Comment successfully deleted'}
 
     except SQLAlchemyError as e:
-        logger.error('Internal error: {e}')
+        logger.error(f'[delete_comment] Database Error | Error: {str(e)}')
         raise exceptions.DatabaseError(e, func='update_comment')

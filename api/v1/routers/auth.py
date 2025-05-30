@@ -37,80 +37,73 @@ async def auth_user(token: str = Depends(oauth2), session : Session = Depends(ge
         
         # Verifica que sea un token de acceso
         scope = payload.get("scope")
-
         if not scope or scope != 'api_access':
-            logger.error('No es un token de acceso')
+            logger.error('[auth_user] Token Error | Is not a access token')
             raise exceptions.InvalidToken()
-        
+
         # Obtiene los datos necesarios
         user_id = payload.get("sub")
-        
         if not user_id:
-            logger.error('Token invalido')
+            logger.error('[auth_user] Token Error | Invalid token')
             raise exceptions.InvalidToken()
-    
-        user = session.get(db_models.User, user_id)
 
+        user = session.get(db_models.User, user_id)
         if not user:
-            logger.error(f'No se encontro el user {user_id}')
+            logger.error(f'[auth_user] Token Error | Not found a user {user_id}')
             raise exceptions.UserNotFoundError(user_id)
 
         exp = payload.get("exp")
-
         if exp is None:
             logger.error('No tiene expiracion')
             raise exceptions.InvalidToken()
 
         exp_datetime = datetime.fromtimestamp(exp, tz=timezone.utc)
-
         if exp_datetime < datetime.now(timezone.utc):
-            logger.error('Token expirado')
+            logger.error('[auth_user] Token Error | Token expired')
             raise exceptions.InvalidToken() 
 
         return user
     
     except JWTError:
-        logger.error('Token invalido')
+        logger.error(f'[auth_user] Token Error | Invalid token')
         raise exceptions.InvalidToken()
 # @limiter.limit("5/minute")
 async def auth_user_ws(token: str, session: Session):
     try:
         payload = jwt.decode(token, SECRET, algorithms=[ALGORITHM])
-        
-        user_id: str = payload.get("sub")
-        
+
+        user_id: str = payload.get("sub")        
         if user_id is None:
             return None
-        
+
         user = session.get(db_models.User, int(user_id))
-        
         if user is None:
             return None
         
         return user
-    
+
     except JWTError as e:
         
         return None
 
 @router.post("/login", description='Login path. You need a username and password. First need to create a user')
 # @limiter.limit("5/minute")
-async def login(form: OAuth2PasswordRequestForm = Depends(),
-                session : Session = Depends(get_session)) -> schemas.Token:
-    
+async def login(
+        form: OAuth2PasswordRequestForm = Depends(),
+        session : Session = Depends(get_session)) -> schemas.Token:
+
     try:
         stmt = select(db_models.User).where(db_models.User.username == form.username)
         user_found = session.exec(stmt).first()
 
         if not user_found:
-            logger.error('NO se encontro el usuario')
+            logger.error(f'[login] Login Error | User not found')
             raise exceptions.UserNotFoundInLogin()
 
         if not crypt.verify(form.password, user_found.password):
-            logger.error('Contraseña incorrecta')
+            logger.error(f'[login] Login Error | Incorrect password')
             raise exceptions.LoginError(user_id=user_found.user_id)
 
-        # Tiempo de expiración de access
         access_expires = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_DURATION)
 
         access_token = {
@@ -143,19 +136,19 @@ async def login(form: OAuth2PasswordRequestForm = Depends(),
         return {"access_token" : encoded_access_token, "token_type" : "bearer", 'refresh_token': encoded_refresh_token}
 
     except SQLAlchemyError as e:
-        logger.error('Error al iniciar sesion {e}')
+        logger.error(f'[login] Database Error | Error: {str(e)}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='login')
 
 @router.post(
-            "/refresh",
-            description='Refresh path for obtain a new token. You need a refresh token.',
-            responses={
-                200:{'detail':'New access_token and refresh_token obtained', 'model':schemas.Token},
-                401:{'detail':'Token incorrect', 'model':responses.InvalidToken},
-                404:{'detail':'User not found', 'model':responses.NotFound},
-                500:{'detail':'Internal error', 'model': responses.DatabaseErrorResponse}
-            })
+        "/refresh",
+        description='Refresh path for obtain a new token. You need a refresh token.',
+        responses={
+            200:{'detail':'New access_token and refresh_token obtained', 'model':schemas.Token},
+            401:{'detail':'Token incorrect', 'model':responses.InvalidToken},
+            404:{'detail':'User not found', 'model':responses.NotFound},
+            500:{'detail':'Internal error', 'model': responses.DatabaseErrorResponse}
+        })
 @limiter.limit("5/minute")
 async def refresh(
         refresh: schemas.RefreshTokenRequest,
@@ -173,7 +166,7 @@ async def refresh(
         actual_session = session.exec(stmt).first()
 
         if not actual_session:
-            logger.error(f'No se encontró sesión activa para jti={jti}')
+            logger.error(f'[refresh] Token Error | Not found active session for jti: {jti}')
             raise exceptions.InvalidToken()
         
         payload = jwt.decode(refresh, SECRET, algorithms=ALGORITHM)
@@ -182,37 +175,38 @@ async def refresh(
         scope = payload.get("scope")
 
         if not scope:
-            logger.error('No tiene Scope')
+            logger.error(f'[refresh] Token Error | Not hace Scope')
             raise exceptions.InvalidToken()
 
         if scope != 'token_refresh':
-            logger.error(f'Scope inválido: {scope}')
+            logger.error(f'[refresh] Token Error | Invalid Scope')
             raise exceptions.InvalidToken()
 
         # Obtiene user_id,  si no existe o no encuentra usuario, lanza error
         user_id = payload.get("sub")
         
         if not user_id:
+            logger.error(f'[refresh] Token Error | Not have user_id')
             logger.error('No tiene ID de Usuario')
             raise exceptions.InvalidToken()
 
         user = session.get(db_models.User, user_id)
 
         if not user:
-            logger.error(f'Usuario con ID {user_id} no encontrado')
+            logger.error(f'[refresh] Token Error | Not found user {user_id}')
             raise exceptions.UserNotFoundError(user_id)
 
         # Obtiene la expiracion, si no tiene o ya expiro, lanza error 
         exp = payload.get("exp")
 
         if exp is None:
-            logger.error('No tiene expiracion')
+            logger.error(f'[refresh] Token Error | Not found expire date')
             raise exceptions.InvalidToken()
 
         exp_datetime = datetime.fromtimestamp(exp, tz=timezone.utc)
 
         if exp_datetime < datetime.now(timezone.utc):
-            logger.error('Token expirado')
+            logger.error(f'[refresh] Token Error | Token expired')
             raise exceptions.InvalidToken() 
 
         # Invalidar la sesion actual
@@ -250,23 +244,23 @@ async def refresh(
         return schemas.Token(**token_data)
     
     except JWTError as e:
-        logger.error(f'Token invalido durante refresh: Error message: {str(e)}')
+        logger.error(f'[refresh] Invalid Token during refresh | Error :{str(e)}')
         if hasattr(e, 'claims'):
             logger.error(f'Problematic claims: {e.claims}')
         raise exceptions.InvalidToken()
     
     except SQLAlchemyError as e:
-        logger.error('Error al renovar el token {e}')
+        logger.error(f'[refersh] Database Error | Error: {str(e)}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='refresh')
 
 @router.post(
-            "/logout",
-            description='Logout path to close session. Close all user sessions ',
-            responses={
-                200: {'description':'All user sesisons are closed.'},
-                500:{'detail':'Internal error', 'model':responses.DatabaseErrorResponse}
-            })
+        "/logout",
+        description='Logout path to close session. Close all user sessions ',
+        responses={
+            200: {'description':'All user sesisons are closed.'},
+            500:{'detail':'Internal error', 'model':responses.DatabaseErrorResponse}
+        })
 @limiter.limit("5/minute")
 async def logout(
         request: Request,
@@ -281,7 +275,7 @@ async def logout(
         active_sessions = session.exec(stmt).all()
 
         if not active_sessions:
-            logger.error(f'User {user.user_id} no tenia sesiones activas')
+            logger.error(f'[logout] Not found Error | Active sessions not found for User {user.user_id}')
             raise exceptions.SessionNotFound(user.user_id)
 
         # Invalidar las sesiones actuales
@@ -290,11 +284,11 @@ async def logout(
 
         session.commit()
 
-        logger.info(f'User {user.user_id} cerró {len(active_sessions)} sesiones')
-        return {"detail":'Cerradas todas las sesiones'}
-    
+        logger.info(f'[logout] All sessions are closed - User {user.user_id} closed {len(active_sessions)} sessions')
+        return {"detail":'Closed all sessions'}
+
     except SQLAlchemyError as e:
-        logger.error(f'Error al cerrar sesion: {str(e)}')
+        logger.error(f'[logout] Database Error | Error: {str(e)}')
         session.rollback()
         raise exceptions.DatabaseError(error=e, func='logout')
 
@@ -309,8 +303,11 @@ def get_expired_sessions(
         results = session.exec(stmt).all()
 
         if results:
+            logger.info('[get_expired_sessions] Sessions found - Expired sessions found')
             return results
-        
-        return {'detail':'No hay sesiones expiradas'}
+
+        logger.info('[get_expired_sessions] Sessions not found - Expired sessions not found')
+        return {'detail':'No expired sessions'}
     except SQLAlchemyError as e:
+        logger.error(f'[get_expired_sessions] Database Error | Error: {str(e)}')
         raise exceptions.DatabaseError(e, func='get_expired_sessions')

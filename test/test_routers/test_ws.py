@@ -99,7 +99,7 @@ async def test_get_current_user_ws_header_error(mocker):
     with pytest.raises(WebSocketException):
         await ws.get_current_user_ws( session=session_mock, websocket=ws_mock)
 
-    ws_mock.close.assert_awaited_once_with(code=1008, reason='Error de autenticacion')
+    ws_mock.close.assert_awaited_once_with(code=1008, reason='Authentication Error')
 
 @pytest.mark.asyncio
 async def test_get_current_user_ws_format_error(mocker):
@@ -112,7 +112,7 @@ async def test_get_current_user_ws_format_error(mocker):
     with pytest.raises(WebSocketException):
         await ws.get_current_user_ws( session=session_mock, websocket=ws_mock)
 
-    ws_mock.close.assert_awaited_once_with(code=1008, reason='Formato de token invalido')
+    ws_mock.close.assert_awaited_once_with(code=1008, reason='Invalid token format')
 
 @pytest.mark.asyncio
 async def test_get_current_user_ws_user_not_found_error(mocker):
@@ -125,7 +125,7 @@ async def test_get_current_user_ws_user_not_found_error(mocker):
     with pytest.raises(WebSocketException):
         await ws.get_current_user_ws( session=session_mock, websocket=ws_mock)
 
-    ws_mock.close.assert_awaited_once_with(code=1008, reason='User no encontrado para token')
+    ws_mock.close.assert_awaited_once_with(code=1008, reason='User not found for token')
 
 @pytest.mark.asyncio
 async def test_websocket_endpoint_not_found_project_error(mocker):
@@ -149,7 +149,7 @@ async def test_websocket_endpoint_not_found_project_error(mocker):
     await ws.websocket_endpoint(websocket=ws_mock, project_id=999, session=session_mock)
 
     # Verificar que se cerró con el mensaje correcto
-    ws_mock.close.assert_awaited_once_with(code=1008, reason="Proyecto 999 no encontrado")
+    ws_mock.close.assert_awaited_once_with(code=1008, reason="Proyect 999 not found")
 
 @pytest.mark.asyncio
 async def test_websocket_endpoint_not_authorized_error(mocker):
@@ -173,4 +173,4 @@ async def test_websocket_endpoint_not_authorized_error(mocker):
     await ws.websocket_endpoint(websocket=ws_mock, project_id=999, session=session_mock)
 
     # Verificar que se cerró con el mensaje correcto
-    ws_mock.close.assert_awaited_once_with(code=1008, reason="Usuario no autorizado para proyecto 999")
+    ws_mock.close.assert_awaited_once_with(code=1008, reason="User not authorized for proyect 999")

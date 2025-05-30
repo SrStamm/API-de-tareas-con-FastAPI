@@ -113,20 +113,3 @@ def validate_in_task(users: List[db_models.User], task_id: int, session:Session)
                 db_models.User.username.in_(users)))
     
     return session.exec(stmt).all()
-
-async def notify_users(users: List[db_models.User], payload: schemas.NotificationPayload):
-    for user in users:
-        # Crea el evento ws
-        outgoing_event = schemas.WebSocketEvent(
-                type='notification',
-                payload=schemas.OutgoingNotificationPayload(
-                    notification_type=payload.notification_type,
-                    message=payload.message).model_dump()
-            )
-        
-        # Lo parsea
-        outgoing_event_json = outgoing_event.model_dump_json()
-
-        # Envia el evento
-        await manager.send_to_user(message=outgoing_event_json, user_id=user.user_id)
-        logger.info(f'Notificacion enviada a User: {user.username} con ID {user.user_id}')

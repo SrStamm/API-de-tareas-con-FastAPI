@@ -17,54 +17,53 @@ async def get_current_user_ws(session: Session, websocket: WebSocket):
         auth_header = websocket.headers.get("Authorization")
         
         if not auth_header:
-            logger.info(f'Error: No tiene el Header')
-            await websocket.close(code=1008, reason='Error de autenticacion')
+            logger.error(f'[get_current_user_ws] Header Error | Not has a Header')
+            await websocket.close(code=1008, reason='Authentication Error')
             raise WebSocketException(code=1008)
         
         if not auth_header.startswith("Bearer "):
-            logger.info('Error: Formato incorrecto')
-            await websocket.close(code=1008, reason='Formato de token invalido')
+            logger.error('[get_current_user_ws] Invalid Token | Invalid Format')
+            await websocket.close(code=1008, reason='Invalid token format')
             raise WebSocketException(code=1008)
         
         token = auth_header.replace("Bearer ", "")
         user = await auth_user_ws(token, session)
 
         if not user:
-            logger.info('Error: Usuario no encontrado')
-            await websocket.close(code=1008, reason=f'User no encontrado para token')
+            logger.info('[get_current_user_ws] Not found Error: User not found')
+            await websocket.close(code=1008, reason=f'User not found for token')
             raise WebSocketException(code=1008)
         
         return user
 
     except WebSocketException as e:
-        logger.warning(f'Error: Desconeccion repentina: {e}')
+        logger.warning(f'[get_current_user_ws] WebScoket Exception Error | Sudden disconnection: {str(e)}')
         raise
 
     except Exception as e:
-        logger.warning(f'Error: Desconeccion repentina: {e}')
-        await websocket.close(code=1008, reason=f"Error de autenticación: {str(e)}")
+        logger.warning(f'[get_current_user_ws] Exception Error | Sudden disconnection: {str(e)}')
+        await websocket.close(code=1008, reason=f"Authentication error: {str(e)}")
         raise
 
 def verify_user_in_project(user_id: int, project_id: int, session: Session = Depends(get_session)):
-    print(f"Verificando usuario {user_id} en proyecto {project_id}")
     logger.info(f"Verificando usuario {user_id} en proyecto {project_id}")
+
     project = session.get(db_models.Project, project_id)
     if not project:
-        logger.info(f"Proyecto {project_id} no encontrado")
-        print(f"Proyecto {project_id} no encontrado")
+        logger.error(f"[verify_user_in_project] Not found Error | Proyect {project_id} not found")
         raise exceptions.ProjectNotFoundError(project_id)
     
     stmt = select(db_models.project_user).where(
-        db_models.project_user.user_id == user_id,
-        db_models.project_user.project_id == project_id
-    )
+            db_models.project_user.user_id == user_id,
+            db_models.project_user.project_id == project_id
+        )
+
     project_user = session.exec(stmt).first()
     if not project_user:
-        logger.info(f"Usuario {user_id} no autorizado para proyecto {project_id}")
-        print(f"Usuario {user_id} no autorizado para proyecto {project_id}")
+        logger.error(f"[verify_user_in_project] Unauthorized | User {user_id} not authorized for proyect {project_id}")
         raise exceptions.NotAuthorized(user_id)
-    print(f"Usuario {user_id} verificado en proyecto {project_id}")
-    logger.info(f"Usuario {user_id} verificado en proyecto {project_id}")
+
+    logger.info(f"[verify_user_in_project] User founded - User {user_id} verify in proyect {project_id}")
     return project_user
 
 @router.websocket("/ws/{project_id}")
@@ -73,19 +72,18 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
     user = await get_current_user_ws(session, websocket)
 
     try:
-        # Verifica que el usuario exista en el proyecto
         verify_user_in_project(user_id=user.user_id, project_id=project_id, session=session)
 
     except exceptions.ProjectNotFoundError as e:
-        await websocket.close(code=1008, reason=f"Proyecto {project_id} no encontrado")
+        await websocket.close(code=1008, reason=f"Proyect {project_id} not found")
         return
 
     except exceptions.NotAuthorized as e:
-        await websocket.close(code=1008, reason=f"Usuario no autorizado para proyecto {project_id}")
+        await websocket.close(code=1008, reason=f"User not authorized for proyect {project_id}")
         return
 
     except Exception as e:
-        await websocket.close(code=1008, reason=f"Error interno: {str(e)}")
+        await websocket.close(code=1008, reason=f"Internal error: {str(e)}")
         return
 
     # Conecta el usario a websocket

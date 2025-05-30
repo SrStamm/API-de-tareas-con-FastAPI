@@ -7,8 +7,8 @@ from core.utils import get_group_or_404, get_user_or_404
 from core.permission import require_role, role_of_user_in_group
 from core.logger import logger
 from core.limiter import limiter
+from core.event_ws import format_notification
 from .ws import manager
-from datetime import datetime
 import json
 
 router = APIRouter(prefix='/group', tags=['Group'])
@@ -57,7 +57,7 @@ async def get_groups(
             await redis_client.setex(key, 300, json.dumps(to_cache, default=str))
             logger.info(f'[get_groups] Cache SET - Key: {key}')
         except redis.RedisError as e:
-            logger.warning(f'[get_groups] Redis Cache FAIL - Key: {key} | Error: {e}') 
+            logger.warning(f'[get_groups] Cache FAIL - Key: {key} | Error: {e}') 
 
         return to_cache
 
@@ -101,9 +101,9 @@ async def create_group(
         # Elimina cache existente
         try:
             await redis_client.delete(f'groups:limit:*:offset:*')
-            logger.info(f'[create_group] Redis Cache Delete - Key: groups:limit:*:offset:*')
+            logger.info(f'[create_group] Cache Delete - Key: groups:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'[create_group] Redis Cache Delete Error | Error: {str(e)}')
+            logger.warning(f'[create_group] Cache Delete Error | Error: {str(e)}')
 
         logger.info(f'[create_group] Group Create Success')
         return {'detail': 'Se ha creado un nuevo grupo de forma exitosa'}
@@ -148,9 +148,9 @@ async def update_group(
         # Elimina cache existente
         try:
             await redis_client.delete(f'groups:limit:*:offset:*')
-            logger.info(f'[update_group] Redis Cache Delete - Key: groups:limit:*:offset:*')
+            logger.info(f'[update_group] Cache Delete - Key: groups:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'[update_group] Redis Cache Delete Error | Error: {str(e)}')
+            logger.warning(f'[update_group] Cache Delete Error | Error: {str(e)}')
 
         logger.info(f'[update_group] Group Create Success')
         return {'detail':'Se ha actualizado la informacion del grupo'}
@@ -189,9 +189,9 @@ async def delete_group(
         # Elimina cache existente
         try:
             await redis_client.delete(f'groups:limit:*:offset:*')
-            logger.info(f'[delete_group] Redis Cache Delete - Key: groups:limit:*:offset:*')
+            logger.info(f'[delete_group] Cache Delete - Key: groups:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'[delete_group] Redis Cache Delete Error | Error: {str(e)}')
+            logger.warning(f'[delete_group] Cache Delete Error | Error: {str(e)}')
 
         return {'detail':'Se ha eliminado el grupo'}
 
@@ -248,9 +248,9 @@ async def get_groups_in_user(
         # Guarda la respuesta
         try:
             await redis_client.setex(key, 600, json.dumps(to_cache, default=str))
-            logger.info(f'[get_groups_in_user] Redis Cache Set - Key: {str(key)}')
+            logger.info(f'[get_groups_in_user] Cache Set - Key: {str(key)}')
         except redis.RedisError as e:
-            logger.warning(f'[get_groups_in_user] Redis Cache Set Error | Error: {str(e)}')
+            logger.warning(f'[get_groups_in_user] Cache Fail | Error: {str(e)}')
 
         return to_cache
 
@@ -296,19 +296,10 @@ async def append_user_group(
         session.commit()
 
         # Se crea la notificacion
-        outgoing_payload = schemas.OutgoingNotificationPayload(
-            notification_type='append_to_group',
-            message=f'Has sido agregado a group {group_id}',
-            timestamp=datetime.now())
-
-        # Crea el evento
-        outgoing_event = schemas.WebSocketEvent(
-            type='notification',
-            payload=outgoing_payload.model_dump()
-        )
-
-        # Parsea el evento
-        outgoing_event_json = outgoing_event.model_dump_json()
+        outgoing_event_json = format_notification(
+                notification_type='append_to_group',
+                message='Has sido agregado a group {group_id}'
+            )
 
         # Envia el evento
         await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
@@ -316,9 +307,9 @@ async def append_user_group(
         # Elimina cache existente
         try:
             await redis_client.delete(f'groups:user_id:{actual_user.user_id}:limit:*:offset:*')
-            logger.info(f'[append_user_group] Redis Cache Delete - Key: groups:user_id:{actual_user.user_id}:limit:*:offset:*')
+            logger.info(f'[append_user_group] Cache Delete - Key: groups:user_id:{actual_user.user_id}:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'[append_user_group] Redis Cache Delete Error | Error: {str(e)}')
+            logger.warning(f'[append_user_group] Cache Delete Error | Error: {str(e)}')
 
         logger.info(f'[append_user_group] User {user_id} Append to Group {group_id} Success')
         return {'detail':'El usuario ha sido agregado al grupo'}
@@ -350,7 +341,7 @@ async def delete_user_group(
 
     try:
         actual_role = auth_data['role']
-        actual_user = auth_data['user']
+        actual_user: db_models.User = auth_data['user']
 
         found_group = get_group_or_404(group_id, session)
 
@@ -367,37 +358,27 @@ async def delete_user_group(
                 session.commit()
 
                 # Se crea la notificacion
-                outgoing_payload = schemas.OutgoingNotificationPayload(
+                outgoing_event_json = format_notification(
                     notification_type='remove_user_to_group',
-                    message=f'Fuiste removido del group {group_id}',
-                    timestamp=datetime.now())
-
-                # Crea el evento
-                outgoing_event = schemas.WebSocketEvent(
-                    type='notification',
-                    payload=outgoing_payload.model_dump()
-                )
-
-                # Parsea el evento
-                outgoing_event_json = outgoing_event.model_dump_json()
+                    message=f'Fuiste removido del group {group_id}'
+                    )
 
                 # Envia el evento
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
-                logger.info(f'User {user_id} eliminado del Group {group_id} por {actual_user.user_id}')
-
-                # Elimina cache existente
                 try:
                     await redis_client.delete(f'groups:user_id:{actual_user.user_id}:limit:*:offset:*')
+                    logger.info(f'[delete_user_group] Cache Delete - Key: groups:user_id:{actual_user.user_id}:limit:*:offset:*')
                 except redis.RedisError as e:
-                    logger.warning(f'Error al eliminar cache en Redis: {e}')
+                    logger.warning(f'[delete_user_group] Cache Delete Error - Error: {str(e)}')
 
                 return {'detail':'El usuario ha sido eliminado al grupo'}
 
+            logger.info(f'[delete_user_group] Unauthorized Error | User {actual_user.user_id} not authorized in group {group_id}')
             raise exceptions.NotAuthorized(actual_user.user_id)
 
         else:
-            logger.error(f'El user {user_id} no se encontro en el grupo {group_id}')
+            logger.error(f'[delete_user_group] User not found Error | User {user_id} not found in group {group_id}')
             raise exceptions.UserNotFoundError(user_id)
 
     except SQLAlchemyError as e:
@@ -431,7 +412,6 @@ async def update_user_group(
 
         get_group_or_404(group_id, session)
 
-        # Busca el usuario
         stmt = (select(db_models.group_user)
                     .join(db_models.Group, db_models.group_user.group_id == db_models.Group.group_id)
                     .where(db_models.group_user.user_id == user_id))
@@ -440,37 +420,26 @@ async def update_user_group(
         found_user = result.first()
 
         if not found_user:
-            logger.error(f'No se encontro el user {user_id} en el grupo {group_id}')
+            logger.error(f'[update_user_group] User not found Error | User {user_id} not found in group {group_id}')
             raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
-        
+
         found_user.role = update_role.role
         
         session.commit()
         session.refresh(found_user)
 
-        # Se crea la notificacion
-        outgoing_payload = schemas.OutgoingNotificationPayload(
-            notification_type='update_role_to_group',
-            message=f'Tu rol en group {group_id} fue actualizado a: {found_user.role.value}',
-            timestamp=datetime.now())
+        outgoing_event_json = format_notification(
+                notification_type='update_role_to_group',
+                message=f'Tu rol en group {group_id} fue actualizado a: {found_user.role.value}')
 
-        # Crea el evento
-        outgoing_event = schemas.WebSocketEvent(
-            type='notification',
-            payload=outgoing_payload.model_dump()
-        )
-
-        # Parsea el evento
-        outgoing_event_json = outgoing_event.model_dump_json()
-
-        # Envia el evento
         await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         # Elimina cache existente
         try:
             await redis_client.delete(f'groups:user_id:{actual_user.user_id}:limit:*:offset:*')
+            logger.info(f'[get_groups] Cache Delete - Key: groups:user_id:{actual_user.user_id}:limit:*:offset:*')
         except redis.RedisError as e:
-            logger.warning(f'Error al eliminar cache en Redis: {e}')
+            logger.warning(f'[get_groups] Cache Delete Error | Error: {str(e)}')
 
         return {'detail':'Se ha cambiado los permisos del usuario en el grupo'}
 
@@ -505,7 +474,7 @@ async def get_user_in_group(
         cached = await redis_client.get(key)
 
         if cached:
-            logger.info(f'Redis Cache: {key}')
+            logger.info(f'[get_user_in_group] Cache Hit - Key: {key}')
             decoded = json.loads(cached)
             return decoded
 
@@ -525,8 +494,9 @@ async def get_user_in_group(
 
         try:
             await redis_client.setex(key, 600, json.dumps([user_.model_dump() for user_ in to_cache], default=str))
+            logger.info(f'[get_groups] Cache Set - Key: {key}')
         except redis.RedisError as e:
-            logger.warning(f'Error al cachear en Redis: {e}')
+            logger.warning(f'[get_groups] Cache Fail | Error: {str(e)}')
 
         return to_cache
 
