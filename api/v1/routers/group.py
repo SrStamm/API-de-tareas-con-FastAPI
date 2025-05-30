@@ -288,7 +288,7 @@ async def append_user_group(
         new_user = get_user_or_404(user_id, session)
 
         if new_user in found_group.users:
-            logger.error(f'[append_user_group] User {user_id} Append to Group {group_id} Error')
+            logger.error(f'[append_user_group] User {user_id} is in Group {group_id} | Error')
             raise exceptions.UserInGroupError(user_id=new_user.user_id, group_id=found_group.group_id)
 
         # Lo agrega al grupo

@@ -154,22 +154,6 @@ async def create_project(
         )
 
         session.add(project_user)
-
-        stmt = (select(db_models.group_user).where(db_models.group_user.group_id == group_id))
-        users_in_group = session.exec(stmt).all()
-
-        if users_in_group:
-            add_user_ids = [actual_user.user_id]
-            for group_user in users_in_group:
-                if group_user.role == 'admin' and group_user.user_id not in add_user_ids:
-                    project_user = db_models.project_user(
-                        project_id=project.project_id,
-                        user_id=group_user.user_id,
-                        permission='admin')
-
-                    session.add(project_user)
-                    add_user_ids.append(group_user.user_id)
-
         session.commit()
 
         try:

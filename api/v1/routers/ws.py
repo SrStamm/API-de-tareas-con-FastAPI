@@ -254,18 +254,19 @@ def get_chat(request: Request,
                         db_models.ProjectChat.user_id == user.user_id)
                 .limit(limit).offset(skip))
 
-        messages_chat = session.exec(stmt).all()
+        response = session.exec(stmt)
+        messages_chat = response.all()
 
         if not messages_chat:
             raise exceptions.ChatNotFoundError(project_id)
-        
+
         return messages_chat
     
     except SQLAlchemyError as e:
         raise exceptions.DatabaseError(error=e, func='get_chat')
 
 @router.post('/chat/{project_id}')
-async def send_message_to_group(
+async def send_message_to_project(
         project_id: int,
         message_payload: schemas.GroupMessagePayload,
         user: db_models.User = Depends(auth_user),
@@ -310,4 +311,4 @@ async def send_message_to_group(
 
     except SQLAlchemyError as e:
         session.rollback()
-        raise exceptions.DatabaseError(error=e, func='send_message_to_group')
+        raise exceptions.DatabaseError(error=e, func='send_message_to_project')

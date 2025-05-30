@@ -80,7 +80,7 @@ async def test_get_user_in_group(async_client, auth_headers):
 
 @pytest.mark.asyncio
 async def test_update_group(async_client, auth_headers):
-    response = await async_client.patch('/group/1', headers=auth_headers, json={'name':'probando el update'})
+    response = await async_client.patch('/group/1', headers=auth_headers, json={'name':'probando el update', 'description':'asfkasklfn'})
     assert response.status_code == 200
     assert response.json() == {'detail': 'Se ha actualizado la informacion del grupo'}
 
@@ -347,13 +347,12 @@ async def test_update_user_group_error(mocker):
 
     db_session_mock.rollback.assert_called_once()
 
-
-"""@pytest.mark.asyncio
+"""
+@pytest.mark.asyncio
 async def test_get_user_in_group_error(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
     mock_delete_user = mocker.Mock(spec=db_models.User)
     mock_delete_user.id = 2
-    db_session_mock = mocker.Mock()
 
     mock_request = mocker.Mock(spec=Request)
 
@@ -363,12 +362,14 @@ async def test_get_user_in_group_error(mocker):
 
     mocker.patch('api.v1.routers.group.get_group_or_404', return_value=mock_group)
 
+    db_session_mock = mocker.Mock()
     db_session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
         await group.get_user_in_group(
             request=mock_request,
             group_id=1,
+            user=mock_user,
             session=db_session_mock
         )
 """

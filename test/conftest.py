@@ -1,8 +1,3 @@
-# pytest -q --disable-warnings
-# pytest -vv --disable-warnings
-# pytest --cov=./routers --cov-report=html
-# xdg-open htmlcov/index.html
-
 import sys, os, pytest, pytest_asyncio, errno
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -14,9 +9,7 @@ from models import db_models
 from api.v1.routers.auth import encrypt_password
 from core.logger import logger
 import asyncio
-
 import redis.asyncio as redis
-
 from httpx import AsyncClient, ASGITransport
 
 # Crea la BD, cierra las conexiones y elimina la BD
@@ -38,6 +31,8 @@ def test_db():
     try:
         os.remove("./test/test.db")
         print("Base de datos test.db eliminada")
+        os.remove("./app.log")
+        print("Eliminado los logs")
     except OSError as e:
         if e.errno != errno.ENOENT:
             print(f"Error al eliminar test.db: {e}")

@@ -24,10 +24,8 @@ async def get_users(
         session:Session = Depends(get_session)) -> List[schemas.ReadUser]:
     try:
         key = f'users:limit:{limit}:offset:{skip}'
-        if not key:
-            logger.error(f'[get_users] Redis Key Error | Key Empty')
-        cached = await redis_client.get(key)
 
+        cached = await redis_client.get(key)
         if cached:
             decoded = json.loads(cached)
             logger.info(f'Redis Cached {key}')
@@ -99,9 +97,9 @@ async def create_user(
 def get_user_me(request:Request, user: db_models.User = Depends(auth_user)) -> schemas.ReadUser:
     try:
         return user
-    except SQLAlchemyError as e:
+    except Exception as e:
         logger.error(f'Error al obtener el user {user.user_id} actual {e}')
-        raise exceptions.DatabaseError(error=e, func='get_users')
+        raise
 
 @router.patch(
         '/me',
