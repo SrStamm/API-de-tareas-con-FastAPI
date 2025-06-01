@@ -296,7 +296,7 @@ async def add_user_to_project(
 
         outgoing_event_json = format_notification(
                 notification_type='add_user_to_project',
-                message=f'Fuiste agregagdo al project {project_id}')
+                message=f'You were added to the project {project_id}')
 
         # Envia el evento
         await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
@@ -357,7 +357,7 @@ async def remove_user_from_project(
 
             outgoing_event_json = format_notification(
                 notification_type='delete_user_from_project',
-                message='Fuiste eliminado del project {project_id}'
+                message=f'You were deleted from the project {project_id}'
                 )
 
             # Envia el evento
@@ -423,7 +423,7 @@ async def update_user_permission_in_project(
 
         outgoing_event_json = format_notification(
                 notification_type='permission_update',
-                message=f'Tus permisos en project {project_id} fue actualizado a {user.permission.value}'
+                message=f'Permissions of the project {project_id} were updated to {user.permission.value}'
                 )
 
         # Envia el evento

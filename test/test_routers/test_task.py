@@ -8,7 +8,7 @@ from fastapi import Request
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
         'project_id, datos, status, detail', [
-            (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1]}, 200, 'Se ha creado una nueva tarea y asignado los usuarios con exito'),
+            (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1]}, 200, 'A new task has been created and users have been successusfully assigned'),
             (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[3]}, 400, 'User with user_id 3 is not in project with project_id 1'),
             (1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'user_ids':[1000]}, 404, 'User with user_id 1000 not found'),
         ]
@@ -51,7 +51,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
         'project_id, task_id, datos, status, detail', [
-            (1, 1, {'description':'probando el testing... otra vez', 'date_exp':'2025-12-12', 'state':db_models.State.EN_PROCESO, 'exclude_user_ids': [1], 'append_user_ids':[2]}, 200, 'Se ha actualizado la tarea'),
+            (1, 1, {'description':'probando el testing... otra vez', 'date_exp':'2025-12-12', 'state':db_models.State.EN_PROCESO, 'exclude_user_ids': [1], 'append_user_ids':[2]}, 200, 'A new task has been created and users have been successfully assigned'),
             (1000, 1, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Project with project_id 1000 not found'),
             (1, 1000, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Task with task_id 1000 is not in Project with project_id 1'),
             (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'exclude_user_ids':[100000]}, 400, 'Task with task_id 1 is NOT assigned to User with user_id 100000'),
@@ -68,7 +68,7 @@ async def test_update_task(async_client, auth_headers, project_id, task_id, dato
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
         'task_id, status, detail', [
-            (1, 200, 'Se ha eliminado la tarea'),
+            (1, 200, 'Task successfully deleted'),
             (1, 404, 'Task with task_id 1 is not in Project with project_id 1')
         ]
 )

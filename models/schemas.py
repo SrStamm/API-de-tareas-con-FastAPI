@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 from typing import List, Optional
 from datetime import datetime as dt, timezone
-from .db_models import State, Group_Role, Project_Permission
+from .db_models import State, Group_Role, Project_Permission, TypeOfLabel, TaskLabelLink
 
 # User
 
@@ -47,6 +47,7 @@ class CreateTask(BaseModel):
     description: str = Field(examples=['Actualizar la API'])
     date_exp: dt = Field(examples=['2025-10-28'])
     user_ids: List[int] = Field(examples=[[1,5,88]])
+    label: List[TypeOfLabel] | None = None
 
     @field_validator("date_exp")
     def date_exp_must_be_future(cls, value):
@@ -57,12 +58,25 @@ class CreateTask(BaseModel):
 class AsignUser(BaseModel):
     users: int | List[int] = Field(examples=[[1, 5, 10]])
 
+class ReadLabel(BaseModel):
+    label: TypeOfLabel
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def __pydantic_init__(cls, obj: TaskLabelLink):
+        if not isinstance(obj, TaskLabelLink):
+            super().__pydantic_init__(obj)
+        else:
+            return cls(label=obj.label)
+
 class ReadTask(BaseModel):
     task_id: int = Field(examples=[1])
     project_id: int = Field(examples=[1])
     description: str = Field(examples=['Actualizar los datos'])
     date_exp: dt = Field(examples=['2025-10-24'])
     state: State = Field(examples=[State.EN_PROCESO])
+    task_label_links: List[ReadLabel] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -72,6 +86,7 @@ class ReadTaskInProject(BaseModel):
     date_exp: dt = Field(examples=[])
     state: State = Field(examples=[])
     asigned: List[ReadUser] = Field(examples=[[{'user_id':1, 'username':'user64'}, {'user_id':2, 'username':'user_falso'}]])
+    task_label_links: Optional[List[ReadLabel]] | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

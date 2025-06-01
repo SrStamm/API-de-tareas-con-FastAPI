@@ -11,6 +11,26 @@ class State(str, Enum):
     CANCELADO = 'cancelado'
     SIN_EMPEZAR = 'sin empezar'
 
+class TypeOfLabel(str, Enum):
+    BUG = 'bug'
+    FEATURE = 'feature'
+    REFACTOR = 'refactor'
+    DOCS = 'docs'
+    TESTS = 'tests'
+    UI_UX = 'ui/ux'
+
+    URGENT = 'urgent'
+    HIGH_PRIORITY = 'high_priority'
+    MEDIUM_PRIORITY = 'medium_priority'
+    LOW_PRIORITY = 'low_priority'
+    BLOCKER = 'blocker'
+
+    FRONTEND = 'frontend'
+    BACKEND = 'backend'
+    DATABASE = 'database'
+    API = 'api'
+    INFRASTRUCTURE = 'infrastructure'
+
 class Group_Role(str, Enum):
     ADMIN = 'admin'
     EDITOR = 'editor'
@@ -34,6 +54,12 @@ class project_user(SQLModel, table=True):
 class tasks_user(SQLModel, table=True):
     task_id: int = Field(primary_key=True, foreign_key='task.task_id')
     user_id: int = Field(primary_key=True, foreign_key='user.user_id')
+
+class TaskLabelLink(SQLModel, table=True):
+    task_id: Optional[int] = Field(default=None, primary_key=True, foreign_key='task.task_id')
+    label: TypeOfLabel = Field(primary_key=True)
+
+    task: Optional["Task"] = Relationship(back_populates='task_label_links')
 
 class Group(SQLModel, table=True):
     __tablename__ = 'group' 
@@ -77,6 +103,7 @@ class Task(SQLModel, table=True):
     asigned: Mapped[List["User"]] = Relationship(back_populates='tasks_asigned', link_model=tasks_user)
     project: Mapped[Optional["Project"]] = Relationship(back_populates='tasks')
     comments: List["Task_comments"] = Relationship(back_populates="task")
+    task_label_links: List["TaskLabelLink"] = Relationship(back_populates='task')
 
 class Task_comments(SQLModel, table=True):
     comment_id: Optional[int] = Field(primary_key=True, default=None)

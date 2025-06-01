@@ -298,7 +298,7 @@ async def append_user_group(
         # Se crea la notificacion
         outgoing_event_json = format_notification(
                 notification_type='append_to_group',
-                message='Has sido agregado a group {group_id}'
+                message='You were added to group {group_id}'
             )
 
         # Envia el evento
@@ -360,7 +360,7 @@ async def delete_user_group(
                 # Se crea la notificacion
                 outgoing_event_json = format_notification(
                     notification_type='remove_user_to_group',
-                    message=f'Fuiste removido del group {group_id}'
+                    message=f'You were removed to group {group_id}'
                     )
 
                 # Envia el evento
@@ -430,7 +430,7 @@ async def update_user_group(
 
         outgoing_event_json = format_notification(
                 notification_type='update_role_to_group',
-                message=f'Tu rol en group {group_id} fue actualizado a: {found_user.role.value}')
+                message=f'Your role in the group {group_id} was upgrated to: {found_user.role.value}')
 
         await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 

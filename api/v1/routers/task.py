@@ -40,9 +40,10 @@ async def get_task(
         stmt = (select(db_models.Task)
                     .join(db_models.tasks_user, db_models.Task.task_id == db_models.tasks_user.task_id)
                     .where(db_models.tasks_user.user_id == user.user_id)
+                    .options(joinedload(db_models.Task.task_label_links))
                     .limit(limit).offset(skip))
 
-        found_tasks = session.exec(stmt).all()
+        found_tasks = session.exec(stmt).unique().all()
 
         to_cache = [
             schemas.ReadTask(
@@ -50,7 +51,8 @@ async def get_task(
                 project_id=task.project_id,
                 description=task.description,
                 date_exp=task.date_exp,
-                state=task.state
+                state=task.state,
+                task_label_links=task.task_label_links
             )
             for task in found_tasks
         ]
@@ -158,7 +160,8 @@ async def get_task_in_project(
                 description=task.description,
                 date_exp=task.date_exp,
                 state=task.state,
-                asigned=task.asigned
+                asigned=task.asigned,
+                task_label_links=task.task_label_links
             )
             for task in found_tasks
         ]
@@ -208,6 +211,14 @@ async def create_task(
         session.commit()
         session.refresh(task)
 
+        if new_task.label:
+            for l in new_task.label:
+                label = db_models.TaskLabelLink(
+                    task_id=task.task_id,
+                    label=l.value)
+                
+                session.add(label)
+
         for user_id in new_task.user_ids:
             task_user = db_models.tasks_user(
                 task_id=task.task_id,
@@ -217,14 +228,14 @@ async def create_task(
             # Se crea la notificacion
             outgoing_event_json = format_notification(
                         notification_type='assigned_task',
-                        message=f'Ya no estas asignado a task {task.task_id} en project {project_id}')
+                        message=f'You are no longer assigned to the task {task.task_id} in project {project_id}')
 
             # Envia el evento
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         session.commit()
 
-        return {'detail':'Se ha creado una nueva tarea y asignado los usuarios con exito'}
+        return {'detail':'A new task has been created and users have been successusfully assigned'}
     
     except SQLAlchemyError as e:
         logger.error(f'[create_task] Database Error | Error: {str(e)}')
@@ -330,7 +341,7 @@ async def update_task(
                 # Se crea la notificacion
                 outgoing_event_json = format_notification(
                         notification_type='assigned_task',
-                        message=f'Te asignaron a task {task_id} en project {project_id}')
+                        message=f'You were assigned to the task {task_id} in the project {project_id}')
                 
                 # Envia el evento
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
@@ -340,7 +351,7 @@ async def update_task(
                 # Se crea la notificacion
                 outgoing_event_json = format_notification(
                         notification_type='assigned_task',
-                        message=f'Ya no estas asignado a task {task_id} en project {project_id}')
+                        message=f'You are no longer assigned to the task {task_id} in project {project_id}')
                 
                 # Envia el evento
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
@@ -351,7 +362,7 @@ async def update_task(
         except redis.RedisError as e:
             logger.warning(f'[update_task] Redis Cache Delete Error | Error: {str(e)}')
 
-        return {'detail':'Se ha actualizado la tarea'}
+        return {'detail':'A new task has been created and users have been successfully assigned'}
 
     except SQLAlchemyError as e:
         logger.error(f'[update_task] Database Error | Error: {str(e)}')
@@ -386,7 +397,7 @@ async def delete_task(
         except redis.RedisError as e:
             logger.warning(f'[delete_task] Redis Cache Delete Error | Error: {str(e)}')
 
-        return {'detail':'Se ha eliminado la tarea'}
+        return {'detail':'Task successfully deleted'}
 
     except SQLAlchemyError as e:
         logger.error(f'[delete_task] Database Error | Error: {str(e)}')
