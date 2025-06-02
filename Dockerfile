@@ -26,9 +26,3 @@ COPY --from=builder /usr/local/bin/ /usr/local/bin/
 COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
 # Copia el código de aplicación
 COPY --from=builder /app /backend
-
-# Expone el puerto de la aplicación
-EXPOSE 8000
-
-# Comando para iniciar la aplicación.
-CMD ["uvicorn", "main:app", "--port", "8000"]

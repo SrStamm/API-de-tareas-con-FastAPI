@@ -103,7 +103,7 @@ class Task(SQLModel, table=True):
     asigned: Mapped[List["User"]] = Relationship(back_populates='tasks_asigned', link_model=tasks_user)
     project: Mapped[Optional["Project"]] = Relationship(back_populates='tasks')
     comments: List["Task_comments"] = Relationship(back_populates="task")
-    task_label_links: List["TaskLabelLink"] = Relationship(back_populates='task')
+    task_label_links: List["TaskLabelLink"] = Relationship(back_populates='task', sa_relationship_kwargs={'cascade':'all, delete-orphan'})
 
 class Task_comments(SQLModel, table=True):
     comment_id: Optional[int] = Field(primary_key=True, default=None)

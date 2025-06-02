@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Request, HTTPException
 from models import db_models, schemas, exceptions, responses
 from .auth import auth_user
-from db.database import get_session, Session, select, SQLAlchemyError, joinedload, redis_client, redis, IntegrityError
-from typing import List
+from db.database import get_session, Session, select, SQLAlchemyError, joinedload, redis_client, redis, IntegrityError, func
+from typing import List, Optional
 from core.utils import found_task_or_404, get_user_or_404, found_user_in_project_or_404
 from core.permission import require_permission
 from core.logger import logger
@@ -17,7 +17,9 @@ router = APIRouter(prefix='/task', tags=['Task'])
         '',
         description=""" Obtain all of assigned tasks this user.
                     'skip' receives an "int" that skips the result obtained.
-                    'limit' receives an "int" that limits the result obtained""",
+                    'limit' receives an "int" that limits the result obtained.
+                    'labels' receives a list with labels to filter the task.
+                    'state' receives a list with states to filter the task.""",
         responses={ 200: {'description':'Tasks obtained', 'model':schemas.ReadTask},
                     500: {'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("30/minute")
@@ -25,11 +27,16 @@ async def get_task(
         request:Request,
         limit:int = 10,
         skip: int = 0,
+        labels: List[db_models.TypeOfLabel] = None,
+        state: List[db_models.State] | None = None,
         user:db_models.User = Depends(auth_user),
         session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
 
     try:
-        key = f'task:user:user_id:{user.user_id}:limit:{limit}:offset:{skip}'
+        labels_str = sorted([label.value for label in labels]) if state else []
+        state_str = sorted([s.value for s in state]) if state else []
+
+        key = f'task:user:user_id:{user.user_id}:state:{json.dumps(state_str)}:labels:{json.dumps(labels_str)}:limit:{limit}:offset:{skip}'
         cached = await redis_client.get(key)
 
         if cached:
@@ -40,10 +47,20 @@ async def get_task(
         stmt = (select(db_models.Task)
                     .join(db_models.tasks_user, db_models.Task.task_id == db_models.tasks_user.task_id)
                     .where(db_models.tasks_user.user_id == user.user_id)
-                    .options(joinedload(db_models.Task.task_label_links))
-                    .limit(limit).offset(skip))
+                    .options(joinedload(db_models.Task.task_label_links)))
 
-        found_tasks = session.exec(stmt).unique().all()
+        if labels:
+            stmt = stmt.join(
+                    db_models.TaskLabelLink, db_models.Task.task_id == db_models.TaskLabelLink.task_id
+                ).where(
+                    db_models.TaskLabelLink.label.in_(labels)
+                ).group_by(db_models.Task.task_id).having(
+                    func.count(db_models.TaskLabelLink.label.distinct()) == len(labels))
+
+        if state:
+            stmt = stmt.where(db_models.Task.state.in_(state))
+
+        found_tasks = session.exec(stmt.limit(limit).offset(skip)).unique().all()
 
         to_cache = [
             schemas.ReadTask(
@@ -123,7 +140,9 @@ async def get_users_for_task(
         '/{project_id}',
         description= """ Obtain all assigned proyect tasks.
                         'skip' receives an "int" that skips the result obtained.
-                        'limit' receives an "int" that limits the result obtained.""",
+                        'limit' receives an "int" that limits the result obtained.
+                        'labels' receives a list with labels to filter the task.
+                        'state' receives a list with states to filter the task.""",
         responses={ 200: {'description':'Tasks from project obtained', 'model':schemas.ReadTaskInProject},
                     500: {'description':'Internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("15/minute")
@@ -132,11 +151,16 @@ async def get_task_in_project(
         project_id: int,
         limit:int = 10,
         skip: int = 0,
+        labels: List[db_models.TypeOfLabel] = None,
+        state: List[db_models.State] | None = None,
         user: db_models.User = Depends(auth_user),
         session: Session = Depends(get_session)) -> List[schemas.ReadTaskInProject]:
 
     try:
-        key = f'task:users:project_id:{project_id}:user_id:{user.user_id}:limit:{limit}:offset:{skip}'
+        labels_str = sorted([label.value for label in labels]) if labels else []
+        state_str = sorted([s.value for s in state]) if state else []
+
+        key = f'task:users:project_id:{project_id}:user_id:{user.user_id}:labels:{json.dumps(labels_str)}:state:{json.dumps(state_str)}:limit:{limit}:offset:{skip}'
         cached = await redis_client.get(key)
 
         if cached:
@@ -146,13 +170,25 @@ async def get_task_in_project(
 
         # Selecciona las tareas asignadas a los usuarios en el proyecto
         stmt = (select(db_models.Task)
-                    .join(db_models.tasks_user, db_models.tasks_user.task_id == db_models.Task.task_id)
-                    .join(db_models.project_user, db_models.project_user.user_id == db_models.tasks_user.user_id)
-                    .where(db_models.project_user.project_id == project_id, db_models.project_user.user_id == user.user_id)
+                    .join(
+                        db_models.tasks_user, db_models.tasks_user.task_id == db_models.Task.task_id)
+                    .where(
+                        db_models.project_user.project_id == project_id, db_models.project_user.user_id == user.user_id)
                     .options(joinedload(db_models.Task.asigned))
-                    .limit(limit).offset(skip))
-        
-        found_tasks = session.exec(stmt).unique().all()
+                    )
+
+        if labels:
+            stmt = stmt.join(
+                    db_models.TaskLabelLink, db_models.Task.task_id == db_models.TaskLabelLink.task_id
+                ).where(
+                    db_models.TaskLabelLink.label.in_(labels)
+                ).group_by(db_models.Task.task_id).having(
+                    func.count(db_models.TaskLabelLink.label.distinct()) == len(labels))
+
+        if state:
+            stmt = stmt.where(db_models.Task.state.in_(state))
+
+        found_tasks = session.exec(stmt.limit(limit).offset(skip)).unique().all()
 
         to_cache = [
             schemas.ReadTaskInProject(
@@ -251,6 +287,7 @@ async def create_task(
                     500: {'description':'internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
 async def update_task(
+
         request:Request,
         task_id: int,
         project_id: int,
@@ -409,8 +446,8 @@ async def update_task(
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
         try:
-            await redis_client.delete(f'task:users:project_id:{project_id}:user_id:*:limit:*:offset:*')
-            logger.info(f'[update_task] Redis Cache Delete Succes - Key: task:users:project_id:{project_id}:user_id:*:limit:*:offset:*')
+            await redis_client.delete(f'task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*')
+            logger.info(f'[update_task] Redis Cache Delete Succes - Key: task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*')
         except redis.RedisError as e:
             logger.warning(f'[update_task] Redis Cache Delete Error | Error: {str(e)}')
 
@@ -442,10 +479,10 @@ async def delete_task(
 
         try:
             await redis_client.delete(f'task:users:task_id:{task_id}:limit:*:offset:*')
-            await redis_client.delete(f'task:users:project_id:{project_id}:user_id:*:limit:*:offset:*')
+            await redis_client.delete(f'task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*')
 
             logger.info(f'[delete_task] Redis Cache Delete Success - Key: task:users:task_id:{task_id}:limit:*:offset:*')
-            logger.info(f'[delete_task] Redis Cache Delete Success - Key: task:users:project_id:{project_id}:user_id:*:limit:*:offset:*')
+            logger.info(f'[delete_task] Redis Cache Delete Success - Key: task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*')
         except redis.RedisError as e:
             logger.warning(f'[delete_task] Redis Cache Delete Error | Error: {str(e)}')
 
