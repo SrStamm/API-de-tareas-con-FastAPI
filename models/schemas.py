@@ -97,6 +97,9 @@ class UpdateTask(BaseModel):
     append_user_ids: Optional[List[int]] = Field(default=None, examples=[1])
     exclude_user_ids: Optional[List[int]] = Field(default=None, examples=[1])
 
+    remove_label: Optional[List[TypeOfLabel]] | None = Field(default=None, examples=[TypeOfLabel.HIGH_PRIORITY, TypeOfLabel.BACKEND])
+    append_label: Optional[List[TypeOfLabel]] | None = Field(default=None, examples=[TypeOfLabel.BUG, TypeOfLabel.FRONTEND])
+
     @field_validator("date_exp")
     def date_exp_must_be_future(cls, value):
         if value <= dt.now():

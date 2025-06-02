@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from models import db_models, schemas, exceptions, responses
 from .auth import auth_user
-from db.database import get_session, Session, select, SQLAlchemyError, joinedload, redis_client, redis
+from db.database import get_session, Session, select, SQLAlchemyError, joinedload, redis_client, redis, IntegrityError
 from typing import List
 from core.utils import found_task_or_404, get_user_or_404, found_user_in_project_or_404
 from core.permission import require_permission
@@ -288,7 +288,7 @@ async def update_task(
                     stmt = (select(db_models.project_user).where(
                         db_models.project_user.user_id == user_exists.user_id,
                         db_models.project_user.project_id == project_id))
-                    
+
                     user_in_project = session.exec(stmt).first()
                     if not user_in_project:
                         logger.error(f'[update_task] User {user_id} not found in project {project_id}')
@@ -298,7 +298,7 @@ async def update_task(
                     stmt = (select(db_models.tasks_user).where(
                         db_models.tasks_user.user_id == user_exists.user_id,
                         db_models.tasks_user.task_id == task_id))
-                    
+
                     user_in_task = session.exec(stmt).first()
                     if user_in_task:
                         logger.error(f'[update_task] User {user_id} was already assigned to task {task_id}')
@@ -321,7 +321,7 @@ async def update_task(
                     stmt = (select(db_models.tasks_user).where(
                         db_models.tasks_user.user_id == user_id,
                         db_models.tasks_user.task_id == task_id))
-                    
+
                     user_in_task = session.exec(stmt).first()
                     if not user_in_task:
                         logger.error(f'[update_task] Update Task Error | User {user_id} not assigned to task {task_id}')
@@ -331,6 +331,58 @@ async def update_task(
             else:
                 logger.error(f'[update_task] Unauthorized | User {user.user_id} not authorized for this action')
                 raise exceptions.NotAuthorized(user.user_id)
+
+        # Verifica si hay nuevas labels para agregar a la tarea
+        if update_task.append_label:
+            if actual_permission in ('admin', 'editor'):                
+                stmt = select(db_models.TaskLabelLink.label).where(db_models.TaskLabelLink.task_id == task_id)
+                existing_labels_for_task = set(session.exec(stmt).all())
+
+                new_labels = []
+                for label_to_append in update_task.append_label:
+                    if label_to_append in existing_labels_for_task:
+                        logger.warning(f'[update_task] Label {label_to_append.value} already exists for Task {task_id}. Skipping')
+                    else:
+                        new_labels.append(label_to_append)
+
+                if new_labels:
+                    try:
+                        for label in new_labels:
+                            new_relation = db_models.TaskLabelLink(
+                                task_id=task_id,
+                                label=label
+                            )
+                            session.add(new_relation)
+
+                    except IntegrityError as e:
+                        logger.error(f'[update_task] Database Integrity Error when adding labbels | Error: {str(e)}')
+                        raise HTTPException(status_code=409, detail='Failed to add labels due to database conflict (label might already exist).')
+                    except Exception as e:
+                        logger.error(f'[update_task] Error adding labels | Error: {str(e)}')
+                        raise HTTPException(status_code=500, detail="An error occurred while adding labels.")
+
+        # Verifica si hay labels para remover de la tarea
+        if update_task.remove_label:
+            if actual_permission in ('admin', 'editor'):                
+                stmt = select(db_models.TaskLabelLink.label).where(db_models.TaskLabelLink.task_id == task_id)
+                existing_labels_for_task = set(session.exec(stmt).all())
+
+                try:
+                    for label_to_remove in update_task.remove_label:
+                        if label_to_remove in existing_labels_for_task:
+                            label = session.exec(select(db_models.TaskLabelLink).where(
+                                        db_models.TaskLabelLink.task_id == task_id,
+                                        db_models.TaskLabelLink.label == label_to_remove)).first()
+                            session.delete(label)
+                        else:
+                            logger.warning(f'[update_task] Label {label_to_remove.value} not exists for Task {task_id}. Skipping')
+
+                except IntegrityError as e:
+                    logger.error(f'[update_task] Database Integrity Error when removing labbels | Error: {str(e)}')
+                    raise HTTPException(status_code=409, detail='Failed to remove labels due to database conflict (label might already exist).')
+                except Exception as e:
+                    logger.error(f'[update_task] Error removing labels | Error: {str(e)}')
+                    raise HTTPException(status_code=500, detail="An error occurred while removing labels.")
 
         session.commit()
 
@@ -342,7 +394,7 @@ async def update_task(
                 outgoing_event_json = format_notification(
                         notification_type='assigned_task',
                         message=f'You were assigned to the task {task_id} in the project {project_id}')
-                
+
                 # Envia el evento
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
@@ -352,7 +404,7 @@ async def update_task(
                 outgoing_event_json = format_notification(
                         notification_type='assigned_task',
                         message=f'You are no longer assigned to the task {task_id} in project {project_id}')
-                
+
                 # Envia el evento
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
@@ -362,7 +414,7 @@ async def update_task(
         except redis.RedisError as e:
             logger.warning(f'[update_task] Redis Cache Delete Error | Error: {str(e)}')
 
-        return {'detail':'A new task has been created and users have been successfully assigned'}
+        return {'detail':'A task has been successfully updated'}
 
     except SQLAlchemyError as e:
         logger.error(f'[update_task] Database Error | Error: {str(e)}')

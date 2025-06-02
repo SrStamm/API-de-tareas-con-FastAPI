@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel, create_engine, Session, select, or_
 from sqlalchemy import text
 from sqlalchemy.orm import selectinload, joinedload
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from dotenv import load_dotenv
 import os
 from models.db_models import Group, Project, User, Task

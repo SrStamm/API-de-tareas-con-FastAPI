@@ -51,7 +51,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
         'project_id, task_id, datos, status, detail', [
-            (1, 1, {'description':'probando el testing... otra vez', 'date_exp':'2025-12-12', 'state':db_models.State.EN_PROCESO, 'exclude_user_ids': [1], 'append_user_ids':[2]}, 200, 'A new task has been created and users have been successfully assigned'),
+            (1, 1, {'description':'probando el testing... otra vez', 'date_exp':'2025-12-12', 'state':db_models.State.EN_PROCESO, 'exclude_user_ids': [1], 'append_user_ids':[2]}, 200, 'A task has been successfully updated'),
             (1000, 1, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Project with project_id 1000 not found'),
             (1, 1000, {'description':'probando el testing', 'date_exp':'2025-10-10'}, 404, 'Task with task_id 1000 is not in Project with project_id 1'),
             (1, 1, {'description':'probando el testing', 'date_exp':'2025-10-10', 'exclude_user_ids':[100000]}, 400, 'Task with task_id 1 is NOT assigned to User with user_id 100000'),
