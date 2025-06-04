@@ -7,7 +7,8 @@ from redis.asyncio import Redis
 from models import schemas
 from datetime import datetime
 import asyncio, json
-
+from tasks import save_notification_in_db
+from core.event_ws import format_notification
 class ConnectionManager:
     # Crea una lista de conexiones activas
     def __init__(self):
@@ -152,9 +153,20 @@ class RedisConnectionManager:
             logger.info(f"Cancelled Pub/Sub task for conn={connection_id}")
         logger.info(f"[DISCONNECTED] conn={connection_id}")
 
-    async def send_to_user(self, user_id: int, message: str):
-        await self.redis.publish(f"user:{user_id}", message)
-        logger.info(f"Published message to user:{user_id}: {message}")
+    async def send_to_user(self, user_id: int, message: dict):
+        connected = await self.redis.exists(f"user_connections:{user_id}")
+
+        if connected:
+            json_message = format_notification(
+                notification_type=message["notification_type"],
+                message=message["message"]
+            )
+
+            await self.redis.publish(f"user:{user_id}", json_message)
+            logger.info(f"[send_to_user] Published message to user:{user_id}: {json_message}")
+        else:
+            logger.warning(f'User {user_id} not connected.')
+            save_notification_in_db.delay(message=message, user_id=user_id)
 
     async def broadcast(self, project_id: int, message: str):
         await self.redis.publish(f"project:{project_id}", message)

@@ -24,6 +24,21 @@ services:
       - "8001:8001"
     env_file: .env
 
+  celery:
+    build: .
+    command: celery -A tasks worker --loglevel=info
+    depends_on:
+      - redis
+      - api
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      # REDIS_PASSWORD: sasaki19
+    env_file: .env
+    volumes:
+      - .:/backend
+
   api:
     build: .
     depends_on:

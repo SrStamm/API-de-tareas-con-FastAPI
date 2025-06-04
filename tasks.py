@@ -1,0 +1,84 @@
+from fastapi import Depends
+from celery import Celery
+from typing import Dict
+import os, json
+from dotenv import load_dotenv
+from db.database import Session, SessionLocal, select, SQLAlchemyError
+from models import db_models, schemas
+from core.logger import logger
+from core.event_ws import format_notification
+
+load_dotenv()
+
+host= os.getenv("REDIS_HOST", "localhost")
+port=int(os.getenv("REDIS_PORT", '6379'))
+db=int(os.getenv("REDIS_DB", '0'))
+password=os.getenv("REDIS_PASSWORD")
+
+url = f"redis://{host}:{port}/{db}"
+
+app = Celery('tasks', broker=url)
+
+@app.task
+def send_due_notifications(user_id: int):
+    session = Session()
+    try:
+        stmt = select(db_models.Notifications).where(
+            db_models.Notifications.user_id == user_id,
+            db_models.Notifications.status == db_models.Notify_State.SIN_ENVIAR)
+
+        notify_found = session.exec(stmt).all()
+
+        if notify_found:
+            for n in notify_found:
+                # Prepara la notificacion a enviar
+                notify_to_send = format_notification(notification_type=n.type, message=n.payload)
+                
+                # deberia de enviarse por aca
+
+                logger.info(f'[send_due_notifications] Notification {n.id} to the User {n.user_id} was sent')
+
+    except SQLAlchemyError as e:
+        logger.error(f'[send_due_notifications] Internal Error | Error: {str(e)}.')
+        raise
+
+    except Exception as e:
+        logger.error(f'[send_due_notifications] Notification {n.id} to the User {user_id} not sent Error | Error: {str(e)}.')
+        raise
+
+@app.task
+def save_notification_in_db(message, user_id: int):
+    session = SessionLocal()
+    try:
+        message_decoded = json.loads(message)
+        notice_payload = schemas.NotificationPayload(**message_decoded)
+
+        new_notice = db_models.Notifications(
+            user_id=user_id,
+            type=notice_payload.notification_type,
+            payload=notice_payload.message,
+            status=db_models.Notify_State.SIN_ENVIAR
+        )
+
+        session.add(new_notice)
+        session.commit()
+        logger.info(f'[save_notification] Saved notification for user {user_id}, type: {notice_payload.notification_type}')
+        return {"status": "success", "notification_id": new_notice.id}
+
+    except ValueError as ve:
+        logger.error(f'[save_notification_in_db] Validation error for user {user_id}: {str(ve)}')
+        session.rollback()
+        raise
+
+    except SQLAlchemyError as dbe:
+        logger.error(f'[save_notification_in_db] Database error for user {user_id}: {str(dbe)}')
+        session.rollback()
+        raise
+
+    except Exception as e:
+        logger.error(f'[save_notification_in_db] Unexpected error for user {user_id}: {str(e)}')
+        session.rollback()
+        raise
+
+    finally:
+        session.close()

@@ -1,11 +1,10 @@
 from sqlmodel import SQLModel, create_engine, Session, select, or_
 from sqlalchemy import text, func
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.orm import selectinload, joinedload, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from dotenv import load_dotenv
 import os
-from models.db_models import Group, Project, User, Task
-
+from models import db_models
 load_dotenv()
 
 user = os.environ.get('POSTGRES_USER')
@@ -26,12 +25,15 @@ def create_db_and_tables():
     except Exception as e:
         raise Exception(f"Error al conectar a la base de datos: {e}, {e.args}")
 
+SessionLocal = sessionmaker(autoflush=False, autocommit=False, bind=engine)
+
 def get_session():
     session = Session(engine)
     try:
         yield session
     finally:
         session.close()
+
 
 # Usar para Docker
 redis_host = os.getenv("REDIS_HOST", "localhost")

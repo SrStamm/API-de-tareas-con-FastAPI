@@ -11,6 +11,10 @@ class State(str, Enum):
     CANCELADO = 'cancelado'
     SIN_EMPEZAR = 'sin empezar'
 
+class Notify_State(str, Enum):
+    ENVIADO = 'enviado'
+    SIN_ENVIAR = 'sin enviar'
+
 class TypeOfLabel(str, Enum):
     BUG = 'bug'
     FEATURE = 'feature'
@@ -92,6 +96,7 @@ class User(SQLModel, table=True):
     projects: Mapped[List["Project"]] = Relationship(back_populates='users', link_model=project_user)
     tasks_asigned: Mapped[List["Task"]] = Relationship(back_populates='asigned', link_model=tasks_user)
     comments: List["Task_comments"] = Relationship(back_populates="user")
+    notifications: List['Notifications'] = Relationship(back_populates='user')
 
 class Task(SQLModel, table=True):
     task_id: Optional[int] = Field(default=None, primary_key=True)
@@ -137,3 +142,13 @@ class Session(SQLModel, table=True):
     expires_at: dt
     class Config:
         indexes = [("sub", "is_active")]
+
+class Notifications(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key='user.user_id', nullable=False)
+    type: str = Field(nullable=True)
+    payload: str = Field(nullable=True)
+    status: Notify_State = Field(default_factory=Notify_State.SIN_ENVIAR)
+    timestamp: dt = Field(default_factory=lambda: dt.now(timezone.utc))
+
+    user: User = Relationship(back_populates='notifications')
