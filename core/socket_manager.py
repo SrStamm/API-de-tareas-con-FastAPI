@@ -7,7 +7,7 @@ from redis.asyncio import Redis
 from models import schemas
 from datetime import datetime
 import asyncio, json
-from tasks import save_notification_in_db
+from tasks import save_notification_in_db, get_pending_notifications_for_user
 from core.event_ws import format_notification
 class ConnectionManager:
     # Crea una lista de conexiones activas
@@ -99,7 +99,7 @@ class RedisConnectionManager:
                 ).model_dump()
         ).model_dump_json()
 
-        await websocket.send_json(event_connected)
+        # await websocket.send_json(event_connected)
 
         # Iniciar la subscripción a canales
         await self._subscribe(websocket, user_id, project_id, connection_id)
@@ -153,13 +153,18 @@ class RedisConnectionManager:
             logger.info(f"Cancelled Pub/Sub task for conn={connection_id}")
         logger.info(f"[DISCONNECTED] conn={connection_id}")
 
-    async def send_to_user(self, user_id: int, message: dict):
+    async def send_to_user(self, user_id: int, message: str):
         connected = await self.redis.exists(f"user_connections:{user_id}")
 
         if connected:
+            logger.info(f'message: {message}')
+
+            json_decoded = json.loads(message)
+            logger.info(f'json_decoded: {json_decoded}')
+
             json_message = format_notification(
-                notification_type=message["notification_type"],
-                message=message["message"]
+                notification_type=json_decoded["payload"]["notification_type"],
+                message=json_decoded["payload"]["message"]
             )
 
             await self.redis.publish(f"user:{user_id}", json_message)
@@ -173,3 +178,14 @@ class RedisConnectionManager:
         logger.info(f"Published broadcast to project:{project_id}: {message}")
 
 manager = RedisConnectionManager(redis_client)
+
+async def send_pending_notifications(user_id: int):
+        pending = get_pending_notifications_for_user(user_id)
+
+        if pending:
+            for n in pending:
+                notification_to_send = format_notification(
+                    notification_type=n.type,
+                    message=n.payload)
+
+                await manager.send_to_user(user_id=user_id, message=notification_to_send)

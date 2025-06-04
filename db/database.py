@@ -26,6 +26,7 @@ def create_db_and_tables():
         raise Exception(f"Error al conectar a la base de datos: {e}, {e.args}")
 
 SessionLocal = sessionmaker(autoflush=False, autocommit=False, bind=engine)
+sessionlocal = Session(engine)
 
 def get_session():
     session = Session(engine)

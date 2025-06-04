@@ -5,12 +5,12 @@ def format_notification(notification_type:str, message:str):
     outgoin_payload = schemas.OutgoingNotificationPayload(
         notification_type=notification_type,
         message=message
-    )
+    ).model_dump()
 
     # Crea el evento
     outgoing_event = schemas.WebSocketEvent(
         type='notification',
-        payload=outgoin_payload.model_dump()
+        payload=outgoin_payload
     )
 
     # Parsea a json

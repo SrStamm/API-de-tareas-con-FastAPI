@@ -1,9 +1,9 @@
 from fastapi import Depends
 from celery import Celery
-from typing import Dict
+from typing import Dict, List
 import os, json
 from dotenv import load_dotenv
-from db.database import Session, SessionLocal, select, SQLAlchemyError
+from db.database import Session, SessionLocal, sessionlocal, select, SQLAlchemyError
 from models import db_models, schemas
 from core.logger import logger
 from core.event_ws import format_notification
@@ -20,8 +20,8 @@ url = f"redis://{host}:{port}/{db}"
 app = Celery('tasks', broker=url)
 
 @app.task
-def send_due_notifications(user_id: int):
-    session = Session()
+def get_pending_notifications_for_user(user_id: int) -> List[db_models.Notifications]:
+    session = sessionlocal
     try:
         stmt = select(db_models.Notifications).where(
             db_models.Notifications.user_id == user_id,
@@ -29,29 +29,22 @@ def send_due_notifications(user_id: int):
 
         notify_found = session.exec(stmt).all()
 
-        if notify_found:
-            for n in notify_found:
-                # Prepara la notificacion a enviar
-                notify_to_send = format_notification(notification_type=n.type, message=n.payload)
-                
-                # deberia de enviarse por aca
-
-                logger.info(f'[send_due_notifications] Notification {n.id} to the User {n.user_id} was sent')
+        return notify_found
 
     except SQLAlchemyError as e:
-        logger.error(f'[send_due_notifications] Internal Error | Error: {str(e)}.')
+        logger.error(f'[get_pending_notifications_for_user] Internal Error | Error: {str(e)}.')
         raise
 
     except Exception as e:
-        logger.error(f'[send_due_notifications] Notification {n.id} to the User {user_id} not sent Error | Error: {str(e)}.')
-        raise
+        logger.error(f'[get_pending_notifications_for_user] Notification Error | Error: {str(e)}.')
+        return []
 
 @app.task
 def save_notification_in_db(message, user_id: int):
     session = SessionLocal()
     try:
-        message_decoded = json.loads(message)
-        notice_payload = schemas.NotificationPayload(**message_decoded)
+        # message_decoded = json.loads(message)
+        notice_payload = schemas.NotificationPayload(**message)
 
         new_notice = db_models.Notifications(
             user_id=user_id,

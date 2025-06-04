@@ -6,7 +6,7 @@ from db.database import get_session, Session, select, SQLAlchemyError
 from .auth import auth_user_ws, auth_user
 from core.logger import logger
 from core.limiter import limiter
-from core.socket_manager import manager
+from core.socket_manager import manager, send_pending_notifications
 import json
 from core.utils import found_user_in_project_or_404
 
@@ -88,6 +88,8 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
 
     # Conecta el usario a websocket
     conn_id = await manager.connect(websocket=websocket, project_id=project_id, user_id=user.user_id)
+
+    await send_pending_notifications(user.user_id)
 
     try:
         while True:
