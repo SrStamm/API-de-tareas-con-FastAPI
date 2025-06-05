@@ -7,8 +7,9 @@ from .auth import auth_user_ws, auth_user
 from core.logger import logger
 from core.limiter import limiter
 from core.socket_manager import manager, send_pending_notifications
-import json
+from core.event_ws import format_personal_message
 from core.utils import found_user_in_project_or_404
+import json
 
 router = APIRouter(tags=['WebSocket'])
 
@@ -88,6 +89,12 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
 
     # Conecta el usario a websocket
     conn_id = await manager.connect(websocket=websocket, project_id=project_id, user_id=user.user_id)
+
+    connection_event = format_personal_message(
+                            user_id=user.user_id,
+                            message=f'User {user.user_id} connected')
+
+    await manager.send_to_user(message=connection_event, user_id=user.user_id)
 
     await send_pending_notifications(user.user_id)
 
@@ -218,19 +225,19 @@ async def websocket_endpoint(websocket: WebSocket, project_id: int, session: Ses
     
     except RuntimeError as e:
         logger.error(f'Error de ejecución: {e}')
-        manager.disconnect(websocket, project_id, user.user_id)
+        manager.disconnect(conn_id)
     
     except ValueError:
         logger.error(f'Se esperaba un mensaje de texto valido')
-        manager.disconnect(websocket, project_id, user.user_id)
+        manager.disconnect(conn_id)
 
     except SQLAlchemyError as e:
         logger.error(f'Error interno en WebSocket: {e}')
-        manager.disconnect(websocket, project_id, user.user_id)
+        manager.disconnect(conn_id)
     
     except Exception as e:
         logger.error(f'Error inesperado: {e}')
-        manager.disconnect(websocket, project_id, user.user_id)
+        manager.disconnect(conn_id)
 
 @router.get('/chat/{project_id}',
         description=""" Obtiene el chat de un proyecto.

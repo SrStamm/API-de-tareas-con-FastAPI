@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, Query
 from models import db_models, schemas, exceptions, responses
 from .auth import auth_user
 from db.database import get_session, Session, select, SQLAlchemyError, joinedload, redis_client, redis, IntegrityError, func
@@ -27,16 +27,13 @@ async def get_task(
         request:Request,
         limit:int = 10,
         skip: int = 0,
-        labels: List[db_models.TypeOfLabel] = None,
-        state: List[db_models.State] | None = None,
+        labels: List[db_models.TypeOfLabel] = Query(default=None),
+        state: List[db_models.State] = Query(default=None),
         user:db_models.User = Depends(auth_user),
         session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
 
     try:
-        labels_str = sorted([label.value for label in labels]) if state else []
-        state_str = sorted([s.value for s in state]) if state else []
-
-        key = f'task:user:user_id:{user.user_id}:state:{json.dumps(state_str)}:labels:{json.dumps(labels_str)}:limit:{limit}:offset:{skip}'
+        key = f'task:user:user_id:{user.user_id}:labels:{labels}:limit:{limit}:offset:{skip}'
         cached = await redis_client.get(key)
 
         if cached:
@@ -151,16 +148,13 @@ async def get_task_in_project(
         project_id: int,
         limit:int = 10,
         skip: int = 0,
-        labels: List[db_models.TypeOfLabel] = None,
-        state: List[db_models.State] | None = None,
+        labels: List[db_models.TypeOfLabel] = Query(default=None),
+        state: List[db_models.State] = Query(default=None),
         user: db_models.User = Depends(auth_user),
         session: Session = Depends(get_session)) -> List[schemas.ReadTaskInProject]:
 
     try:
-        labels_str = sorted([label.value for label in labels]) if labels else []
-        state_str = sorted([s.value for s in state]) if state else []
-
-        key = f'task:users:project_id:{project_id}:user_id:{user.user_id}:labels:{json.dumps(labels_str)}:state:{json.dumps(state_str)}:limit:{limit}:offset:{skip}'
+        key = f'task:users:project_id:{project_id}:user_id:{user.user_id}:labels:{labels}:state:{state}:limit:{limit}:offset:{skip}'
         cached = await redis_client.get(key)
 
         if cached:

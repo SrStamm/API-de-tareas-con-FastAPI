@@ -1,12 +1,10 @@
-from fastapi import Depends
 from celery import Celery
-from typing import Dict, List
-import os, json
+from typing import List
+import os
 from dotenv import load_dotenv
-from db.database import Session, SessionLocal, sessionlocal, select, SQLAlchemyError
+from db.database import SessionLocal, sessionlocal, select, SQLAlchemyError
 from models import db_models, schemas
 from core.logger import logger
-from core.event_ws import format_notification
 
 load_dotenv()
 
@@ -43,7 +41,6 @@ def get_pending_notifications_for_user(user_id: int) -> List[db_models.Notificat
 def save_notification_in_db(message, user_id: int):
     session = SessionLocal()
     try:
-        # message_decoded = json.loads(message)
         notice_payload = schemas.NotificationPayload(**message)
 
         new_notice = db_models.Notifications(

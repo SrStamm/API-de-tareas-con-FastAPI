@@ -1,4 +1,4 @@
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, WebSocketException
 
 class NotAuthorized(HTTPException):
     def __init__(self, user_id):
