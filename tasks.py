@@ -1,6 +1,6 @@
 from celery import Celery
 from typing import List
-import os
+import os, json
 from dotenv import load_dotenv
 from db.database import SessionLocal, sessionlocal, select, SQLAlchemyError
 from models import db_models, schemas
@@ -17,7 +17,7 @@ url = f"redis://{host}:{port}/{db}"
 
 app = Celery('tasks', broker=url)
 
-@app.task
+@app.task(retry_backoff=5)
 def get_pending_notifications_for_user(user_id: int) -> List[db_models.Notifications]:
     session = sessionlocal
     try:
@@ -41,7 +41,10 @@ def get_pending_notifications_for_user(user_id: int) -> List[db_models.Notificat
 def save_notification_in_db(message, user_id: int):
     session = SessionLocal()
     try:
-        notice_payload = schemas.NotificationPayload(**message)
+        message_decoded = json.loads(message)["payload"]
+        notice_payload = schemas.NotificationPayload(**message_decoded)
+
+        notice_payload = schemas.NotificationPayload(**message_decoded)
 
         new_notice = db_models.Notifications(
             user_id=user_id,

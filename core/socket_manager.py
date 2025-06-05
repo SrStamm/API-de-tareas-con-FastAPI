@@ -73,7 +73,6 @@ class RedisConnectionManager:
             logger.info(f'message: {message}')
 
             await self.redis.publish(f"user:{user_id}", message)
-            logger.info(f"[send_to_user] Published message to user:{user_id}: {message}")
         else:
             logger.warning(f'User {user_id} not connected.')
             save_notification_in_db.delay(message=message, user_id=user_id)
