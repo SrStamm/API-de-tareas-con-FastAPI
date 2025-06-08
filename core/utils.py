@@ -1,20 +1,13 @@
 from db.database import Session, select, selectinload
-from models import db_models, exceptions, schemas
+from models import db_models, exceptions
 from .logger import logger
-from .socket_manager import manager
 from db.database import select, Session, select
 from typing import List
 import re
+from repositories.group_repositories import GroupRepository
+from fastapi import Depends
 
-def get_group_or_404(group_id: int, session: Session):
-    stmt = select(db_models.Group).where(db_models.Group.group_id == group_id)
-    group = session.exec(stmt).first() 
 
-    if not group:
-        logger.error(f'Group {group_id} no encontrado')
-        raise exceptions.GroupNotFoundError(group_id)
-
-    return group
 
 def found_project_or_404(group_id:int, project_id:int, session: Session):
     stmt = (select(db_models.Project)

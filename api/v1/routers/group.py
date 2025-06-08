@@ -1,15 +1,12 @@
 from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
-from db.database import get_session, Session, select, selectinload, SQLAlchemyError, redis_client, redis
+from db.database import SQLAlchemyError
 from typing import List
 from .auth import auth_user
-from core.utils import get_group_or_404, get_user_or_404
-from core.permission import require_role, role_of_user_in_group
+from core.permission import require_role
 from core.logger import logger
 from core.limiter import limiter
-from core.event_ws import format_notification
-from .ws import manager
-import json
+from dependency.group_dependencies import get_group_service, GroupService
 
 router = APIRouter(prefix='/group', tags=['Group'])
 
@@ -26,40 +23,10 @@ async def get_groups(
         request: Request,
         limit:int = 10,
         skip: int = 0,
-        session: Session = Depends(get_session)) -> List[schemas.ReadBasicDataGroup]: 
+        group_service: GroupService = Depends(get_group_service)) -> List[schemas.ReadBasicDataGroup]:
 
     try:
-        key = f'groups:limit:{limit}:offset:{skip}'
-        # Busca si existe una respuesta guardada y la busca
-        cached = await redis_client.get(key)
-
-        if cached:
-            logger.info(f'[get_groups] Cache HIT - Key: {key}')
-            decoded = json.loads(cached)
-            return decoded
-
-        stmt = (select(db_models.Group)
-                    .options(selectinload(db_models.Group.users))
-                    .order_by(db_models.Group.group_id).limit(limit).offset(skip))
-
-        found_group = session.exec(stmt).all()
-
-        # Cachea la respuesta
-        to_cache = [
-            {
-                **group.model_dump(),
-                'users': [user.model_dump() for user in group.users]
-            }
-            for group in found_group]
-
-        # Guarda la respuesta
-        try:
-            await redis_client.setex(key, 300, json.dumps(to_cache, default=str))
-            logger.info(f'[get_groups] Cache SET - Key: {key}')
-        except redis.RedisError as e:
-            logger.warning(f'[get_groups] Cache FAIL - Key: {key} | Error: {e}') 
-
-        return to_cache
+        return await group_service.get_groups_with_cache(limit, skip)
 
     except SQLAlchemyError as e:
         logger.error(f'[get_groups] Database Error:  {str(e)}')
@@ -80,37 +47,11 @@ async def create_group(
         request: Request,
         new_group: schemas.CreateGroup,
         user: db_models.User = Depends(auth_user),
-        session: Session = Depends(get_session)):
+        group_service: GroupService = Depends(get_group_service)):
     try:
-        # Crear el grupo con el usuario creador
-        group = db_models.Group(**new_group.model_dump())
-        session.add(group)
-        session.commit()
-        session.refresh(group)
-
-        # Agregar al usuario creador al grupo con el rol de administrador
-        group_user = db_models.group_user(
-            group_id=group.group_id,
-            user_id=user.user_id,
-            role=db_models.Group_Role.ADMIN
-        )
-        session.add(group_user)
-        session.commit()
-
-
-        # Elimina cache existente
-        try:
-            await redis_client.delete(f'groups:limit:*:offset:*')
-            logger.info(f'[create_group] Cache Delete - Key: groups:limit:*:offset:*')
-        except redis.RedisError as e:
-            logger.warning(f'[create_group] Cache Delete Error | Error: {str(e)}')
-
-        logger.info(f'[create_group] Group Create Success')
-        return {'detail': 'Se ha creado un nuevo grupo de forma exitosa'}
-
+        return await group_service.create_group(new_group, user.user_id)
     except SQLAlchemyError as e:
         logger.error(f'[create_group] Database Error:  {str(e)}')
-        session.rollback()
         raise exceptions.DatabaseError(error=e, func='get_groups')
     except Exception as e:
         logger.error(f'[create_group] Unexpected Error:  {str(e)}')
@@ -132,32 +73,16 @@ async def update_group(
         group_id: int,
         updated_group: schemas.UpdateGroup,
         auth_data: dict = Depends(require_role(roles=['admin', 'editor'])),
-        session: Session = Depends(get_session)):
+        group_service: GroupService = Depends(get_group_service)):
 
     try:
-        found_group = get_group_or_404(group_id, session)
+        actual_role = auth_data['role']
+        actual_user_id = auth_data['user']
 
-        if updated_group.name and found_group.name != updated_group.name:
-            found_group.name = updated_group.name
-
-        if updated_group.description and found_group.description != updated_group.description:
-            found_group.description = updated_group.description
-
-        session.commit()
-
-        # Elimina cache existente
-        try:
-            await redis_client.delete(f'groups:limit:*:offset:*')
-            logger.info(f'[update_group] Cache Delete - Key: groups:limit:*:offset:*')
-        except redis.RedisError as e:
-            logger.warning(f'[update_group] Cache Delete Error | Error: {str(e)}')
-
-        logger.info(f'[update_group] Group Create Success')
-        return {'detail':'Se ha actualizado la informacion del grupo'}
+        return await group_service.update_group(group_id, updated_group, actual_role, actual_user_id)
 
     except SQLAlchemyError as e:
         logger.error(f'[update_group] Database Error:  {str(e)}')
-        session.rollback()
         raise exceptions.DatabaseError(error=e, func='get_groups')
     except Exception as e:
         logger.error(f'[update_group] Unexpected Error:  {str(e)}')
@@ -176,28 +101,13 @@ async def delete_group(
         request: Request,
         group_id: int,
         auth_data: dict = Depends(require_role(roles=['admin'])),
-        session: Session = Depends(get_session)):
+        group_service: GroupService = Depends(get_group_service)):
 
     try:
-        # found_group = get_group_or_404(group_id, session)
-
-        found_group = session.get(db_models.Group, group_id)
-
-        session.delete(found_group)
-        session.commit()
-
-        # Elimina cache existente
-        try:
-            await redis_client.delete(f'groups:limit:*:offset:*')
-            logger.info(f'[delete_group] Cache Delete - Key: groups:limit:*:offset:*')
-        except redis.RedisError as e:
-            logger.warning(f'[delete_group] Cache Delete Error | Error: {str(e)}')
-
-        return {'detail':'Se ha eliminado el grupo'}
+        return await group_service.delete_group(group_id)
 
     except SQLAlchemyError as e:
         logger.error(f'[delete_group] Database Error:  {str(e)}')
-        session.rollback()
         raise exceptions.DatabaseError(error=e, func='get_groups')
     except Exception as e:
         logger.error(f'[delete_group] Unexpected Error:  {str(e)}')
@@ -217,42 +127,10 @@ async def get_groups_in_user(
         limit:int = 10,
         skip: int = 0,
         user:db_models.User = Depends(auth_user),
-        session:Session = Depends(get_session)) -> List[schemas.ReadGroup]:
+        group_service: GroupService = Depends(get_group_service)) -> List[schemas.ReadGroup]:
 
     try:
-        key = f'groups:user_id:{user.user_id}:limit:{limit}:offset:{skip}'
-        # Busca si existe una respuesta guardada y la busca
-        cached = await redis_client.get(key)
-
-        if cached:
-            logger.info(f'[get_groups_in_user] Cache Hit - Key: {str(key)}')
-            decoded = json.loads(cached)
-            return decoded
-
-        stmt = (select(db_models.Group)
-                    .join(db_models.group_user, db_models.group_user.group_id == db_models.Group.group_id)
-                    .where(db_models.group_user.user_id == user.user_id)
-                    .order_by(db_models.Group.group_id)
-                    .limit(limit).offset(skip))
-
-        found_group = session.exec(stmt).all()
-
-        # Cachea la respuesta
-        to_cache = [
-            {
-                **group.model_dump(),
-                'users': [user.model_dump() for user in group.users]
-            }
-            for group in found_group]
-
-        # Guarda la respuesta
-        try:
-            await redis_client.setex(key, 600, json.dumps(to_cache, default=str))
-            logger.info(f'[get_groups_in_user] Cache Set - Key: {str(key)}')
-        except redis.RedisError as e:
-            logger.warning(f'[get_groups_in_user] Cache Fail | Error: {str(e)}')
-
-        return to_cache
+        return await group_service.get_groups_where_user_in(user.user_id, limit, skip)
 
     except SQLAlchemyError as e:
         logger.error(f'[get_groups_in_user] Database Error:  {str(e)}')
@@ -276,47 +154,16 @@ async def append_user_group(
         group_id: int,
         user_id: int,
         auth_data: dict = Depends(require_role(roles=['admin', 'editor'])),
-        session: Session = Depends(get_session)):
+        group_service: GroupService = Depends(get_group_service)):
 
     try:
         actual_role = auth_data['role']
         actual_user = auth_data['user']
 
-        found_group = get_group_or_404(group_id, session)
-
-        # Busca el usuario
-        new_user = get_user_or_404(user_id, session)
-
-        if new_user in found_group.users:
-            logger.error(f'[append_user_group] User {user_id} is in Group {group_id} | Error')
-            raise exceptions.UserInGroupError(user_id=new_user.user_id, group_id=found_group.group_id)
-
-        # Lo agrega al grupo
-        found_group.users.append(new_user)
-        session.commit()
-
-        # Se crea la notificacion
-        outgoing_event_json = format_notification(
-                notification_type='append_to_group',
-                message='You were added to group {group_id}'
-            )
-
-        # Envia el evento
-        await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
-
-        # Elimina cache existente
-        try:
-            await redis_client.delete(f'groups:user_id:{actual_user.user_id}:limit:*:offset:*')
-            logger.info(f'[append_user_group] Cache Delete - Key: groups:user_id:{actual_user.user_id}:limit:*:offset:*')
-        except redis.RedisError as e:
-            logger.warning(f'[append_user_group] Cache Delete Error | Error: {str(e)}')
-
-        logger.info(f'[append_user_group] User {user_id} Append to Group {group_id} Success')
-        return {'detail':'El usuario ha sido agregado al grupo'}
+        return await group_service.append_user(group_id, user_id, actual_user.user_id)
 
     except SQLAlchemyError as e:
         logger.error(f'[append_user_group] Database Error:  {str(e)}')
-        session.rollback()
         raise exceptions.DatabaseError(error=e, func='get_groups')
     except Exception as e:
         logger.error(f'[append_user_group] Unexpected Error:  {str(e)}')
@@ -337,53 +184,19 @@ async def delete_user_group(
         group_id: int,
         user_id: int,
         auth_data: dict = Depends(require_role(roles=['admin', 'editor'])),
-        session: Session = Depends(get_session)):
+        group_service: GroupService = Depends(get_group_service)):
 
     try:
         actual_role = auth_data['role']
         actual_user: db_models.User = auth_data['user']
 
-        found_group = get_group_or_404(group_id, session)
-
-        # Busca el usuario
-        found_user = get_user_or_404(user_id, session)
-
-        if found_user in found_group.users:
-            # Lo elimina del grupo
-
-            role_user = role_of_user_in_group(user_id=found_user.user_id, group_id=group_id, session=session)
-
-            if role_user in ['editor', 'member'] and actual_role == 'admin' or role_user == 'member' and actual_role == 'editor':            
-                found_group.users.remove(found_user)
-                session.commit()
-
-                # Se crea la notificacion
-                outgoing_event_json = format_notification(
-                    notification_type='remove_user_to_group',
-                    message=f'You were removed to group {group_id}'
-                    )
-
-                # Envia el evento
-                await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
-
-                try:
-                    await redis_client.delete(f'groups:user_id:{actual_user.user_id}:limit:*:offset:*')
-                    logger.info(f'[delete_user_group] Cache Delete - Key: groups:user_id:{actual_user.user_id}:limit:*:offset:*')
-                except redis.RedisError as e:
-                    logger.warning(f'[delete_user_group] Cache Delete Error - Error: {str(e)}')
-
-                return {'detail':'El usuario ha sido eliminado al grupo'}
-
-            logger.info(f'[delete_user_group] Unauthorized Error | User {actual_user.user_id} not authorized in group {group_id}')
-            raise exceptions.NotAuthorized(actual_user.user_id)
-
-        else:
-            logger.error(f'[delete_user_group] User not found Error | User {user_id} not found in group {group_id}')
-            raise exceptions.UserNotFoundError(user_id)
-
+        return await group_service.delete_user(
+            group_id=group_id,
+            user_id=user_id,
+            actual_user_id=actual_user.user_id,
+            actual_user_role=actual_role)
     except SQLAlchemyError as e:
         logger.error(f'[delete_user_group] Database Error:  {str(e)}')
-        session.rollback()
         raise exceptions.DatabaseError(error=e, func='get_groups')
     except Exception as e:
         logger.error(f'[delete_user_group] Unexpected Error:  {str(e)}')
@@ -405,47 +218,23 @@ async def update_user_group(
         user_id: int,
         update_role: schemas.UpdateRoleUser,
         auth_data: dict = Depends(require_role(roles=['admin'])),
-        session: Session = Depends(get_session)):
+        group_service: GroupService = Depends(get_group_service)):
 
     try:
         actual_user = auth_data['user']
 
-        get_group_or_404(group_id, session)
+        result = await group_service.update_user_role(
+            group_id,
+            user_id,
+            update_role.role,
+            actual_user.user_id
+        )
+        return result
 
-        stmt = (select(db_models.group_user)
-                    .join(db_models.Group, db_models.group_user.group_id == db_models.Group.group_id)
-                    .where(db_models.group_user.user_id == user_id))
-
-        result = session.exec(stmt)
-        found_user = result.first()
-
-        if not found_user:
-            logger.error(f'[update_user_group] User not found Error | User {user_id} not found in group {group_id}')
-            raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
-
-        found_user.role = update_role.role
-        
-        session.commit()
-        session.refresh(found_user)
-
-        outgoing_event_json = format_notification(
-                notification_type='update_role_to_group',
-                message=f'Your role in the group {group_id} was upgrated to: {found_user.role.value}')
-
-        await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
-
-        # Elimina cache existente
-        try:
-            await redis_client.delete(f'groups:user_id:{actual_user.user_id}:limit:*:offset:*')
-            logger.info(f'[get_groups] Cache Delete - Key: groups:user_id:{actual_user.user_id}:limit:*:offset:*')
-        except redis.RedisError as e:
-            logger.warning(f'[get_groups] Cache Delete Error | Error: {str(e)}')
-
-        return {'detail':'Se ha cambiado los permisos del usuario en el grupo'}
-
+    except RecursionError as e:
+        raise 
     except SQLAlchemyError as e:
         logger.error(f'[update_user_group] Database Error:  {str(e)}')
-        session.rollback()
         raise exceptions.DatabaseError(error=e, func='get_groups')
     except Exception as e:
         logger.error(f'[update_user_group] Unexpected Error:  {str(e)}')
@@ -467,38 +256,10 @@ async def get_user_in_group(
         limit:int = 10,
         skip: int = 0,
         user: db_models.User = Depends(auth_user),
-        session: Session = Depends(get_session)) -> List[schemas.ReadGroupUser]:
+        group_service: GroupService = Depends(get_group_service)) -> List[schemas.ReadGroupUser]:
 
     try:
-        key = f'groups:users:group_id:{group_id}:limit:{limit}:offset:{skip}'
-        cached = await redis_client.get(key)
-
-        if cached:
-            logger.info(f'[get_user_in_group] Cache Hit - Key: {key}')
-            decoded = json.loads(cached)
-            return decoded
-
-        get_group_or_404(group_id, session)
-
-        stmt = (select(db_models.User.username, db_models.User.user_id, db_models.group_user.role)
-                    .join(db_models.group_user, db_models.group_user.user_id == db_models.User.user_id)
-                    .where(db_models.group_user.group_id == group_id)
-                    .limit(limit).offset(skip))
-
-        results = session.exec(stmt).all()
-
-        to_cache = [
-            schemas.ReadGroupUser(user_id=user_id, username=username, role=role.value)
-            for username, user_id, role in results
-            ]
-
-        try:
-            await redis_client.setex(key, 600, json.dumps([user_.model_dump() for user_ in to_cache], default=str))
-            logger.info(f'[get_groups] Cache Set - Key: {key}')
-        except redis.RedisError as e:
-            logger.warning(f'[get_groups] Cache Fail | Error: {str(e)}')
-
-        return to_cache
+        return await group_service.get_users_in_group(group_id, limit, skip)
 
     except SQLAlchemyError as e:
         logger.error(f'[get_user_in_group] Database Error:  {str(e)}')
