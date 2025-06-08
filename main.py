@@ -49,12 +49,12 @@ async def log_requests(request: Request, call_next):
     response = await call_next(request)
     duration = time() - start_time
     user = request.state.user if hasattr(request.state, 'user') else 'anonymous'
-    
+
     # Use request.url.scheme instead of request.scope["scheme"]
     scheme = request.url.scheme or "http"  # Fallback to 'http' if scheme is empty
     if not scheme:
         logger.warning(f"Invalid scheme in request URL: {request.url}")
-    
+
     logger.info(
         f"method={request.method} path={request.url.path} user={user} duration={duration:.3f}s status={response.status_code}"
     )
