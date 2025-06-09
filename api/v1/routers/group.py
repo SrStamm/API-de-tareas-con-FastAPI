@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Request
-from models import db_models, schemas, exceptions, responses
+from models import schemas, exceptions, responses
+from models.db_models import User
 from db.database import SQLAlchemyError
 from typing import List
 from .auth import auth_user
@@ -46,7 +47,7 @@ async def get_groups(
 async def create_group(
         request: Request,
         new_group: schemas.CreateGroup,
-        user: db_models.User = Depends(auth_user),
+        user: User = Depends(auth_user),
         group_service: GroupService = Depends(get_group_service)):
     try:
         return await group_service.create_group(new_group, user.user_id)
@@ -126,7 +127,7 @@ async def get_groups_in_user(
         request: Request,
         limit:int = 10,
         skip: int = 0,
-        user:db_models.User = Depends(auth_user),
+        user:User = Depends(auth_user),
         group_service: GroupService = Depends(get_group_service)) -> List[schemas.ReadGroup]:
 
     try:
@@ -188,13 +189,14 @@ async def delete_user_group(
 
     try:
         actual_role = auth_data['role']
-        actual_user: db_models.User = auth_data['user']
+        actual_user: User = auth_data['user']
 
         return await group_service.delete_user(
             group_id=group_id,
             user_id=user_id,
             actual_user_id=actual_user.user_id,
-            actual_user_role=actual_role)
+            actual_user_role=actual_role
+        )
     except SQLAlchemyError as e:
         logger.error(f'[delete_user_group] Database Error:  {str(e)}')
         raise exceptions.DatabaseError(error=e, func='get_groups')
@@ -223,13 +225,12 @@ async def update_user_group(
     try:
         actual_user = auth_data['user']
 
-        result = await group_service.update_user_role(
+        return await group_service.update_user_role(
             group_id,
             user_id,
             update_role.role,
             actual_user.user_id
         )
-        return result
 
     except RecursionError as e:
         raise 
@@ -255,7 +256,7 @@ async def get_user_in_group(
         group_id: int,
         limit:int = 10,
         skip: int = 0,
-        user: db_models.User = Depends(auth_user),
+        user: User = Depends(auth_user),
         group_service: GroupService = Depends(get_group_service)) -> List[schemas.ReadGroupUser]:
 
     try:

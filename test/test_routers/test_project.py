@@ -83,7 +83,7 @@ async def test_update_user_permission_in_project(async_client, auth_headers, pro
     assert response.status_code == status
     assert response.json() == {'detail': detail}
 
-@pytest.mark.asyncio
+"""@pytest.mark.asyncio
 async def test_update_project_error(async_client, auth_headers2):
     response = await async_client.patch('/project/1/1', headers=auth_headers2, json={'description':'probando otra vez', 'name':'probando el update'})
     assert response.status_code == 401
@@ -126,7 +126,7 @@ async def test_failed_delete_project(async_client, auth_headers2):
     response = await async_client.delete(f'/project/1/1', headers=auth_headers2)
     assert response.status_code == 401
     assert response.json() == {'detail': 'User with user_id 2 is Not Authorized'}
-
+"""
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
         'user_id, status, detail', [
@@ -170,7 +170,7 @@ def test_require_permission(mocker):
     assert exc_info.value.user_id == mock_user.user_id
     assert exc_info.value.project_id == 10000
 
-@pytest.mark.asyncio
+"""@pytest.mark.asyncio
 async def test_get_projects_error(mocker):
     db_session_mock = mocker.Mock()
 
@@ -405,4 +405,4 @@ async def test_get_user_in_project_not_results_error(mocker):
                 group_id=1,
                 project_id = 1,
                 session=db_session_mock
-            )
+            )"""

@@ -1,13 +1,13 @@
 from repositories.group_repositories import GroupRepository
+from repositories.user_repositories import UserRepository
 from models.schemas import ReadGroup, CreateGroup, ReadGroupUser, UpdateGroup
-from models.db_models import Group_Role
+from models.db_models import Group_Role, Group
 from models import exceptions
-from typing import List
 from db.database import redis_client, redis
 from core.logger import logger
-from repositories.user_repositories import UserRepository
 from core.socket_manager import manager
 from core.event_ws import format_notification
+from typing import List
 import json
 
 class GroupService:
@@ -15,7 +15,7 @@ class GroupService:
         self.group_repo = group_repo
         self.user_repo = user_repo
 
-    async def get_group_or_404(self, group_id: int):
+    async def get_group_or_404(self, group_id: int) -> Group:
         group = self.group_repo.get_group_by_id(group_id)
 
         if not group:

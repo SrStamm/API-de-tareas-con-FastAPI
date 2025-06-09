@@ -7,7 +7,7 @@ class GroupRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def get_group_by_id(self, group_id: int):
+    def get_group_by_id(self, group_id: int) -> Group:
         try:
             stmt = (select(Group)
                     .options(selectinload(Group.users))
