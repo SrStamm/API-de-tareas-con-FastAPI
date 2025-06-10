@@ -3,7 +3,12 @@ from repositories.task_repositories import TaskRepository
 from services import project_services
 from models.db_models import TypeOfLabel, State, Project_Permission, User
 from models.schemas import ReadTask, ReadUser, ReadTaskInProject, CreateTask, UpdateTask
-from models import exceptions
+from models.exceptions import (
+    DatabaseError,
+    TaskNotFound,
+    TaskIsAssignedError,
+    TaskIsNotAssignedError,
+)
 from db.database import redis, redis_client, IntegrityError
 from typing import List
 from core.logger import logger
@@ -17,8 +22,8 @@ class TaskService:
         self,
         task_repo: TaskRepository,
         user_ser: project_services.UserService,
-        proj_ser: project_services.ProjectService
-        ):
+        proj_ser: project_services.ProjectService,
+    ):
         self.task_repo = task_repo
         self.user_ser = user_ser
         self.proj_ser = proj_ser
@@ -28,7 +33,7 @@ class TaskService:
 
         if not task_found:
             logger.error(f"Task {task_id} no encontrado en Project {project_id}")
-            raise exceptions.TaskNotFound(task_id=task_id, project_id=project_id)
+            raise TaskNotFound(task_id=task_id, project_id=project_id)
 
         return task_found
 
@@ -36,7 +41,7 @@ class TaskService:
         user = self.task_repo.get_task_is_asigned(task_id, user_id)
 
         if not user:
-            raise exceptions.TaskIsAssignedError(user_id=user_id, task_id=task_id)
+            raise TaskIsAssignedError(user_id=user_id, task_id=task_id)
         return user
 
     def validate_in_task(self, users: List[User], task_id: int):
@@ -182,6 +187,9 @@ class TaskService:
             return {
                 "detail": "A new task has been created and users have been successusfully assigned"
             }
+        except DatabaseError as e:
+            logger.error(f"[task_services.create] Repo failed: {str(e)}")
+            raise
         except Exception:
             raise
 
@@ -211,6 +219,10 @@ class TaskService:
                 )
 
             return {"detail": "Task successfully deleted"}
+
+        except DatabaseError as e:
+            logger.error(f"[task_services.delete] Repo failed: {str(e)}")
+            raise
         except Exception:
             raise
 
@@ -242,9 +254,7 @@ class TaskService:
                             logger.error(
                                 f"[update_task] User {user_id} was already assigned to task {task_id}"
                             )
-                            raise exceptions.TaskIsAssignedError(
-                                user_id=user_id, task_id=task_id
-                            )
+                            raise TaskIsAssignedError(user_id=user_id, task_id=task_id)
 
                         self.task_repo.add_user(user_id, task_id)
                 else:
@@ -255,13 +265,15 @@ class TaskService:
             if update_task.exclude_user_ids:
                 if permission == "admin":
                     for user_id in update_task.exclude_user_ids:
-                        user_in_task = self.task_repo.get_task_is_asigned( task_id, user_id )
+                        user_in_task = self.task_repo.get_task_is_asigned(
+                            task_id, user_id
+                        )
 
                         if not user_in_task:
                             logger.error(
                                 f"[update_task] Update Task Error | User {user_id} not assigned to task {task_id}"
                             )
-                            raise exceptions.TaskIsNotAssignedError(
+                            raise TaskIsNotAssignedError(
                                 user_id=user_id, task_id=task_id
                             )
 
@@ -370,5 +382,9 @@ class TaskService:
                 )
 
             return {"detail": "A task has been successfully updated"}
+
+        except DatabaseError as e:
+            logger.error(f"[task_services.update_task] Repo failed: {str(e)}")
+            raise
         except Exception:
             raise

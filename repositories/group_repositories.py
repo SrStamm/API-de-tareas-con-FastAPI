@@ -1,7 +1,9 @@
 from models.schemas import CreateGroup, UpdateGroup
 from models.db_models import Group, group_user, Group_Role, User
-from db.database import Session, select, selectinload
+from models.exceptions import DatabaseError
+from db.database import Session, select, selectinload, SQLAlchemyError
 from typing import List, Dict
+
 
 class GroupRepository:
     def __init__(self, session: Session):
@@ -9,43 +11,53 @@ class GroupRepository:
 
     def get_group_by_id(self, group_id: int) -> Group:
         try:
-            stmt = (select(Group)
-                    .options(selectinload(Group.users))
-                    .where(Group.group_id == group_id))
+            stmt = (
+                select(Group)
+                .options(selectinload(Group.users))
+                .where(Group.group_id == group_id)
+            )
             return self.session.exec(stmt).first()
+        except SQLAlchemyError as e:
+            raise DatabaseError(e, "get_group_by_id")
         except Exception as e:
             raise
 
-    def get_all_groups(self, limit: int, skip:int) -> List[Dict]:
-        stmt = (select(Group)
-                .options(selectinload(Group.users))
-                .order_by(Group.group_id)
-                .limit(limit)
-                .offset(skip))
+    def get_all_groups(self, limit: int, skip: int) -> List[Dict]:
+        stmt = (
+            select(Group)
+            .options(selectinload(Group.users))
+            .order_by(Group.group_id)
+            .limit(limit)
+            .offset(skip)
+        )
         return self.session.exec(stmt).all()
 
-    def get_groups_for_user(self, user_id: int, limit:int, skip: int):
-        stmt = (select(Group)
-                .join(group_user, group_user.group_id == Group.group_id)
-                .where(group_user.user_id == user_id)
-                .order_by(Group.group_id)
-                .limit(limit)
-                .offset(skip))
-        
+    def get_groups_for_user(self, user_id: int, limit: int, skip: int):
+        stmt = (
+            select(Group)
+            .join(group_user, group_user.group_id == Group.group_id)
+            .where(group_user.user_id == user_id)
+            .order_by(Group.group_id)
+            .limit(limit)
+            .offset(skip)
+        )
+
         return self.session.exec(stmt).all()
-    
+
     def get_users_for_group(self, group_id: int):
-        stmt = (select(User.username, User.user_id, group_user.role)
-                .join(group_user, group_user.user_id == User.user_id)
-                .where(group_user.group_id == group_id))
-        
+        stmt = (
+            select(User.username, User.user_id, group_user.role)
+            .join(group_user, group_user.user_id == User.user_id)
+            .where(group_user.group_id == group_id)
+        )
+
         return self.session.exec(stmt).all()
 
     def get_role_for_user_in_group(self, group_id: int, user_id: int):
         stmt = select(group_user).where(
-                group_user.user_id == user_id,
-                group_user.group_id == group_id)
-        
+            group_user.user_id == user_id, group_user.group_id == group_id
+        )
+
         return self.session.exec(stmt).first()
 
     def create(self, group_data: CreateGroup, user_id: int) -> Group:
@@ -57,15 +69,16 @@ class GroupRepository:
 
             # Create a relation with user
             user_in_group = group_user(
-                group_id=new_group.group_id,
-                user_id=user_id,
-                role=Group_Role.ADMIN)
+                group_id=new_group.group_id, user_id=user_id, role=Group_Role.ADMIN
+            )
             self.session.add(user_in_group)
 
             self.session.commit()
             self.session.refresh(new_group)
             return new_group
 
+        except SQLAlchemyError as e:
+            raise DatabaseError(error=e, func="create")
         except Exception as e:
             self.session.rollback()
             raise
@@ -75,12 +88,17 @@ class GroupRepository:
             if update_group.name and actual_group.name != update_group.name:
                 actual_group.name = update_group.name
 
-            if update_group.description and actual_group.description != update_group.description:
+            if (
+                update_group.description
+                and actual_group.description != update_group.description
+            ):
                 actual_group.description = update_group.description
 
             self.session.commit()
             return
 
+        except SQLAlchemyError as e:
+            raise DatabaseError(error=e, func="update")
         except Exception as e:
             self.session.rollback()
             raise
@@ -90,6 +108,9 @@ class GroupRepository:
             self.session.delete(group)
             self.session.commit()
             return
+
+        except SQLAlchemyError as e:
+            raise DatabaseError(error=e, func="delete")
         except Exception as e:
             self.session.rollback()
             raise
@@ -100,6 +121,9 @@ class GroupRepository:
             group.users.append(user)
             self.session.commit()
             return
+
+        except SQLAlchemyError as e:
+            raise DatabaseError(error=e, func="append_user")
         except Exception as e:
             self.session.rollback()
             raise
@@ -111,20 +135,27 @@ class GroupRepository:
             self.session.commit()
             return
 
+        except SQLAlchemyError as e:
+            raise DatabaseError(error=e, func="delete_user")
         except Exception as e:
             self.session.rollback()
             raise
 
     def update_role(self, user_id: int, role: Group_Role):
         try:
-            stmt = (select(group_user)
-                    .join(Group, group_user.group_id == Group.group_id)
-                    .where(group_user.user_id == user_id))
+            stmt = (
+                select(group_user)
+                .join(Group, group_user.group_id == Group.group_id)
+                .where(group_user.user_id == user_id)
+            )
             user = self.session.exec(stmt).first()
 
             user.role == role
             self.session.commit()
 
+        except SQLAlchemyError as e:
+            raise DatabaseError(error=e, func="create")
         except Exception as e:
             self.session.rollback()
             raise
+

@@ -1,6 +1,7 @@
 from models.schemas import CreateUser
 from models.db_models import User
-from db.database import Session, select, or_
+from models.exceptions import DatabaseError
+from db.database import Session, select, or_, SQLAlchemyError
 from api.v1.routers.auth import encrypt_password
 
 class UserRepository:
@@ -26,6 +27,9 @@ class UserRepository:
             self.session.add(new_user)
             self.session.commit()
             return
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'create')
         except Exception as e:
             self.session.rollback()
             raise
@@ -34,6 +38,10 @@ class UserRepository:
         try:
             self.session.delete(user)
             self.session.commit()
+            return
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'delete')
         except Exception:
             self.session.rollback()
             raise

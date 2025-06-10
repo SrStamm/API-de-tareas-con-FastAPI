@@ -1,7 +1,8 @@
-from typing import List
 from models.db_models import Task_comments, User
-from db.database import Session, select
 from models.schemas import CreateComment, UpdateComment
+from models.exceptions import DatabaseError
+from db.database import Session, select, SQLAlchemyError
+from typing import List
 import re
 
 
@@ -42,6 +43,9 @@ class CommentRepository:
             )
             self.session.add(add_comment)
             self.session.commit()
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'create')
         except Exception:
             self.session.rollback()
             raise
@@ -53,6 +57,9 @@ class CommentRepository:
 
             comment.update_at = update_comment.update_at
             self.session.commit()
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'update')
         except Exception:
             self.session.rollback()
             raise
@@ -61,6 +68,9 @@ class CommentRepository:
         try:
             comment.is_deleted = True
             self.session.commit()
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'delete')
         except Exception:
             self.session.rollback()
             raise

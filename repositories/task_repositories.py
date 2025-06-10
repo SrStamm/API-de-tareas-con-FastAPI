@@ -1,6 +1,7 @@
 from models.schemas import ReadTask, CreateTask, UpdateTask
 from models.db_models import Task, tasks_user, TypeOfLabel, State, TaskLabelLink, User, project_user
-from db.database import Session, select, joinedload, func
+from models.exceptions import DatabaseError
+from db.database import Session, select, joinedload, func, SQLAlchemyError
 from typing import List
 
 class TaskRepository:
@@ -126,6 +127,9 @@ class TaskRepository:
                 self.session.add(task_user)
             self.session.commit()
             return new_task
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'create')
         except Exception:
             self.session.rollback()
             raise
@@ -139,6 +143,9 @@ class TaskRepository:
             if task.state != update_task.state and update_task.state:
                 task.state = update_task.state
             return
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'update')
         except Exception:
             self.session.rollback()
             raise
@@ -148,6 +155,9 @@ class TaskRepository:
             self.session.delete(task)
             self.session.commit()
             return
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'delete')
         except Exception:
             self.session.rollback()
             raise
@@ -158,6 +168,9 @@ class TaskRepository:
             self.session.add(new_user)
             self.session.commit()
             return
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'add_user')
         except Exception:
             self.session.rollback()
             raise
@@ -167,6 +180,9 @@ class TaskRepository:
             self.session.delete(user)
             self.session.commit()
             return
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'remove_user')
         except Exception:
             self.session.rollback()
             raise
@@ -177,6 +193,9 @@ class TaskRepository:
             self.session.add(new_label)
             self.session.commit()
             return
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'add_label')
         except Exception:
             self.session.rollback()
             raise
@@ -186,6 +205,9 @@ class TaskRepository:
             self.session.delete(label)
             self.session.commit()
             return
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, 'delete_label')
         except Exception:
             self.session.rollback()
             raise
