@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from models import db_models, schemas, exceptions, responses
 from models.db_models import User
-from db.database import SQLAlchemyError, redis_client, redis
+from db.database import SQLAlchemyError
 from typing import List
 from .auth import auth_user
 from core.permission import require_permission, require_role

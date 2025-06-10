@@ -1,0 +1,66 @@
+from typing import List
+from models.db_models import Task_comments, User
+from db.database import Session, select
+from models.schemas import CreateComment, UpdateComment
+import re
+
+
+class CommentRepository:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def get_comment_by_id(self, comment_id: int):
+        stmt = select(Task_comments).where(Task_comments.comment_id == comment_id)
+        return self.session.exec(stmt).first()
+
+    def get_comments(self, task_id: int):
+        stmt = select(Task_comments).where(
+            Task_comments.task_id == task_id, Task_comments.is_deleted == False
+        )
+        return self.session.exec(stmt).all()
+
+    def get_all_comments(self, task_id):
+        stmt = select(Task_comments).where(Task_comments.task_id == task_id)
+        return self.session.exec(stmt).all()
+
+    def extract_valid_mentions(self, content: str) -> List[User]:
+        mentions_raw = re.findall(r"@(\w+)", content)
+        mentions = list(set(mentions_raw))
+
+        if not mentions:
+            return []
+
+        stmt = select(User.username).where(User.username.in_(mentions))
+        return self.session.exec(stmt).all()
+
+    def create(self, new_comment: CreateComment, task_id: int, user_id: int):
+        try:
+            add_comment = Task_comments(
+                task_id=task_id,
+                user_id=user_id,
+                content=new_comment.content,
+            )
+            self.session.add(add_comment)
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+
+    def update(self, update_comment: UpdateComment, comment: Task_comments):
+        try:
+            if update_comment.content:
+                comment.content = update_comment.content
+
+            comment.update_at = update_comment.update_at
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise
+
+    def delete(self, comment: Task_comments):
+        try:
+            comment.is_deleted = True
+            self.session.commit()
+        except Exception:
+            self.session.rollback()
+            raise

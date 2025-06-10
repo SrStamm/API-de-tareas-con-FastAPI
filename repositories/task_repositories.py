@@ -91,6 +91,15 @@ class TaskRepository:
                     .limit(limit).offset(skip))
         return self.session.exec(stmt).all()
 
+    def validate_in_task(self, users: List[User], task_id: int):
+        stmt = (select(User.username, User.user_id)
+                .where(
+                    tasks_user.user_id == User.user_id,
+                    tasks_user.task_id == task_id,
+                    User.username.in_(users)))
+        
+        return self.session.exec(stmt).all()
+
     def create(self, project_id:int, task: CreateTask) -> Task:
         try:
             new_task = Task(

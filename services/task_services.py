@@ -32,6 +32,16 @@ class TaskService:
 
         return task_found
 
+    def found_user_assigned_to_task(self, task_id: int, user_id: int):
+        user = self.task_repo.get_task_is_asigned(task_id, user_id)
+
+        if not user:
+            raise exceptions.TaskIsAssignedError(user_id=user_id, task_id=task_id)
+        return user
+
+    def validate_in_task(self, users: List[User], task_id: int):
+        return self.task_repo.validate_in_task(users, task_id)
+
     async def get_all_task_for_user(
         self,
         user_id: int,
