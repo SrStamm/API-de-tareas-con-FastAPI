@@ -27,12 +27,12 @@ class ProjectService:
         return founded_project
 
     def found_user_in_project_or_404(self, user_id:int, project_id:int) -> User:
-        user = self.project_repo.get_user_in_project(user_id, project_id)
-        
+        user = self.project_repo.get_user_in_project(project_id, user_id)
+
         if not user:
             logger.error(f'User {user_id} no encontrado en project {project_id}')
             raise exceptions.UserNotInProjectError(user_id=user_id, project_id=project_id)
-        
+
         return user
 
     async def get_projects_iam(self, user_id: int, limit: int, skip: int) -> List[ReadBasicProject]:

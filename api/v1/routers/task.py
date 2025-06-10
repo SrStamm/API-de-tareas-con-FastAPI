@@ -1,15 +1,13 @@
-from fastapi import APIRouter, Depends, Request, HTTPException, Query
+from fastapi import APIRouter, Depends, Request, Query
 from models import db_models, schemas, exceptions, responses
 from .auth import auth_user
-from db.database import get_session, Session, select, SQLAlchemyError, joinedload, redis_client, redis, IntegrityError, func
-from typing import List, Optional
-from core.utils import found_task_or_404, get_user_or_404, found_user_in_project_or_404
+from db.database import SQLAlchemyError
+from typing import List
 from core.permission import require_permission
 from core.logger import logger
 from core.limiter import limiter
-from core.event_ws import format_notification
-from .ws import manager
-import json
+
+from dependency.task_dependencies import get_task_service, TaskService
 
 router = APIRouter(prefix='/task', tags=['Task'])
 
@@ -30,54 +28,10 @@ async def get_task(
         labels: List[db_models.TypeOfLabel] = Query(default=None),
         state: List[db_models.State] = Query(default=None),
         user:db_models.User = Depends(auth_user),
-        session:Session = Depends(get_session)) -> List[schemas.ReadTask]:
+        task_serv: TaskService = Depends(get_task_service)) -> List[schemas.ReadTask]:
 
     try:
-        key = f'task:user:user_id:{user.user_id}:labels:{labels}:limit:{limit}:offset:{skip}'
-        cached = await redis_client.get(key)
-
-        if cached:
-            decoded = json.loads(cached)
-            logger.info(f'[get_task] Redis Cache Hit - Key: {key}')
-            return decoded
-
-        stmt = (select(db_models.Task)
-                    .join(db_models.tasks_user, db_models.Task.task_id == db_models.tasks_user.task_id)
-                    .where(db_models.tasks_user.user_id == user.user_id)
-                    .options(joinedload(db_models.Task.task_label_links)))
-
-        if labels:
-            stmt = stmt.join(
-                    db_models.TaskLabelLink, db_models.Task.task_id == db_models.TaskLabelLink.task_id
-                ).where(
-                    db_models.TaskLabelLink.label.in_(labels)
-                ).group_by(db_models.Task.task_id).having(
-                    func.count(db_models.TaskLabelLink.label.distinct()) == len(labels))
-
-        if state:
-            stmt = stmt.where(db_models.Task.state.in_(state))
-
-        found_tasks = session.exec(stmt.limit(limit).offset(skip)).unique().all()
-
-        to_cache = [
-            schemas.ReadTask(
-                task_id=task.task_id,
-                project_id=task.project_id,
-                description=task.description,
-                date_exp=task.date_exp,
-                state=task.state,
-                task_label_links=task.task_label_links
-            )
-            for task in found_tasks
-        ]
-
-        try:
-            await redis_client.setex(key, 10, json.dumps([task.model_dump() for task in to_cache], default=str))
-            logger.info(f'[get_task] Redis Cache Set - Key: {key}')
-        except redis.RedisError as e:
-            logger.warning(f'[get_task] Redis Cache Set Error | Error: {str(e)}')
-
-        return to_cache
+        return await task_serv.get_all_task_for_user(user.user_id, limit, skip, labels, state)
 
     except SQLAlchemyError as e:
         logger.error(f'[get_task] Database Error | Error: {str(e)}')
@@ -97,37 +51,10 @@ async def get_users_for_task(
         limit:int = 10,
         skip: int = 0,
         user: db_models.User = Depends(auth_user),
-        session: Session = Depends(get_session)) -> List[schemas.ReadUser]:
+        task_serv: TaskService = Depends(get_task_service)) -> List[schemas.ReadUser]:
 
     try:
-        key = f'task:users:task_id:{task_id}:limit:{limit}:offset:{skip}'
-        cached = await redis_client.get(key)
-
-        if cached:
-            decoded = json.loads(cached)
-            logger.info(f'[get_users_for_task] Redis Cache Hit - Key: {key}')
-            return decoded
-        
-        stmtm = (select(db_models.User.user_id, db_models.User.username)
-                    .join(db_models.tasks_user, db_models.tasks_user.user_id == db_models.User.user_id)
-                    .where(db_models.tasks_user.task_id == task_id)
-                    .limit(limit).offset(skip))
-
-        resultados = session.exec(stmtm).all()
-
-        to_cache = [
-            schemas.ReadUser(user_id=user_id, username=username)
-            for user_id, username in resultados
-            ]
-
-        # Guarda la respuesta
-        try:
-            await redis_client.setex(key, 600, json.dumps([user_.model_dump() for user_ in to_cache], default=str))
-            logger.info(f'[get_users_for_task] Redis Cache Set - Key: {key}')
-        except redis.RedisError as e:
-            logger.warning(f'[get_users_for_task] Redis Cache Set Error | Error: {str(e)}')
-
-        return to_cache
+        return await task_serv.get_users_for_task(task_id, limit, skip)
 
     except SQLAlchemyError as e:
         logger.error(f'[get_users_for_task] Database Error | Error: {str(e)}')
@@ -151,59 +78,10 @@ async def get_task_in_project(
         labels: List[db_models.TypeOfLabel] = Query(default=None),
         state: List[db_models.State] = Query(default=None),
         user: db_models.User = Depends(auth_user),
-        session: Session = Depends(get_session)) -> List[schemas.ReadTaskInProject]:
+        task_serv: TaskService = Depends(get_task_service)) -> List[schemas.ReadTaskInProject]:
 
     try:
-        key = f'task:users:project_id:{project_id}:user_id:{user.user_id}:labels:{labels}:state:{state}:limit:{limit}:offset:{skip}'
-        cached = await redis_client.get(key)
-
-        if cached:
-            decoded = json.loads(cached)
-            logger.info(f'[get_task_in_project] Redis Cache Hit - Key: {key}')
-            return decoded
-
-        # Selecciona las tareas asignadas a los usuarios en el proyecto
-        stmt = (select(db_models.Task)
-                    .join(
-                        db_models.tasks_user, db_models.tasks_user.task_id == db_models.Task.task_id)
-                    .where(
-                        db_models.project_user.project_id == project_id, db_models.project_user.user_id == user.user_id)
-                    .options(joinedload(db_models.Task.asigned))
-                    )
-
-        if labels:
-            stmt = stmt.join(
-                    db_models.TaskLabelLink, db_models.Task.task_id == db_models.TaskLabelLink.task_id
-                ).where(
-                    db_models.TaskLabelLink.label.in_(labels)
-                ).group_by(db_models.Task.task_id).having(
-                    func.count(db_models.TaskLabelLink.label.distinct()) == len(labels))
-
-        if state:
-            stmt = stmt.where(db_models.Task.state.in_(state))
-
-        found_tasks = session.exec(stmt.limit(limit).offset(skip)).unique().all()
-
-        to_cache = [
-            schemas.ReadTaskInProject(
-                task_id=task.task_id,
-                description=task.description,
-                date_exp=task.date_exp,
-                state=task.state,
-                asigned=task.asigned,
-                task_label_links=task.task_label_links
-            )
-            for task in found_tasks
-        ]
-
-        # Guarda la respuesta
-        try:
-            await redis_client.setex(key, 10, json.dumps([task_.model_dump() for task_ in to_cache], default=str))
-            logger.info(f'[get_task_in_project] Redis Cache Set - Key: {key}')
-        except redis.RedisError as e:
-            logger.warning(f'[get_task_in_project] Redis Cache Set Error | Error {str(e)}')
-
-        return to_cache
+        return await task_serv.get_all_task_for_project(user.user_id, project_id, limit, skip, labels, state)
     
     except SQLAlchemyError as e:
         logger.error(f'[get_task_in_project] Database Error | Error: {str(e)}')
@@ -222,54 +100,13 @@ async def create_task(
         new_task: schemas.CreateTask,
         project_id: int,
         auth_data: dict = Depends(require_permission(permissions=['admin'])),
-        session: Session = Depends(get_session)):
+        task_serv: TaskService = Depends(get_task_service)):
 
     try:
-        # Busca el usuario al que va a asignarse la tarea, y si existe en el proyecto
-        if new_task.user_ids:
-            for user_id in new_task.user_ids:
-                get_user_or_404(user_id=user_id, session=session)
-                
-                found_user_in_project_or_404(user_id=user_id, project_id=project_id, session=session)
-
-        task = db_models.Task(
-            project_id=project_id,
-            description=new_task.description,
-            date_exp=new_task.date_exp)
-
-        session.add(task)
-        session.commit()
-        session.refresh(task)
-
-        if new_task.label:
-            for l in new_task.label:
-                label = db_models.TaskLabelLink(
-                    task_id=task.task_id,
-                    label=l.value)
-                
-                session.add(label)
-
-        for user_id in new_task.user_ids:
-            task_user = db_models.tasks_user(
-                task_id=task.task_id,
-                user_id=user_id)
-            session.add(task_user)
-
-            # Se crea la notificacion
-            outgoing_event_json = format_notification(
-                        notification_type='assigned_task',
-                        message=f'You are no longer assigned to the task {task.task_id} in project {project_id}')
-
-            # Envia el evento
-            await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
-
-        session.commit()
-
-        return {'detail':'A new task has been created and users have been successusfully assigned'}
+        return await task_serv.create(new_task, project_id)
     
     except SQLAlchemyError as e:
         logger.error(f'[create_task] Database Error | Error: {str(e)}')
-        session.rollback()
         raise exceptions.DatabaseError(error=e, func='create_task')
 
 @router.patch(
@@ -281,175 +118,21 @@ async def create_task(
                     500: {'description':'internal error', 'model':responses.DatabaseErrorResponse}})
 @limiter.limit("10/minute")
 async def update_task(
-
         request:Request,
         task_id: int,
         project_id: int,
         update_task: schemas.UpdateTask,
         auth_data: dict = Depends(require_permission(permissions=['admin', 'write'])),
-        session: Session = Depends(get_session)):
+        task_serv: TaskService = Depends(get_task_service)):
 
     try:
         actual_permission = auth_data['permission']
         user: db_models.User = auth_data['user']
 
-        # Busca la task seleccionada
-        task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
-
-        if task.description != update_task.description and update_task.description:
-            task.description = update_task.description
-
-        if task.date_exp != update_task.date_exp and update_task.date_exp:
-            task.date_exp = update_task.date_exp
-
-        if task.state != update_task.state and update_task.state:
-            task.state = update_task.state
-
-        # Verifica si hay nuevos usuarios a agregar 
-        if update_task.append_user_ids:
-            if actual_permission == 'admin':
-                for user_id in update_task.append_user_ids:
-                    # Verifica que el usuario exista
-                    user_exists = session.get(db_models.User, user_id)
-                    if not user_exists:
-                        logger.error(f'[update_task] User {user_id} not found')
-                        raise exceptions.UserNotFoundError(user_id)
-
-                    # Verifica que el usuario exista en el projecto
-                    stmt = (select(db_models.project_user).where(
-                        db_models.project_user.user_id == user_exists.user_id,
-                        db_models.project_user.project_id == project_id))
-
-                    user_in_project = session.exec(stmt).first()
-                    if not user_in_project:
-                        logger.error(f'[update_task] User {user_id} not found in project {project_id}')
-                        raise exceptions.UserNotInProjectError(project_id=project_id, user_id=user_id)
-
-                    # Verifica que el usuario este asignado al task
-                    stmt = (select(db_models.tasks_user).where(
-                        db_models.tasks_user.user_id == user_exists.user_id,
-                        db_models.tasks_user.task_id == task_id))
-
-                    user_in_task = session.exec(stmt).first()
-                    if user_in_task:
-                        logger.error(f'[update_task] User {user_id} was already assigned to task {task_id}')
-                        raise exceptions.TaskIsAssignedError(user_id=user_id, task_id=task_id)
-
-                    # Agrega el usuario al task
-                    task_user = db_models.tasks_user(
-                        task_id=task.task_id,
-                        user_id=user_id)
-                    session.add(task_user)
-            else:
-                logger.error(f'[update_task] Unauthorized | User {user.user_id} not authorized for this action')
-                raise exceptions.NotAuthorized(user.user_id)
-
-        # Verifica si hay usuarios para eliminar de la tarea 
-        if update_task.exclude_user_ids:
-            if actual_permission == 'admin':
-                for user_id in update_task.exclude_user_ids:
-                    # Verifica que el usuario este asignado al task
-                    stmt = (select(db_models.tasks_user).where(
-                        db_models.tasks_user.user_id == user_id,
-                        db_models.tasks_user.task_id == task_id))
-
-                    user_in_task = session.exec(stmt).first()
-                    if not user_in_task:
-                        logger.error(f'[update_task] Update Task Error | User {user_id} not assigned to task {task_id}')
-                        raise exceptions.TaskIsNotAssignedError(user_id=user_id, task_id=task_id)
-
-                    session.delete(user_in_task)
-            else:
-                logger.error(f'[update_task] Unauthorized | User {user.user_id} not authorized for this action')
-                raise exceptions.NotAuthorized(user.user_id)
-
-        # Verifica si hay nuevas labels para agregar a la tarea
-        if update_task.append_label:
-            if actual_permission in ('admin', 'editor'):                
-                stmt = select(db_models.TaskLabelLink.label).where(db_models.TaskLabelLink.task_id == task_id)
-                existing_labels_for_task = set(session.exec(stmt).all())
-
-                new_labels = []
-                for label_to_append in update_task.append_label:
-                    if label_to_append in existing_labels_for_task:
-                        logger.warning(f'[update_task] Label {label_to_append.value} already exists for Task {task_id}. Skipping')
-                    else:
-                        new_labels.append(label_to_append)
-
-                if new_labels:
-                    try:
-                        for label in new_labels:
-                            new_relation = db_models.TaskLabelLink(
-                                task_id=task_id,
-                                label=label
-                            )
-                            session.add(new_relation)
-
-                    except IntegrityError as e:
-                        logger.error(f'[update_task] Database Integrity Error when adding labbels | Error: {str(e)}')
-                        raise HTTPException(status_code=409, detail='Failed to add labels due to database conflict (label might already exist).')
-                    except Exception as e:
-                        logger.error(f'[update_task] Error adding labels | Error: {str(e)}')
-                        raise HTTPException(status_code=500, detail="An error occurred while adding labels.")
-
-        # Verifica si hay labels para remover de la tarea
-        if update_task.remove_label:
-            if actual_permission in ('admin', 'editor'):                
-                stmt = select(db_models.TaskLabelLink.label).where(db_models.TaskLabelLink.task_id == task_id)
-                existing_labels_for_task = set(session.exec(stmt).all())
-
-                try:
-                    for label_to_remove in update_task.remove_label:
-                        if label_to_remove in existing_labels_for_task:
-                            label = session.exec(select(db_models.TaskLabelLink).where(
-                                        db_models.TaskLabelLink.task_id == task_id,
-                                        db_models.TaskLabelLink.label == label_to_remove)).first()
-                            session.delete(label)
-                        else:
-                            logger.warning(f'[update_task] Label {label_to_remove.value} not exists for Task {task_id}. Skipping')
-
-                except IntegrityError as e:
-                    logger.error(f'[update_task] Database Integrity Error when removing labbels | Error: {str(e)}')
-                    raise HTTPException(status_code=409, detail='Failed to remove labels due to database conflict (label might already exist).')
-                except Exception as e:
-                    logger.error(f'[update_task] Error removing labels | Error: {str(e)}')
-                    raise HTTPException(status_code=500, detail="An error occurred while removing labels.")
-
-        session.commit()
-
-        task = session.get(db_models.Task, task_id)
-
-        if update_task.append_user_ids:
-            for user_id in update_task.append_user_ids:
-                # Se crea la notificacion
-                outgoing_event_json = format_notification(
-                        notification_type='assigned_task',
-                        message=f'You were assigned to the task {task_id} in the project {project_id}')
-
-                # Envia el evento
-                await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
-
-        if update_task.exclude_user_ids:
-            for user_id in update_task.exclude_user_ids:
-                # Se crea la notificacion
-                outgoing_event_json = format_notification(
-                        notification_type='assigned_task',
-                        message=f'You are no longer assigned to the task {task_id} in project {project_id}')
-
-                # Envia el evento
-                await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
-
-        try:
-            await redis_client.delete(f'task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*')
-            logger.info(f'[update_task] Redis Cache Delete Succes - Key: task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*')
-        except redis.RedisError as e:
-            logger.warning(f'[update_task] Redis Cache Delete Error | Error: {str(e)}')
-
-        return {'detail':'A task has been successfully updated'}
+        return await task_serv.update_task(task_id, project_id, update_task, user, actual_permission)
 
     except SQLAlchemyError as e:
         logger.error(f'[update_task] Database Error | Error: {str(e)}')
-        session.rollback()
         raise exceptions.DatabaseError(error=e, func='update_task')
 
 @router.delete(
@@ -462,27 +145,11 @@ async def delete_task(
         task_id: int,
         project_id: int,
         auth_data: dict = Depends(require_permission(permissions=['admin'])),
-        session: Session = Depends(get_session)):
+        task_serv: TaskService = Depends(get_task_service)):
 
     try:        
-        # Verifica que exista la task
-        task = found_task_or_404(project_id=project_id, task_id=task_id, session=session)
-
-        session.delete(task)
-        session.commit()
-
-        try:
-            await redis_client.delete(f'task:users:task_id:{task_id}:limit:*:offset:*')
-            await redis_client.delete(f'task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*')
-
-            logger.info(f'[delete_task] Redis Cache Delete Success - Key: task:users:task_id:{task_id}:limit:*:offset:*')
-            logger.info(f'[delete_task] Redis Cache Delete Success - Key: task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*')
-        except redis.RedisError as e:
-            logger.warning(f'[delete_task] Redis Cache Delete Error | Error: {str(e)}')
-
-        return {'detail':'Task successfully deleted'}
+        return await task_serv.delete(task_id, project_id)
 
     except SQLAlchemyError as e:
         logger.error(f'[delete_task] Database Error | Error: {str(e)}')
-        session.rollback()
         raise exceptions.DatabaseError(error=e, func='delete_task')
