@@ -1,3 +1,4 @@
+from services.cache_service import cache_manager
 from repositories.user_repositories import UserRepository
 from core.logger import logger
 from models.exceptions import (
@@ -44,10 +45,9 @@ class UserService:
     async def get_all_users(self, limit: int, skip: int):
         try:
             key = f"users:limit:{limit}:offset:{skip}"
-            cached = await redis_client.get(key)
+            cached = await cache_manager.get(key, "get_all_users")
             if cached:
-                logger.info(f"[get_users] Cache Hit - Key: {key}")
-                return json.loads(cached)
+                return cached
 
             results = self.user_repo.get_all_users(limit, skip)
 
@@ -57,15 +57,9 @@ class UserService:
             ]
 
             # Guarda la respuesta
-            try:
-                await redis_client.setex(
-                    key,
-                    600,
-                    json.dumps([user_.model_dump() for user_ in to_cache], default=str),
-                )
-                logger.info(f"[get_users] Cache Set - Key: {key}")
-            except redis.RedisError as e:
-                logger.warning(f"[get_users] Cache Fail | Key: {key} | Error: {str(e)}")
+            await cache_manager.set(
+                key, [user.model_dump() for user in to_cache], "get_all_users", 600
+            )
 
             return to_cache
 
@@ -79,11 +73,7 @@ class UserService:
 
             self.user_repo.create(new_user)
 
-            try:
-                await redis_client.delete("users:limit:*:offset:*")
-                logger.info("[create_user] Cache Delete - Key: users:limit:*:offset:*")
-            except redis.RedisError as e:
-                logger.warning(f"[create_user] Cache Delete Error | Error:  {str(e)}")
+            await cache_manager.delete("users:limit:*:offset:*", "create_user")
 
             return {"detail": "Se ha creado un nuevo usuario con exito"}
         except DatabaseError as e:
@@ -98,15 +88,7 @@ class UserService:
             if user.username != update_user.username and update_user.username:
                 user.username = update_user.username
 
-                try:
-                    await redis_client.delete("users:limit:*:offset:*")
-                    logger.info(
-                        "[update_user_me] Cache Delete - Key: users:limit:*:offset:*"
-                    )
-                except redis.RedisError as e:
-                    logger.warning(
-                        f"[update_user_me] Cache Delete Error | Error: {str(e)}"
-                    )
+                await cache_manager.delete("users:limit:*:offset:*", "update_user")
 
             if user.email != update_user.email and update_user.email:
                 user.email = update_user.email
@@ -125,13 +107,7 @@ class UserService:
         try:
             self.user_repo.delete(user)
 
-            try:
-                await redis_client.delete("users:limit:*:offset:*")
-                logger.info(
-                    "[delete_user_me] Cache Delete | Key: users:limit:*:offset:*"
-                )
-            except redis.RedisError as e:
-                logger.warning(f"[delete_user_me] Cache Delete Error | Error: {str(e)}")
+            await cache_manager.delete("users:limit:*:offset:*", "delete_user")
 
             return {"detail": "Se ha eliminado el usuario"}
         except DatabaseError as e:
@@ -139,4 +115,3 @@ class UserService:
             raise
         except Exception:
             raise
-

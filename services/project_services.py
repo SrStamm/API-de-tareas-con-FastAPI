@@ -1,3 +1,4 @@
+from services.cache_service import cache_manager
 from repositories.project_repositories import ProjectRepository
 from services.group_service import GroupService
 from services.user_services import UserService
@@ -9,7 +10,6 @@ from models.exceptions import (
     UserNotInGroupError,
     UserInProjectError,
 )
-from models.db_models import User
 from models.schemas import (
     ReadBasicProject,
     CreateProject,
@@ -17,11 +17,10 @@ from models.schemas import (
     ReadProjectUser,
     UpdatePermissionUser,
 )
-from db.database import redis_client, redis
 from core.logger import logger
 from core.socket_manager import manager
 from core.event_ws import format_notification
-import json
+from db.database import SQLAlchemyError
 from typing import List
 
 
@@ -45,7 +44,7 @@ class ProjectService:
 
         return founded_project
 
-    def found_user_in_project_or_404(self, user_id: int, project_id: int) -> User:
+    def found_user_in_project_or_404(self, user_id: int, project_id: int):
         user = self.project_repo.get_user_in_project(project_id, user_id)
 
         if not user:
@@ -57,122 +56,117 @@ class ProjectService:
     async def get_projects_iam(
         self, user_id: int, limit: int, skip: int
     ) -> List[ReadBasicProject]:
-        key = f"project:user:user_id:{user_id}:limit:{limit}:offset:{skip}"
-        cached = await redis_client.get(key)
-
-        # Devuelve si es verdad
-        if cached:
-            logger.info(f"[get_projects_iam] Redis Cache HIT - Key: {key}")
-            return json.loads(cached)
-
-        found_projects = self.project_repo.get_all_project_by_user(user_id, limit, skip)
-
-        # Cachea la respuesta
-        to_cache = [
-            ReadBasicProject(group_id=group_id, project_id=project_id, title=title)
-            for group_id, project_id, title in found_projects
-        ]
-
-        # Guarda la respuesta
         try:
-            await redis_client.setex(
-                key,
-                6000,
-                json.dumps(
-                    [project_.model_dump() for project_ in to_cache], default=str
-                ),
-            )
-            logger.info(f"[get_projects_iam] Redis Cache Success - Key {key}")
-        except redis.RedisError as e:
-            logger.warning(f"[get_projects_iam] Redis Cache Error | Error: {e}")
+            key = f"project:user:user_id:{user_id}:limit:{limit}:offset:{skip}"
+            cached = await cache_manager.get(key, "get_projects_iam")
 
-        return to_cache
+            # Devuelve si es verdad
+            if cached:
+                return cached
+
+            found_projects = self.project_repo.get_all_project_by_user(
+                user_id, limit, skip
+            )
+
+            # Cachea la respuesta
+            to_cache = [
+                ReadBasicProject(group_id=group_id, project_id=project_id, title=title)
+                for group_id, project_id, title in found_projects
+            ]
+
+            # Guarda la respuesta
+            await cache_manager.set(key, to_cache, "get_projects_iam")
+
+            return to_cache
+        except SQLAlchemyError as e:
+            logger.error(f"[project_service.get_projects_iam] Error: {e}")
+            raise DatabaseError(e, "project_service.get_projects_iam")
 
     async def get_all_projects(self, group_id: int, limit: int, skip: int):
-        key = f"projects:group_id:{group_id}:limit:{limit}:offset:{skip}"
-        cached = await redis_client.get(key)
-
-        # Devuelve si es verdad
-        if cached:
-            logger.info(f"[get_projects] Redis Cache Hit - Key: {key}")
-            return json.loads(cached)
-
-        await self.group_serv.get_group_or_404(group_id)
-
-        found_projects = self.project_repo.get_all_projects(group_id, limit, skip)
-
-        to_cache = [
-            {
-                **project.model_dump(),
-                "users": [user.model_dump() for user in project.users],
-            }
-            for project in found_projects
-        ]
-
         try:
-            await redis_client.setex(key, 6000, json.dumps(to_cache, default=str))
-        except redis.RedisError as e:
-            logger.error(f"[get_projects] Redis Cache Error | Error: {str(e)}")
+            key = f"projects:group_id:{group_id}:limit:{limit}:offset:{skip}"
+            cached = await cache_manager.get(key, "get_all_projects")
 
-        return to_cache
+            # Devuelve si es verdad
+            if cached:
+                return cached
+
+            self.group_serv.get_group_or_404(group_id)
+
+            found_projects = self.project_repo.get_all_projects(group_id, limit, skip)
+
+            to_cache = [
+                {
+                    **project.model_dump(),
+                    "users": [user.model_dump() for user in project.users],
+                }
+                for project in found_projects
+            ]
+
+            await cache_manager.set(key, to_cache, "get_all_projects")
+
+            return to_cache
+
+        except SQLAlchemyError as e:
+            logger.error(f"[project_service.get_all_projects] Error: {e}")
+            raise DatabaseError(e, "project_service.get_all_projects")
 
     async def get_user_in_project(
         self, group_id: int, project_id: int, limit: int, skip: int
     ):
-        key = f"project:users:group_id:{group_id}:project_id:{project_id}:limit:{limit}:offset:{skip}"
-        cached = await redis_client.get(key)
-
-        if cached:
-            logger.info(f"[get_user_in_project] Redis Cache Hit - Key: {key}")
-            return json.loads(cached)
-
-        self.found_project_or_404(group_id, project_id)
-
-        results = self.project_repo.get_users_in_project(project_id, limit, skip)
-
-        if not results:
-            logger.error(
-                f"[get_user_in_project] Users in Project {project_id} Error | Users not found in Project"
-            )
-            raise UsersNotFoundInProjectError(project_id=project_id)
-
-        # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
-        to_cache = [
-            ReadProjectUser(user_id=user_id, username=username, permission=permission)
-            for user_id, username, permission in results
-        ]
-
         try:
-            await redis_client.setex(
-                key,
-                600,
-                json.dumps([project.model_dump() for project in to_cache], default=str),
-            )
-            logger.info(f"[get_user_in_project] Redis Cache Set - Key: {key}")
-        except redis.RedisError as e:
-            logger.warning(
-                f"[get_user_in_project] Redis Cache Set Error | Error: {str(e)}"
+            key = f"project:users:group_id:{group_id}:project_id:{project_id}:limit:{limit}:offset:{skip}"
+            cached = await cache_manager.get(key, "get_users_in_project")
+
+            if cached:
+                try:
+                    return [ReadProjectUser.model_validate(item) for item in cached]
+                except Exception as e:
+                    logger.error(
+                        f"[get_user_in_project] Cache deserialization error: {str(e)}"
+                    )
+
+            self.found_project_or_404(group_id, project_id)
+
+            results = self.project_repo.get_users_in_project(project_id, limit, skip)
+
+            if not results:
+                logger.error(
+                    f"[get_user_in_project] Users in Project {project_id} Error | Users not found in Project"
+                )
+                raise UsersNotFoundInProjectError(project_id=project_id)
+
+            # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
+            to_cache = [
+                ReadProjectUser(
+                    user_id=user_id, username=username, permission=permission
+                )
+                for user_id, username, permission in results
+            ]
+
+            await cache_manager.set(
+                key, [user.model_dump() for user in to_cache], "get_user_in_project"
             )
 
-        return to_cache
+            return to_cache
+        except SQLAlchemyError as e:
+            logger.error(f"[project_service.get_users_in_project] Error: {e}")
+            raise DatabaseError(e, "project_service.get_users_in_project")
 
     async def create_project(self, group_id: int, user_id: int, project: CreateProject):
         try:
-            await self.group_serv.get_group_or_404(group_id)
+            self.group_serv.get_group_or_404(group_id)
 
             self.project_repo.create(group_id, user_id, project)
 
-            try:
-                await redis_client.delete(
-                    "projects:group_id:{group_id}:limit:*:offset:*"
-                )
-            except redis.RedisError as e:
-                logger.warning(f"Error al cachear en Redis {e}")
+            await cache_manager.delete(
+                "projects:group_id:{group_id}:limit:*:offset:*", "create_project"
+            )
 
             return {"detail": "Se ha creado un nuevo proyecto de forma exitosa"}
-        except DatabaseError as e:
-            logger.error(f"[project_service.create_project] Repo failed: {str(e)}")
-            raise
+        except SQLAlchemyError as e:
+            logger.error(f"[project_service.create_project] Error: {e}")
+            raise DatabaseError(e, "project_service.create_project")
 
     async def update_project(
         self, group_id: int, project_id: int, update_project: UpdateProject
@@ -182,23 +176,15 @@ class ProjectService:
 
             self.project_repo.update(found_project, update_project)
 
-            try:
-                await redis_client.delete(
-                    "projects:group_id:{group_id}:limit:*:offset:*"
-                )
-                logger.info(
-                    f"[update_project] Redis Cache Delete - Key: projects:group_id:{group_id}:limit:*:offset:*"
-                )
-            except redis.RedisError as e:
-                logger.error(
-                    f"[update_project] Redis Cache Delete Error | Error: {str(e)}"
-                )
+            await cache_manager.delete(
+                "projects:group_id:{group_id}:limit:*:offset:*", "update_project"
+            )
 
             return {"detail": "Se ha actualizado la informacion del projecto"}
 
-        except DatabaseError as e:
-            logger.error(f"[project_service.update_project] Repo failed: {str(e)}")
-            raise
+        except SQLAlchemyError as e:
+            logger.error(f"[project_service.create_project] Error: {e}")
+            raise DatabaseError(e, "project_service.create_project")
         except Exception:
             raise
 
@@ -208,30 +194,19 @@ class ProjectService:
 
             self.project_repo.delete(found_project)
 
-            try:
-                await redis_client.delete(
-                    "projects:group_id:{group_id}:limit:*:offset:*"
-                )
-                await redis_client.delete(
-                    "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*"
-                )
-
-                logger.info(
-                    f"[delete_project] Redis Cache Delete Succes - Key: projects:group_id:{group_id}:limit:*:offset:*"
-                )
-                logger.info(
-                    f"[delete_project] Redis Cache Delete Succes - Key: project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*"
-                )
-            except redis.RedisError as e:
-                logger.warning(
-                    f"[delete_project] Redis Cache Delete Error | Error: {str(e)}"
-                )
+            await cache_manager.delete(
+                "projects:group_id:{group_id}:limit:*:offset:*", "delete_project"
+            )
+            await cache_manager.delete(
+                "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
+                "delete_project",
+            )
 
             return {"detail": "Se ha eliminado el proyecto"}
 
-        except DatabaseError as e:
-            logger.error(f"[project_service.delete_project] Repo failed: {str(e)}")
-            raise
+        except SQLAlchemyError as e:
+            logger.error(f"[project_service.delete_project] Error: {e}")
+            raise DatabaseError(e, "project_service.delete_project")
         except Exception:
             raise
 
@@ -241,7 +216,7 @@ class ProjectService:
 
             user = self.user_serv.get_user_or_404(user_id)
 
-            group = await self.group_serv.get_group_or_404(group_id)
+            group = self.group_serv.get_group_or_404(group_id)
 
             if user not in group.users:
                 logger.error(
@@ -266,30 +241,19 @@ class ProjectService:
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
             # Elimina cache
-            try:
-                await redis_client.delete(
-                    "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*"
-                )
-                await redis_client.delete(
-                    "projects:group_id:{group_id}:limit:*:offset:*"
-                )
-
-                logger.info(
-                    f"[add_user_to_project] Redis Cache Delete Success - Key: project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*"
-                )
-                logger.info(
-                    f"[add_user_to_project] Redis Cache Delete Success - Key: projects:group_id:{group_id}:limit:*:offset:*"
-                )
-            except redis.RedisError as e:
-                logger.warning(
-                    f"[add_user_to_project] Redis Cache Delete Error | Error: {str(e)}"
-                )
+            await cache_manager.delete(
+                "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
+                "add_user",
+            )
+            await cache_manager.delete(
+                "projects:group_id:{group_id}:limit:*:offset:*", "add_user"
+            )
 
             return {"detail": "El usuario ha sido agregado al proyecto"}
 
-        except DatabaseError as e:
-            logger.error(f"[project_service.add_user] Repo failed: {str(e)}")
-            raise
+        except SQLAlchemyError as e:
+            logger.error(f"[project_service.add_user] Error: {e}")
+            raise DatabaseError(e, "project_service.add_user")
         except Exception:
             raise
 
@@ -299,7 +263,7 @@ class ProjectService:
 
             user = self.user_serv.get_user_or_404(user_id)
 
-            group = await self.group_serv.get_group_or_404(group_id)
+            group = self.group_serv.get_group_or_404(group_id)
 
             if user not in group.users:
                 logger.error(
@@ -320,24 +284,13 @@ class ProjectService:
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
                 # Elimina cache
-                try:
-                    await redis_client.delete(
-                        "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*"
-                    )
-                    await redis_client.delete(
-                        "projects:group_id:{group_id}:limit:*:offset:*"
-                    )
-
-                    logger.info(
-                        f"[remove_user_from_project] Redis Cache Delete Success - Key: project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*"
-                    )
-                    logger.info(
-                        f"[remove_user_from_project] Redis Cache Delete Success - Key: projects:group_id:{group_id}:limit:*:offset:*"
-                    )
-                except redis.RedisError as e:
-                    logger.warning(
-                        f"[remove_user_from_project] Redis Cache Delete Error | Error: {str(e)}"
-                    )
+                await cache_manager.delete(
+                    "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
+                    "remove_user",
+                )
+                await cache_manager.delete(
+                    "projects:group_id:{group_id}:limit:*:offset:*", "remove_user"
+                )
 
                 return {"detail": "El usuario ha sido eliminado del proyecto"}
             else:
@@ -346,9 +299,9 @@ class ProjectService:
                 )
                 raise UserNotInProjectError(user_id=user_id, project_id=project_id)
 
-        except DatabaseError as e:
-            logger.error(f"[project_service.remove_user] Repo failed: {str(e)}")
-            raise
+        except SQLAlchemyError as e:
+            logger.error(f"[project_service.remove_user_from_project] Error: {e}")
+            raise DatabaseError(e, "project_service.remove_user_from_project")
         except Exception:
             raise
 
@@ -379,25 +332,18 @@ class ProjectService:
 
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
-            try:
-                await redis_client.delete(
-                    "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*"
-                )
-                logger.info(
-                    f"[update_user_permission_in_project] Redis Cache Delete Success - Key: project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*"
-                )
-            except redis.RedisError as e:
-                logger.warning(
-                    f"[update_user_permission_in_project] Redis Cache Delete Error | Error {str(e)}"
-                )
+            await cache_manager.delete(
+                "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
+                "update_user_permission_in_project",
+            )
 
             return {"detail": "Se ha cambiado los permisos del usuario en el proyecto"}
 
-        except DatabaseError as e:
+        except SQLAlchemyError as e:
             logger.error(
-                f"[project_service.update_user_permission_in_project] Repo failed: {str(e)}"
+                f"[project_service.update_user_permission_in_project] Error: {e}"
             )
-            raise
+            raise DatabaseError(e, "project_service.update_user_permission_in_project")
         except Exception:
             raise
 

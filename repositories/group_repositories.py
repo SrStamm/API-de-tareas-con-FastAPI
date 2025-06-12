@@ -1,7 +1,7 @@
+from core.logger import logger
 from models.schemas import CreateGroup, UpdateGroup
 from models.db_models import Group, group_user, Group_Role, User
-from models.exceptions import DatabaseError
-from db.database import Session, select, selectinload, SQLAlchemyError
+from db.database import Session, SQLAlchemyError, select, selectinload
 from typing import List, Dict
 
 
@@ -18,47 +18,64 @@ class GroupRepository:
             )
             return self.session.exec(stmt).first()
         except SQLAlchemyError as e:
-            raise DatabaseError(e, "get_group_by_id")
+            logger.error(f"[GroupRepository.get_group_by_id] Erro: {e}")
+            raise
         except Exception as e:
             raise
 
     def get_all_groups(self, limit: int, skip: int) -> List[Dict]:
-        stmt = (
-            select(Group)
-            .options(selectinload(Group.users))
-            .order_by(Group.group_id)
-            .limit(limit)
-            .offset(skip)
-        )
-        return self.session.exec(stmt).all()
+        try:
+            stmt = (
+                select(Group)
+                .options(selectinload(Group.users))
+                .order_by(Group.group_id)
+                .limit(limit)
+                .offset(skip)
+            )
+            return self.session.exec(stmt).all()
+        except SQLAlchemyError as e:
+            logger.error(f"[GroupRepository.get_all_groups] Erro: {e}")
+            raise
 
     def get_groups_for_user(self, user_id: int, limit: int, skip: int):
-        stmt = (
-            select(Group)
-            .join(group_user, group_user.group_id == Group.group_id)
-            .where(group_user.user_id == user_id)
-            .order_by(Group.group_id)
-            .limit(limit)
-            .offset(skip)
-        )
+        try:
+            stmt = (
+                select(Group)
+                .join(group_user, group_user.group_id == Group.group_id)
+                .where(group_user.user_id == user_id)
+                .order_by(Group.group_id)
+                .limit(limit)
+                .offset(skip)
+            )
 
-        return self.session.exec(stmt).all()
+            return self.session.exec(stmt).all()
+        except SQLAlchemyError as e:
+            logger.error(f"[GroupRepository.get_groups_for_user] Erro: {e}")
+            raise
 
     def get_users_for_group(self, group_id: int):
-        stmt = (
-            select(User.username, User.user_id, group_user.role)
-            .join(group_user, group_user.user_id == User.user_id)
-            .where(group_user.group_id == group_id)
-        )
+        try:
+            stmt = (
+                select(User.username, User.user_id, group_user.role)
+                .join(group_user, group_user.user_id == User.user_id)
+                .where(group_user.group_id == group_id)
+            )
 
-        return self.session.exec(stmt).all()
+            return self.session.exec(stmt).all()
+        except SQLAlchemyError as e:
+            logger.error(f"[GroupRepository.get_users_for_group] Erro: {e}")
+            raise
 
     def get_role_for_user_in_group(self, group_id: int, user_id: int):
-        stmt = select(group_user).where(
-            group_user.user_id == user_id, group_user.group_id == group_id
-        )
+        try:
+            stmt = select(group_user).where(
+                group_user.user_id == user_id, group_user.group_id == group_id
+            )
 
-        return self.session.exec(stmt).first()
+            return self.session.exec(stmt).first()
+        except SQLAlchemyError as e:
+            logger.error(f"[GroupRepository.get_role_for_user_in_group] Erro: {e}")
+            raise
 
     def create(self, group_data: CreateGroup, user_id: int) -> Group:
         try:
@@ -78,7 +95,10 @@ class GroupRepository:
             return new_group
 
         except SQLAlchemyError as e:
-            raise DatabaseError(error=e, func="create")
+            logger.error(f"[GroupRepository.create] Erro: {e}")
+            self.session.rollback()
+            raise
+
         except Exception as e:
             self.session.rollback()
             raise
@@ -98,7 +118,10 @@ class GroupRepository:
             return
 
         except SQLAlchemyError as e:
-            raise DatabaseError(error=e, func="update")
+            logger.error(f"[GroupRepository.update] Erro: {e}")
+            self.session.rollback()
+            raise
+
         except Exception as e:
             self.session.rollback()
             raise
@@ -110,7 +133,10 @@ class GroupRepository:
             return
 
         except SQLAlchemyError as e:
-            raise DatabaseError(error=e, func="delete")
+            logger.error(f"[GroupRepository.delete] Error: {e}")
+            self.session.rollback()
+            raise
+
         except Exception as e:
             self.session.rollback()
             raise
@@ -123,7 +149,10 @@ class GroupRepository:
             return
 
         except SQLAlchemyError as e:
-            raise DatabaseError(error=e, func="append_user")
+            logger.error(f"[GroupRepository.append_user] Error: {e}")
+            self.session.rollback()
+            raise
+
         except Exception as e:
             self.session.rollback()
             raise
@@ -136,7 +165,10 @@ class GroupRepository:
             return
 
         except SQLAlchemyError as e:
-            raise DatabaseError(error=e, func="delete_user")
+            logger.error(f"[GroupRepository.delete_user] Error: {e}")
+            self.session.rollback()
+            raise
+
         except Exception as e:
             self.session.rollback()
             raise
@@ -154,8 +186,10 @@ class GroupRepository:
             self.session.commit()
 
         except SQLAlchemyError as e:
-            raise DatabaseError(error=e, func="create")
-        except Exception as e:
+            logger.error(f"[GroupRepository.update_role] Error: {e}")
             self.session.rollback()
             raise
 
+        except Exception as e:
+            self.session.rollback()
+            raise

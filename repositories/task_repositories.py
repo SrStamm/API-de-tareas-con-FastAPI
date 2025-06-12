@@ -1,112 +1,168 @@
 from models.schemas import ReadTask, CreateTask, UpdateTask
-from models.db_models import Task, tasks_user, TypeOfLabel, State, TaskLabelLink, User, project_user
-from models.exceptions import DatabaseError
+from models.db_models import (
+    Task,
+    tasks_user,
+    TypeOfLabel,
+    State,
+    TaskLabelLink,
+    User,
+    project_user,
+)
 from db.database import Session, select, joinedload, func, SQLAlchemyError
 from typing import List
+from core.logger import logger
+
 
 class TaskRepository:
     def __init__(self, session: Session):
         self.session = session
 
     def get_task_by_id(self, task_id: int, project_id: int):
-        stmt = (select(Task).where(
-            Task.project_id == project_id,
-            Task.task_id == task_id
-        ))
-        return self.session.exec(stmt).first()
+        try:
+            stmt = select(Task).where(
+                Task.project_id == project_id, Task.task_id == task_id
+            )
+            return self.session.exec(stmt).first()
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.get_task_by_id] Error: {e}")
+            raise
 
     def get_task_is_asigned(self, task_id: int, user_id: int):
-        stmt = (select(tasks_user).where(
-            tasks_user.user_id == user_id,
-            tasks_user.task_id == task_id
-        ))
-        return self.session.exec(stmt).first()
+        try:
+            stmt = select(tasks_user).where(
+                tasks_user.user_id == user_id, tasks_user.task_id == task_id
+            )
+            return self.session.exec(stmt).first()
+
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.get_task_by_id] Error: {e}")
+            raise
 
     def get_labels_for_task(self, task_id: int):
-        stmt = (select(TaskLabelLink.label).where(
-            TaskLabelLink.task_id == task_id
-        ))
-        return set(self.session.exec(stmt).all())
+        try:
+            stmt = select(TaskLabelLink.label).where(TaskLabelLink.task_id == task_id)
+            return set(self.session.exec(stmt).all())
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.get_labels_for_task] Error: {e}")
+            raise
 
     def get_label_for_task_by_label(self, task_id: int, label: TypeOfLabel):
-        stmt = (select(TaskLabelLink.label).where(
-            TaskLabelLink.task_id == task_id,
-            TaskLabelLink.label == label
-        ))
-        return self.session.exec(stmt).first()
+        try:
+            stmt = select(TaskLabelLink.label).where(
+                TaskLabelLink.task_id == task_id, TaskLabelLink.label == label
+            )
+            return self.session.exec(stmt).first()
+
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.get_label_for_task_by_label] Error: {e}")
+            raise
 
     def get_all_task_for_user(
-            self,
-            user_id: int,
-            limit: int,
-            skip: int,
-            labels: List[TypeOfLabel] | None,
-            state: List[State] | None) -> List[ReadTask]:
+        self,
+        user_id: int,
+        limit: int,
+        skip: int,
+        labels: List[TypeOfLabel] | None = None,
+        state: List[State] | None = None,
+    ) -> List[ReadTask]:
+        try:
+            stmt = (
+                select(Task)
+                .join(tasks_user, Task.task_id == tasks_user.task_id)
+                .where(tasks_user.user_id == user_id)
+                .options(joinedload(Task.task_label_links))
+            )
 
-        stmt = (select(Task)
-                    .join(tasks_user, Task.task_id == tasks_user.task_id)
-                    .where(tasks_user.user_id == user_id)
-                    .options(joinedload(Task.task_label_links)))
+            if labels:
+                stmt = (
+                    stmt.join(TaskLabelLink, Task.task_id == TaskLabelLink.task_id)
+                    .where(TaskLabelLink.label.in_(labels))
+                    .group_by(Task.task_id)
+                    .having(func.count(TaskLabelLink.label.distinct()) == len(labels))
+                )
 
-        if labels:
-            stmt = stmt.join(
-                TaskLabelLink, Task.task_id == TaskLabelLink.task_id).where(
-                    TaskLabelLink.label.in_(labels)).group_by(
-                    Task.task_id).having(
-                    func.count(TaskLabelLink.label.distinct()) == len(labels))
+            if state:
+                stmt = stmt.where(Task.state.in_(state))
 
-        if state:
-            stmt = stmt.where(Task.state.in_(state))
+            return self.session.exec(stmt.limit(limit).offset(skip)).unique().all()
 
-        return self.session.exec(stmt.limit(limit).offset(skip)).unique().all()
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.get_all_task_for_user] Error: {e}")
+            raise
 
     def get_all_task_to_project(
-            self,
-            project_id:int,
-            user_id: int,
-            limit: int,
-            skip: int,
-            labels: List[TypeOfLabel] | None,
-            state: List[State] | None):
-        stmt = (select(Task)
-                .join( tasks_user, tasks_user.task_id == Task.task_id )
-                .where( project_user.project_id == project_id, project_user.user_id == user_id)
+        self,
+        project_id: int,
+        user_id: int,
+        limit: int,
+        skip: int,
+        labels: List[TypeOfLabel] | None,
+        state: List[State] | None,
+    ):
+        try:
+            stmt = (
+                select(Task)
+                .join(tasks_user, tasks_user.task_id == Task.task_id)
+                .where(
+                    project_user.project_id == project_id,
+                    project_user.user_id == user_id,
+                )
                 .options(joinedload(Task.asigned))
-        )
+            )
 
-        if labels:
-            stmt = stmt.join( TaskLabelLink, Task.task_id == TaskLabelLink.task_id ).where(
-                    TaskLabelLink.label.in_(labels)).group_by(
-                    Task.task_id).having(
-                    func.count(TaskLabelLink.label.distinct()) == len(labels))
+            if labels:
+                stmt = (
+                    stmt.join(TaskLabelLink, Task.task_id == TaskLabelLink.task_id)
+                    .where(TaskLabelLink.label.in_(labels))
+                    .group_by(Task.task_id)
+                    .having(func.count(TaskLabelLink.label.distinct()) == len(labels))
+                )
 
-        if state:
-            stmt = stmt.where( Task.state.in_(state))
+            if state:
+                stmt = stmt.where(Task.state.in_(state))
 
-        return self.session.exec(stmt.limit(limit).offset(skip)).unique().all()
+            return self.session.exec(stmt.limit(limit).offset(skip)).unique().all()
+
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.get_all_task_to_project] Error: {e}")
+            raise
 
     def get_user_for_task(self, task_id: int, limit: int, skip: int):
-        stmt = (select(User.user_id, User.username)
-                    .join(tasks_user, tasks_user.user_id == User.user_id)
-                    .where(tasks_user.task_id == task_id)
-                    .limit(limit).offset(skip))
-        return self.session.exec(stmt).all()
+        try:
+            stmt = (
+                select(User.user_id, User.username)
+                .join(tasks_user, tasks_user.user_id == User.user_id)
+                .where(tasks_user.task_id == task_id)
+                .limit(limit)
+                .offset(skip)
+            )
+            return self.session.exec(stmt).all()
+
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.get_user_for_task] Error: {e}")
+            raise
 
     def validate_in_task(self, users: List[User], task_id: int):
-        stmt = (select(User.username, User.user_id)
-                .where(
-                    tasks_user.user_id == User.user_id,
-                    tasks_user.task_id == task_id,
-                    User.username.in_(users)))
-        
-        return self.session.exec(stmt).all()
+        try:
+            stmt = select(User.username, User.user_id).where(
+                tasks_user.user_id == User.user_id,
+                tasks_user.task_id == task_id,
+                User.username.in_(users),
+            )
 
-    def create(self, project_id:int, task: CreateTask) -> Task:
+            return self.session.exec(stmt).all()
+
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.validate_in_task] Error: {e}")
+            raise
+
+    def create(self, project_id: int, task: CreateTask) -> Task:
         try:
             new_task = Task(
-                    project_id=project_id,
-                    description=task.description,
-                    date_exp=task.date_exp)
+                project_id=project_id,
+                description=task.description,
+                date_exp=task.date_exp,
+            )
 
             self.session.add(new_task)
             self.session.commit()
@@ -114,22 +170,18 @@ class TaskRepository:
 
             if task.label:
                 for l in task.label:
-                    label = TaskLabelLink(
-                        task_id=new_task.task_id,
-                        label=l.value)
+                    label = TaskLabelLink(task_id=new_task.task_id, label=l.value)
 
                     self.session.add(label)
 
             for user_id in task.user_ids:
-                task_user = tasks_user(
-                    task_id=new_task.task_id,
-                    user_id=user_id)
+                task_user = tasks_user(task_id=new_task.task_id, user_id=user_id)
                 self.session.add(task_user)
             self.session.commit()
             return new_task
         except SQLAlchemyError as e:
-            self.session.rollback()
-            raise DatabaseError(e, 'create')
+            logger.error(f"[TaskRepository.create] Error: {e}")
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -144,8 +196,8 @@ class TaskRepository:
                 task.state = update_task.state
             return
         except SQLAlchemyError as e:
-            self.session.rollback()
-            raise DatabaseError(e, 'update')
+            logger.error(f"[TaskRepository.update] Error: {e}")
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -156,8 +208,9 @@ class TaskRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.delete] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, 'delete')
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -169,8 +222,9 @@ class TaskRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.add_user] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, 'add_user')
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -181,8 +235,9 @@ class TaskRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.remove_user] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, 'remove_user')
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -194,8 +249,9 @@ class TaskRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.add_label] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, 'add_label')
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -206,8 +262,9 @@ class TaskRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.delete_label] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, 'delete_label')
+            raise
         except Exception:
             self.session.rollback()
             raise

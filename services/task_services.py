@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from repositories.task_repositories import TaskRepository
+from services.cache_service import cache_manager
 from services import project_services
 from models.db_models import TypeOfLabel, State, Project_Permission, User
 from models.schemas import ReadTask, ReadUser, ReadTaskInProject, CreateTask, UpdateTask
@@ -9,12 +10,11 @@ from models.exceptions import (
     TaskIsAssignedError,
     TaskIsNotAssignedError,
 )
-from db.database import redis, redis_client, IntegrityError
+from db.database import IntegrityError, SQLAlchemyError
 from typing import List
 from core.logger import logger
 from core.event_ws import format_notification
 from core.socket_manager import manager
-import json
 
 
 class TaskService:
@@ -52,72 +52,60 @@ class TaskService:
         user_id: int,
         limit: int,
         skip: int,
-        labels: List[TypeOfLabel] | None,
-        state: List[State] | None,
+        labels: List[TypeOfLabel] | None = None,
+        state: List[State] | None = None,
     ):
-        key = f"task:user:user_id:{user_id}:labels:{labels}:state:{state}:limit:{limit}:offset:{skip}"
-        cached = await redis_client.get(key)
-
-        if cached:
-            logger.info(f"[get_task] Redis Cache Hit - Key: {key}")
-            return json.loads(cached)
-
-        found_tasks = self.task_repo.get_all_task_for_user(
-            user_id, limit, skip, labels, state
-        )
-
-        to_cache = [
-            ReadTask(
-                task_id=task.task_id,
-                project_id=task.project_id,
-                description=task.description,
-                date_exp=task.date_exp,
-                state=task.state,
-                task_label_links=task.task_label_links,
-            )
-            for task in found_tasks
-        ]
-
         try:
-            await redis_client.setex(
-                key,
-                10,
-                json.dumps([task.model_dump() for task in to_cache], default=str),
-            )
-            logger.info(f"[get_task] Redis Cache Set - Key: {key}")
-        except redis.RedisError as e:
-            logger.warning(f"[get_task] Redis Cache Set Error | Error: {str(e)}")
+            key = f"task:user:user_id:{user_id}:labels:{labels}:state:{state}:limit:{limit}:offset:{skip}"
+            cached = await cache_manager.get(key, "get_all_task_for_user")
 
-        return to_cache
+            if cached:
+                return cached
+
+            found_tasks = self.task_repo.get_all_task_for_user(
+                user_id, limit, skip, labels, state
+            )
+
+            to_cache = [
+                ReadTask(
+                    task_id=task.task_id,
+                    project_id=task.project_id,
+                    description=task.description,
+                    date_exp=task.date_exp,
+                    state=task.state,
+                    task_label_links=task.task_label_links,
+                )
+                for task in found_tasks
+            ]
+
+            await cache_manager.set(key, to_cache, "get_all_task_for_user")
+
+            return to_cache
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskService.get_all_task_for_user] Error: {e}")
+            raise DatabaseError(e, "get_all_task_for_user")
 
     async def get_users_for_task(self, task_id: int, limit: int, skip: int):
-        key = f"task:users:task_id:{task_id}:limit:{limit}:offset:{skip}"
-        cached = await redis_client.get(key)
-
-        if cached:
-            logger.info(f"[get_users_for_task] Redis Cache Hit - Key: {key}")
-            return json.loads(cached)
-
-        results = self.task_repo.get_user_for_task(task_id, limit, skip)
-
-        to_cache = [
-            ReadUser(user_id=user_id, username=username)
-            for user_id, username in results
-        ]
-
         try:
-            await redis_client.setex(
-                key,
-                600,
-                json.dumps([user_.model_dump() for user_ in to_cache], default=str),
-            )
-            logger.info(f"[get_users_for_task] Redis Cache Set - Key: {key}")
-        except redis.RedisError as e:
-            logger.warning(
-                f"[get_users_for_task] Redis Cache Set Error | Error: {str(e)}"
-            )
+            key = f"task:users:task_id:{task_id}:limit:{limit}:offset:{skip}"
+            cached = await cache_manager.get(key, "get_user_for_task")
 
-        return to_cache
+            if cached:
+                return cached
+
+            results = self.task_repo.get_user_for_task(task_id, limit, skip)
+
+            to_cache = [
+                ReadUser(user_id=user_id, username=username)
+                for user_id, username in results
+            ]
+
+            await cache_manager.set(key, to_cache, "get_user_for_task")
+
+            return to_cache
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskService.get_user_for_task] Error: {e}")
+            raise DatabaseError(e, "TaskService.get_user_for_task")
 
     async def get_all_task_for_project(
         self,
@@ -128,42 +116,39 @@ class TaskService:
         labels: List[TypeOfLabel] | None,
         state: List[State] | None,
     ):
-        key = f"task:users:project_id:{project_id}:user_id:{user_id}:labels:{labels}:state:{state}:limit:{limit}:offset:{skip}"
-        cached = await redis_client.get(key)
-
-        if cached:
-            logger.info(f"[get_task_in_project] Redis Cache Hit - Key: {key}")
-            return json.loads(cached)
-
-        results = self.task_repo.get_all_task_to_project(
-            project_id, user_id, limit, skip, labels, state
-        )
-
-        to_cache = [
-            ReadTaskInProject(
-                task_id=task.task_id,
-                description=task.description,
-                date_exp=task.date_exp,
-                state=task.state,
-                asigned=task.asigned,
-                task_label_links=task.task_label_links,
-            )
-            for task in results
-        ]
-
         try:
-            await redis_client.setex(
-                key,
-                10,
-                json.dumps([task_.model_dump() for task_ in to_cache], default=str),
-            )
-            logger.info(f"[get_task_in_project] Redis Cache Set - Key: {key}")
-        except redis.RedisError as e:
-            logger.warning(
-                f"[get_task_in_project] Redis Cache Set Error | Error {str(e)}"
+            key = f"task:users:project_id:{project_id}:user_id:{user_id}:labels:{labels}:state:{state}:limit:{limit}:offset:{skip}"
+            cached = await cache_manager.get(key, "get_all_task_for_project")
+
+            if cached:
+                return cached
+
+            results = self.task_repo.get_all_task_to_project(
+                project_id, user_id, limit, skip, labels, state
             )
 
-        return to_cache
+            to_cache = [
+                ReadTaskInProject(
+                    task_id=task.task_id,
+                    description=task.description,
+                    date_exp=task.date_exp,
+                    state=task.state,
+                    asigned=task.asigned,
+                    task_label_links=task.task_label_links,
+                )
+                for task in results
+            ]
+
+            await cache_manager.set(
+                key,
+                [task.model_dump() for task in to_cache],
+                "get_all_task_for_project",
+            )
+
+            return to_cache
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskService.get_all_task_for_project] Error: {e}")
+            raise DatabaseError(e, "TaskService.get_all_task_for_project")
 
     async def create(self, task: CreateTask, project_id: int):
         try:
@@ -187,9 +172,9 @@ class TaskService:
             return {
                 "detail": "A new task has been created and users have been successusfully assigned"
             }
-        except DatabaseError as e:
-            logger.error(f"[task_services.create] Repo failed: {str(e)}")
-            raise
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskService.create] Error: {e}")
+            raise DatabaseError(e, "TaskService.create")
         except Exception:
             raise
 
@@ -199,30 +184,19 @@ class TaskService:
 
             self.task_repo.delete(task)
 
-            try:
-                await redis_client.delete(
-                    f"task:users:task_id:{task_id}:limit:*:offset:*"
-                )
-                await redis_client.delete(
-                    f"task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*"
-                )
-
-                logger.info(
-                    f"[delete_task] Redis Cache Delete Success - Key: task:users:task_id:{task_id}:limit:*:offset:*"
-                )
-                logger.info(
-                    f"[delete_task] Redis Cache Delete Success - Key: task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*"
-                )
-            except redis.RedisError as e:
-                logger.warning(
-                    f"[delete_task] Redis Cache Delete Error | Error: {str(e)}"
-                )
+            await cache_manager.delete(
+                f"task:users:task_id:{task_id}:limit:*:offset:*", "delete"
+            )
+            await cache_manager.delete(
+                f"task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*",
+                "delete",
+            )
 
             return {"detail": "Task successfully deleted"}
 
-        except DatabaseError as e:
-            logger.error(f"[task_services.delete] Repo failed: {str(e)}")
-            raise
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskService.delete] Error: {e}")
+            raise DatabaseError(e, "TaskService.delete")
         except Exception:
             raise
 
@@ -301,7 +275,7 @@ class TaskService:
                     if new_labels:
                         try:
                             for label in new_labels:
-                                self.task_repo.add_label(label)
+                                self.task_repo.add_label(task_id, label)
 
                         except IntegrityError as e:
                             logger.error(
@@ -369,22 +343,15 @@ class TaskService:
                         message=outgoing_event_json, user_id=user_id
                     )
 
-            try:
-                await redis_client.delete(
-                    f"task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*"
-                )
-                logger.info(
-                    f"[update_task] Redis Cache Delete Succes - Key: task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*"
-                )
-            except redis.RedisError as e:
-                logger.warning(
-                    f"[update_task] Redis Cache Delete Error | Error: {str(e)}"
-                )
+            await cache_manager.delete(
+                f"task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*",
+                "update_task",
+            )
 
             return {"detail": "A task has been successfully updated"}
 
-        except DatabaseError as e:
-            logger.error(f"[task_services.update_task] Repo failed: {str(e)}")
-            raise
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskService.update_task] Error: {e}")
+            raise DatabaseError(e, "TaskService.update_task")
         except Exception:
             raise

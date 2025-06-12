@@ -1,7 +1,9 @@
+from core.logger import logger
 from models.db_models import Project, project_user, Project_Permission, User
 from models.schemas import CreateProject, UpdateProject
 from models.exceptions import DatabaseError
 from db.database import Session, select, selectinload, SQLAlchemyError
+from typing import List
 
 
 class ProjectRepository:
@@ -9,50 +11,70 @@ class ProjectRepository:
         self.session = session
 
     def get_project_by_id(self, group_id: int, project_id: int) -> Project:
-        stmt = (
-            select(Project)
-            .options(selectinload(Project.users))
-            .where(Project.group_id == group_id, Project.project_id == project_id)
-        )
-        return self.session.exec(stmt).first()
+        try:
+            stmt = (
+                select(Project)
+                .options(selectinload(Project.users))
+                .where(Project.group_id == group_id, Project.project_id == project_id)
+            )
+            return self.session.exec(stmt).first()
+        except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.get_project_by_id] Error: {e}")
+            raise
 
     def get_user_in_project(self, project_id: int, user_id: int) -> project_user:
-        stmt = select(project_user).where(
-            project_user.user_id == user_id, project_user.project_id == project_id
-        )
-        return self.session.exec(stmt).first()
+        try:
+            stmt = select(project_user).where(
+                project_user.user_id == user_id, project_user.project_id == project_id
+            )
+            return self.session.exec(stmt).first()
+        except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.get_user_in_project] Error: {e}")
+            raise
 
     def get_all_project_by_user(self, user_id: int, limit: int, skip: int):
-        stmt = (
-            select(Project.project_id, Project.group_id, Project.title)
-            .where(
-                Project.project_id == project_user.project_id,
-                project_user.user_id == user_id,
+        try:
+            stmt = (
+                select(Project.project_id, Project.group_id, Project.title)
+                .where(
+                    Project.project_id == project_user.project_id,
+                    project_user.user_id == user_id,
+                )
+                .limit(limit)
+                .offset(skip)
             )
-            .limit(limit)
-            .offset(skip)
-        )
-        return self.session.exec(stmt).all()
+            return self.session.exec(stmt).all()
+        except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.get_all_project_by_user] Error: {e}")
+            raise
 
     def get_all_projects(self, group_id: int, limit: int, skip: int):
-        stmt = (
-            select(Project)
-            .options(selectinload(Project.users))
-            .where(Project.group_id == group_id)
-            .limit(limit)
-            .offset(skip)
-        )
-        return self.session.exec(stmt).all()
+        try:
+            stmt = (
+                select(Project)
+                .options(selectinload(Project.users))
+                .where(Project.group_id == group_id)
+                .limit(limit)
+                .offset(skip)
+            )
+            return self.session.exec(stmt).all()
+        except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.get_all_projects] Error: {e}")
+            raise
 
     def get_users_in_project(self, project_id: int, limit: int, skip: int):
-        stmt = (
-            select(User.user_id, User.username, project_user.permission)
-            .join(project_user, project_user.user_id == User.user_id)
-            .where(project_user.project_id == project_id)
-            .limit(limit)
-            .offset(skip)
-        )
-        return self.session.exec(stmt).all()
+        try:
+            stmt = (
+                select(User.user_id, User.username, project_user.permission)
+                .join(project_user, project_user.user_id == User.user_id)
+                .where(project_user.project_id == project_id)
+                .limit(limit)
+                .offset(skip)
+            )
+            return self.session.exec(stmt).all()
+        except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.get_users_in_project] Error: {e}")
+            raise
 
     def create(self, group_id: int, user_id: int, project: CreateProject):
         try:
@@ -70,8 +92,9 @@ class ProjectRepository:
             self.session.commit()
 
         except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.create] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, "create")
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -93,8 +116,9 @@ class ProjectRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.update] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, "update")
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -104,8 +128,9 @@ class ProjectRepository:
             self.session.delete(project)
             self.session.commit()
         except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.delete] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, "create")
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -117,8 +142,9 @@ class ProjectRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.add_user] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, "create")
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -129,8 +155,9 @@ class ProjectRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.remove_user] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, "create")
+            raise
         except Exception:
             self.session.rollback()
             raise
@@ -142,9 +169,9 @@ class ProjectRepository:
             self.session.refresh(user)
             return user
         except SQLAlchemyError as e:
+            logger.error(f"[ProjectRepository.update_permission] Error: {e}")
             self.session.rollback()
-            raise DatabaseError(e, "create")
+            raise
         except Exception:
             self.session.rollback()
             raise
-

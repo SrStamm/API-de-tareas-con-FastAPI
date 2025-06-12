@@ -1,20 +1,10 @@
 from fastapi import APIRouter, Depends, Request
 from dependency.comment_dependencies import get_comment_service
-from dependency.task_dependencies import get_task_service
-from models import db_models, schemas, exceptions, responses
+from models import db_models, schemas, responses
 from services.comment_services import CommentService
 from .auth import auth_user
-from db.database import get_session, Session, select, SQLAlchemyError
 from typing import List
-from core.utils import (
-    found_user_in_task_or_404,
-    extract_valid_mentions,
-    validate_in_task,
-)
-from core.logger import logger
 from core.limiter import limiter
-from core.event_ws import format_notification
-from .ws import manager
 
 router = APIRouter(prefix="/task/{task_id}", tags=["Comment"])
 
@@ -34,12 +24,7 @@ def get_comments(
     user: db_models.User = Depends(auth_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ) -> List[schemas.ReadComment]:
-    try:
-        return comment_serv.get_comments(task_id, user.user_id)
-
-    except SQLAlchemyError as e:
-        logger.error(f"[get_comments] Database error | Error: {str(e)}")
-        raise exceptions.DatabaseError(e, func="get_comments")
+    return comment_serv.get_comments(task_id, user.user_id)
 
 
 @router.get(
@@ -61,12 +46,7 @@ def get_all_comments(
     user: db_models.User = Depends(auth_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ) -> List[schemas.ReadComment]:
-    try:
-        return comment_serv.get_all_comments(task_id, user.user_id)
-
-    except SQLAlchemyError as e:
-        logger.error(f"[get_all_comments] Database Error | Error: {str(e)}")
-        raise exceptions.DatabaseError(e, func="get_all_comments")
+    return comment_serv.get_all_comments(task_id, user.user_id)
 
 
 @router.post(
@@ -87,12 +67,7 @@ async def create_comment(
     user: db_models.User = Depends(auth_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ):
-    try:
-        return await comment_serv.create(new_comment, task_id, user.user_id)
-
-    except SQLAlchemyError as e:
-        logger.error(f"[create_comment] Dabasae Error | Error: {str(e)}")
-        raise exceptions.DatabaseError(e, func="create_comment")
+    return await comment_serv.create(new_comment, task_id, user.user_id)
 
 
 @router.patch(
@@ -117,12 +92,7 @@ def update_comment(
     user: db_models.User = Depends(auth_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ):
-    try:
-        return comment_serv.update(update_comment, comment_id, task_id, user.user_id)
-
-    except SQLAlchemyError as e:
-        logger.error(f"[update_comment] Database Error | Error: {str(e)}")
-        raise exceptions.DatabaseError(e, func="update_comment")
+    return comment_serv.update(update_comment, comment_id, task_id, user.user_id)
 
 
 @router.delete(
@@ -143,9 +113,4 @@ def delete_comment(
     user: db_models.User = Depends(auth_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ):
-    try:
-        return comment_serv.delete(task_id, comment_id, user.user_id)
-
-    except SQLAlchemyError as e:
-        logger.error(f"[delete_comment] Database Error | Error: {str(e)}")
-        raise exceptions.DatabaseError(e, func="update_comment")
+    return comment_serv.delete(task_id, comment_id, user.user_id)
