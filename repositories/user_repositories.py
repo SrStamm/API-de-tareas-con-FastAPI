@@ -2,13 +2,14 @@ from models.schemas import CreateUser
 from models.db_models import User
 from models.exceptions import DatabaseError
 from db.database import Session, select, or_, SQLAlchemyError
-from api.v1.routers.auth import encrypt_password
+from core.security import encrypt_password
+
 
 class UserRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def get_user_by_id(self, user_id:int) -> User:
+    def get_user_by_id(self, user_id: int) -> User:
         stmt = select(User).where(User.user_id == user_id)
         return self.session.exec(stmt).first()
 
@@ -29,7 +30,7 @@ class UserRepository:
             return
         except SQLAlchemyError as e:
             self.session.rollback()
-            raise DatabaseError(e, 'create')
+            raise DatabaseError(e, "create")
         except Exception as e:
             self.session.rollback()
             raise
@@ -41,7 +42,8 @@ class UserRepository:
             return
         except SQLAlchemyError as e:
             self.session.rollback()
-            raise DatabaseError(e, 'delete')
+            raise DatabaseError(e, "delete")
         except Exception:
             self.session.rollback()
             raise
+

@@ -1,13 +1,11 @@
 from fastapi import APIRouter, Depends, Request
-from models import db_models, schemas, responses
+from models import schemas, responses
 from models.db_models import User
 from typing import List
-from .auth import auth_user
 from core.permission import require_permission, require_role
 from core.logger import logger
 from core.limiter import limiter
-
-
+from dependency.auth_dependencies import get_current_user
 from dependency.project_dependencies import get_project_service, ProjectService
 
 router = APIRouter(prefix="/project", tags=["Project"])
@@ -34,7 +32,7 @@ async def get_projects_iam(
     request: Request,
     limit: int = 10,
     skip: int = 0,
-    user: db_models.User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     project_serv: ProjectService = Depends(get_project_service),
 ) -> List[schemas.ReadBasicProject]:
     return await project_serv.get_projects_iam(user.user_id, limit, skip)
@@ -279,8 +277,7 @@ async def get_user_in_project(
     project_id: int,
     limit: int = 10,
     skip: int = 0,
-    user: db_models.User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     project_serv: ProjectService = Depends(get_project_service),
 ) -> List[schemas.ReadProjectUser]:
     return await project_serv.get_user_in_project(group_id, project_id, limit, skip)
-

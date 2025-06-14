@@ -10,7 +10,6 @@ from models.exceptions import (
 from models.schemas import ReadUser, CreateUser, UpdateUser
 from models.db_models import User
 from db.database import redis_client, redis
-import json
 
 
 class UserService:

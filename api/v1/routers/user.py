@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, Request
-from models import db_models, schemas, responses
+from models import schemas, responses
+from models.db_models import User
 from typing import List
-from .auth import auth_user
 from core.logger import logger
 from core.limiter import limiter
 from dependency.user_dependencies import get_user_service, UserService
+from dependency.auth_dependencies import get_current_user
 
 router = APIRouter(prefix="/user", tags=["User"])
 
@@ -66,7 +67,7 @@ async def create_user(
 )
 @limiter.limit("20/minute")
 def get_user_me(
-    request: Request, user: db_models.User = Depends(auth_user)
+    request: Request, user: User = Depends(get_current_user)
 ) -> schemas.ReadUser:
     try:
         return user
@@ -93,7 +94,7 @@ def get_user_me(
 async def update_user_me(
     request: Request,
     updated_user: schemas.UpdateUser,
-    user: db_models.User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     user_serv: UserService = Depends(get_user_service),
 ):
     return await user_serv.update_user(user, updated_user)
@@ -116,7 +117,7 @@ async def update_user_me(
 @limiter.limit("5/minute")
 async def delete_user_me(
     request: Request,
-    user: db_models.User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     user_serv: UserService = Depends(get_user_service),
 ):
     return await user_serv.delete_user(user)

@@ -2,11 +2,11 @@ from fastapi import APIRouter, Depends, Request
 from models import schemas, responses
 from models.db_models import User
 from typing import List
-from .auth import auth_user
 from core.permission import require_role
 from core.logger import logger
 from core.limiter import limiter
 from dependency.group_dependencies import get_group_service, GroupService
+from dependency.auth_dependencies import get_current_user
 
 router = APIRouter(prefix="/group", tags=["Group"])
 
@@ -50,7 +50,7 @@ async def get_groups(
 async def create_group(
     request: Request,
     new_group: schemas.CreateGroup,
-    user: User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     group_service: GroupService = Depends(get_group_service),
 ):
     return await group_service.create_group(new_group, user.user_id)
@@ -136,7 +136,7 @@ async def get_groups_in_user(
     request: Request,
     limit: int = 10,
     skip: int = 0,
-    user: User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     group_service: GroupService = Depends(get_group_service),
 ) -> List[schemas.ReadGroup]:
     return await group_service.get_groups_where_user_in(user.user_id, limit, skip)
@@ -275,7 +275,7 @@ async def get_user_in_group(
     group_id: int,
     limit: int = 10,
     skip: int = 0,
-    user: User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     group_service: GroupService = Depends(get_group_service),
 ) -> List[schemas.ReadGroupUser]:
     return await group_service.get_users_in_group(group_id, limit, skip)

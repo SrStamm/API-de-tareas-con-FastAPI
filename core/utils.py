@@ -4,9 +4,6 @@ from .logger import logger
 from db.database import select, Session, select
 from typing import List
 import re
-from repositories.group_repositories import GroupRepository
-from fastapi import Depends
-
 
 
 def found_project_or_404(group_id:int, project_id:int, session: Session):

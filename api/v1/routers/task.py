@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, Request, Query
-from models import db_models, schemas, responses
-from .auth import auth_user
+from models import schemas, responses
+from models.db_models import User, TypeOfLabel, State
 from typing import List
 from core.permission import require_permission
 from core.logger import logger
 from core.limiter import limiter
-
+from dependency.auth_dependencies import get_current_user
 from dependency.task_dependencies import get_task_service, TaskService
 
 router = APIRouter(prefix="/task", tags=["Task"])
@@ -31,9 +31,9 @@ async def get_task(
     request: Request,
     limit: int = 10,
     skip: int = 0,
-    labels: List[db_models.TypeOfLabel] = Query(default=None),
-    state: List[db_models.State] = Query(default=None),
-    user: db_models.User = Depends(auth_user),
+    labels: List[TypeOfLabel] = Query(default=None),
+    state: List[State] = Query(default=None),
+    user: User = Depends(get_current_user),
     task_serv: TaskService = Depends(get_task_service),
 ) -> List[schemas.ReadTask]:
     return await task_serv.get_all_task_for_user(
@@ -63,7 +63,7 @@ async def get_users_for_task(
     task_id: int,
     limit: int = 10,
     skip: int = 0,
-    user: db_models.User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     task_serv: TaskService = Depends(get_task_service),
 ) -> List[schemas.ReadUser]:
     return await task_serv.get_users_for_task(task_id, limit, skip)
@@ -93,9 +93,9 @@ async def get_task_in_project(
     project_id: int,
     limit: int = 10,
     skip: int = 0,
-    labels: List[db_models.TypeOfLabel] = Query(default=None),
-    state: List[db_models.State] = Query(default=None),
-    user: db_models.User = Depends(auth_user),
+    labels: List[TypeOfLabel] = Query(default=None),
+    state: List[State] = Query(default=None),
+    user: User = Depends(get_current_user),
     task_serv: TaskService = Depends(get_task_service),
 ) -> List[schemas.ReadTaskInProject]:
     return await task_serv.get_all_task_for_project(
@@ -151,7 +151,7 @@ async def update_task(
 ):
     try:
         actual_permission = auth_data["permission"]
-        user: db_models.User = auth_data["user"]
+        user: User = auth_data["user"]
 
         return await task_serv.update_task(
             task_id, project_id, update_task, user, actual_permission
@@ -181,4 +181,3 @@ async def delete_task(
     task_serv: TaskService = Depends(get_task_service),
 ):
     return await task_serv.delete(task_id, project_id)
-

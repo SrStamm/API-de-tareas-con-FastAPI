@@ -1,84 +1,73 @@
 from fastapi import Depends
-from db.database import Session, select
-from models import db_models, exceptions
-from .logger import logger
-from typing import Callable
-from api.v1.routers.auth import auth_user
-from db.database import select, get_session, Session, select
-from typing import List
+from models.exceptions import GroupNotFoundError, UserNotInGroupError, NotAuthorized, UserNotInProjectError
+from models.schemas import ReadUser
+from typing import Callable, List
+from dependency.project_dependencies import get_project_repository
+from dependency.group_dependencies import GroupService, get_group_service
+from dependency.auth_dependencies import get_current_user
+from repositories.project_repositories import ProjectRepository
+
 
 def require_role(roles: List[str]) -> Callable:
-    def dependency( group_id: int,
-                    user: db_models.User = Depends(auth_user),
-                    session: Session = Depends(get_session)):
-
-        group_found = session.get(db_models.Group, group_id)
-
+    def dependency(
+        group_id: int,
+        user: ReadUser = Depends(get_current_user),
+        group_serv: GroupService = Depends(get_group_service),
+    ):
+        group_found = group_serv.get_group_or_404(group_id)
         if not group_found:
-            raise exceptions.GroupNotFoundError(group_id)
+            raise GroupNotFoundError(group_id)
 
-        stmt = (select(db_models.group_user).where(
-                    db_models.group_user.user_id == user.user_id,
-                    db_models.group_user.group_id == group_id))
-
-        found_user = session.exec(stmt).first()
+        found_user = group_serv.role_of_user_in_group(user.user_id, group_id)
 
         if not found_user:
-            raise exceptions.UserNotInGroupError(user_id=user.user_id, group_id=group_id)
+            raise UserNotInGroupError(user_id=user.user_id, group_id=group_id)
 
-        if found_user.role not in roles:
-            raise exceptions.NotAuthorized(user.user_id)
+        if found_user not in roles:
+            raise NotAuthorized(user.user_id)
 
-        return {'user':user, 'role':found_user.role.value}
+        return {"user": user, "role": found_user.value}
 
     return dependency
 
-def role_of_user_in_group(user_id: int, group_id: int, session:Session):
-    stmt = (select(db_models.group_user).where(
-            db_models.group_user.user_id == user_id,
-            db_models.group_user.group_id == group_id))
 
-    found_user = session.exec(stmt).first()
+def role_of_user_in_group(
+    user_id: int, group_id: int, group_serv: GroupService = Depends(get_group_service)
+):
+    found_user = group_serv.role_of_user_in_group(user_id, group_id)
 
     if not found_user:
-        raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
+        raise UserNotInGroupError(user_id=user_id, group_id=group_id)
 
-    return found_user.role.value
+    return found_user.value
+
 
 def require_permission(permissions: List[str]) -> Callable:
-    def dependency( project_id: int,
-                    user: db_models.User = Depends(auth_user),
-                    session: Session = Depends(get_session)):
-        
-        project_found = session.get(db_models.Project, project_id)
-
-        if not project_found:
-            raise exceptions.ProjectNotFoundError(project_id)
-
-        stmt = (select(db_models.project_user)
-                .where( db_models.project_user.user_id == user.user_id,
-                        db_models.project_user.project_id == project_id))
-
-        found_user = session.exec(stmt).first()
+    def dependency(
+        project_id: int,
+        user: ReadUser = Depends(get_current_user),
+        project_repo: ProjectRepository = Depends(get_project_repository)
+    ):
+        found_user = project_repo.get_user_in_project(project_id, user.user_id)
 
         if not found_user:
-            raise exceptions.UserNotInProjectError(user_id=user.user_id, project_id=project_id)
+            raise UserNotInProjectError(
+                user_id=user.user_id, project_id=project_id
+            )
 
         if found_user.permission not in permissions:
-            raise exceptions.NotAuthorized(user.user_id)
+            raise NotAuthorized(user.user_id)
 
-        return {'user':user, 'permission':found_user.permission.value}
+        return {"user": user, "permission": found_user.permission.value}
 
     return dependency
 
-def permission_of_user_in_project(user_id: int, project_id: int, session:Session):
-    stmt = (select(db_models.project_user)
-            .where( db_models.project_user.user_id == user_id,
-                    db_models.project_user.project_id == project_id))
 
-    found_user = session.exec(stmt).first()
+def permission_of_user_in_project(user_id: int, project_id: int, project_repo: ProjectRepository = Depends(get_project_repository)):
+    found_user = project_repo.get_user_in_project(project_id, user_id)
 
     if not found_user:
-        raise exceptions.UserNotInProjectError(user_id=user_id, project_id=project_id)
+        raise UserNotInProjectError(user_id=user_id, project_id=project_id)
 
     return found_user.permission.value
+

@@ -162,28 +162,3 @@ async def test_delete_project(async_client, auth_headers, project_id, status, de
     )
     assert response.status_code == status
     assert response.json() == {"detail": detail}
-
-
-def test_require_permission(mocker):
-    # Usuario ficticio
-    mock_user = mocker.Mock(spec=db_models.User)
-    mock_user.user_id = 1
-
-    # Simulación de sesión de DB
-    db_session_mock = mocker.Mock()
-    db_session_mock.exec.return_value.first.return_value = (
-        None  # Simula que no está en el grupo
-    )
-
-    # Ejecutás la función real que queremos testear
-    dependency = require_permission(
-        permissions=["admin"]
-    )  # obtenés la dependencia real
-
-    # Verificás que lanza el error esperado
-    with pytest.raises(exceptions.UserNotInProjectError) as exc_info:
-        dependency(project_id=10000, user=mock_user, session=db_session_mock)
-
-    assert exc_info.value.user_id == mock_user.user_id
-    assert exc_info.value.project_id == 10000
-

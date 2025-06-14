@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, Request
 from dependency.comment_dependencies import get_comment_service
-from models import db_models, schemas, responses
+from dependency.auth_dependencies import get_current_user
+from models import schemas, responses
+from models.db_models import User
 from services.comment_services import CommentService
-from .auth import auth_user
 from typing import List
 from core.limiter import limiter
 
@@ -21,7 +22,7 @@ router = APIRouter(prefix="/task/{task_id}", tags=["Comment"])
 def get_comments(
     request: Request,
     task_id: int,
-    user: db_models.User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ) -> List[schemas.ReadComment]:
     return comment_serv.get_comments(task_id, user.user_id)
@@ -43,7 +44,7 @@ def get_comments(
 def get_all_comments(
     request: Request,
     task_id: int,
-    user: db_models.User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ) -> List[schemas.ReadComment]:
     return comment_serv.get_all_comments(task_id, user.user_id)
@@ -64,7 +65,7 @@ async def create_comment(
     request: Request,
     task_id: int,
     new_comment: schemas.CreateComment,
-    user: db_models.User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ):
     return await comment_serv.create(new_comment, task_id, user.user_id)
@@ -89,7 +90,7 @@ def update_comment(
     task_id: int,
     comment_id: int,
     update_comment: schemas.UpdateComment,
-    user: db_models.User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ):
     return comment_serv.update(update_comment, comment_id, task_id, user.user_id)
@@ -110,7 +111,7 @@ def delete_comment(
     request: Request,
     task_id: int,
     comment_id: int,
-    user: db_models.User = Depends(auth_user),
+    user: User = Depends(get_current_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ):
     return comment_serv.delete(task_id, comment_id, user.user_id)

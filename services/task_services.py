@@ -163,7 +163,7 @@ class TaskService:
             for user_id in task.user_ids:
                 outgoing_event_json = format_notification(
                     notification_type="assigned_task",
-                    message=f"You are no longer assigned to the task {new_task.task_id} in project {project_id}",
+                    message=f"You are assigned to the task {new_task.task_id} in project {project_id}",
                 )
 
                 # Envia el evento
