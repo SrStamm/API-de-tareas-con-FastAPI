@@ -70,4 +70,3 @@ def permission_of_user_in_project(user_id: int, project_id: int, project_repo: P
         raise UserNotInProjectError(user_id=user_id, project_id=project_id)
 
     return found_user.permission.value
-

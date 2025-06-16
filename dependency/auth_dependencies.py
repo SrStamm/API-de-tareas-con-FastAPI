@@ -1,18 +1,9 @@
-from db.database import Session, get_session
 from fastapi import Depends
+from db.database import Session, get_session
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from dependency.group_dependencies import get_group_service
-from models.exceptions import (
-    GroupNotFoundError,
-    InvalidToken,
-    NotAuthorized,
-    UserNotFoundError,
-    UserNotInGroupError,
-)
+from models.exceptions import InvalidToken, UserNotFoundError
 from repositories.auth_repositories import AuthRepository
 from services.auth_services import AuthService
-from services.group_service import GroupService
-from typing import List, Callable
 
 security = HTTPBearer()
 
@@ -35,26 +26,3 @@ def get_current_user(
         raise
     except InvalidToken:
         raise
-
-
-def require_role(roles: List[str]) -> Callable:
-    def dependency(
-        group_id: int,
-        user: User = Depends(get_current_user),
-        group_serv: GroupService = Depends(get_group_service),
-    ):
-        group_found = group_serv.get_group_or_404(group_id)
-        if not group_found:
-            raise GroupNotFoundError(group_id)
-
-        found_user = group_serv.role_of_user_in_group(user.user_id, group_id)
-
-        if not found_user:
-            raise UserNotInGroupError(user_id=user.user_id, group_id=group_id)
-
-        if found_user not in roles:
-            raise NotAuthorized(user.user_id)
-
-        return {"user": user, "role": found_user.value}
-
-    return dependency

@@ -34,6 +34,10 @@ class AuthRepository:
         self.session.delete(actual_session)
         self.session.commit()
 
+    def get_session_with_jti(self, jti: str):
+        stmt = select(db_models.Session).where(db_models.Session.jti == jti)
+        return self.session.exec(stmt).first()
+
     def get_active_sessions(self, user_id):
         stmt = select(db_models.Session).where(
             db_models.Session.sub == user_id, db_models.Session.is_active == True

@@ -1,4 +1,3 @@
-from models.db_models import Session, User
 from repositories.auth_repositories import AuthRepository
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
@@ -32,10 +31,6 @@ class AuthService:
     def __init__(self, auth_repo: AuthRepository):
         self.auth_repo = auth_repo
 
-    def encrypt_password(self, password: str):
-        password = password.encode()
-        return crypt.hash(password)
-
     def get_expired_sessions(self):
         try:
             exp_sessions = self.auth_repo.get_expired_sessions()
@@ -46,6 +41,7 @@ class AuthService:
             logger.info("[AuthService.get_expired_sessions]Expired Sessions not Found")
             return {"detail": "No expired sessions"}
         except Exception as e:
+            logger.error(f"[AuthService.get_expired_sessions] Unknown error: {e}")
             raise
 
     def auth_user(self, token: str):
@@ -151,7 +147,7 @@ class AuthService:
             actual_session = self.auth_repo.get_session_with_jti(jti)
             if not actual_session:
                 logger.error(
-                    f"[AuthService.refresh] Token error | Not found active session for jti: {jti}"
+                    "[AuthService.refresh] Token error | Not found active session for jti: {jti}"
                 )
                 raise InvalidToken
 

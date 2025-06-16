@@ -23,7 +23,7 @@ def found_project_for_task_or_404(project_id:int, session: Session):
             .where(db_models.Project.project_id == project_id))
     
     founded_project = session.exec(stmt).first()
-    
+
     if not founded_project:
         logger.error(f'Project {project_id} no encontrado')
         raise exceptions.ProjectNotFoundError(project_id)

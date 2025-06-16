@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
-from datetime import datetime, timezone
-from db.database import get_session, Session, SQLAlchemyError
+from db.database import Session, SQLAlchemyError
 from passlib.context import CryptContext
 from dependency.auth_dependencies import get_auth_serv, AuthService, get_current_user
 from models import schemas, responses
-from models.exceptions import InvalidToken, UserNotFoundError, DatabaseError
+from models.exceptions import InvalidToken, DatabaseError
 from models.db_models import User
 import os
 from core.logger import logger
@@ -26,27 +25,6 @@ SECRET = os.environ.get("SECRET_KEY")
 crypt = CryptContext(schemes=["bcrypt"])
 
 oauth2 = OAuth2PasswordBearer(tokenUrl="token", scheme_name="Bearer")
-
-
-@router.post(
-    "/logout",
-    description="Logout path to close session. Close all user sessions ",
-    responses={
-        200: {"description": "All user sesisons are closed."},
-        500: {"detail": "Internal error", "model": responses.DatabaseErrorResponse},
-    },
-)
-@limiter.limit("10/minute")
-async def logout(
-    request: Request,
-    user: User = Depends(get_current_user),
-    auth_serv: AuthService = Depends(get_auth_serv),
-):
-    try:
-        return auth_serv.logout(user.user_id)
-    except DatabaseError:
-        logger.error("[logout] Database Error")
-        raise
 
 
 # @limiter.limit("10/minute")
@@ -144,3 +122,4 @@ def get_expired_sessions(auth_serv: AuthService = Depends(get_auth_serv)):
     except SQLAlchemyError as e:
         logger.error(f"[get_expired_sessions] Database Error | Error: {str(e)}")
         raise DatabaseError(e, func="get_expired_sessions")
+
