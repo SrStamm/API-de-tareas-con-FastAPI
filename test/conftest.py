@@ -4,6 +4,8 @@ import pytest
 import pytest_asyncio
 import errno
 
+# pytest_plugins = ["pytest_asyncio.plugin"]
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from fastapi.testclient import TestClient
@@ -23,6 +25,11 @@ engine = create_engine("sqlite:///./test/test.db")
 
 PASSWORD = "0000"
 
+@pytest_asyncio.fixture(scope="session")
+def event_loop():
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
 
 @pytest.fixture(scope="module")
 def test_db():
