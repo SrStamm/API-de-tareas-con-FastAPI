@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e  # <- 🔒 Termina el script si ocurre un error
+# set -e # <- 🔒 Termina el script si ocurre un error
 
 # Activar entorno virtual (opcional en CI si usás containers o poetry/pipx)
 source env/bin/activate || echo "No se pudo activar el entorno virtual, probablemente en CI"

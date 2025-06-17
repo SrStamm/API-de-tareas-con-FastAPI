@@ -20,7 +20,6 @@ from models.schemas import (
 from core.logger import logger
 from core.socket_manager import manager
 from core.event_ws import format_notification
-from db.database import SQLAlchemyError
 from typing import List
 
 
@@ -78,9 +77,9 @@ class ProjectService:
             await cache_manager.set(key, to_cache, "get_projects_iam")
 
             return to_cache
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[project_service.get_projects_iam] Error: {e}")
-            raise DatabaseError(e, "project_service.get_projects_iam")
+            raise
 
     async def get_all_projects(self, group_id: int, limit: int, skip: int):
         try:
@@ -107,9 +106,9 @@ class ProjectService:
 
             return to_cache
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[project_service.get_all_projects] Error: {e}")
-            raise DatabaseError(e, "project_service.get_all_projects")
+            raise
 
     async def get_user_in_project(
         self, group_id: int, project_id: int, limit: int, skip: int
@@ -149,9 +148,9 @@ class ProjectService:
             )
 
             return to_cache
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[project_service.get_users_in_project] Error: {e}")
-            raise DatabaseError(e, "project_service.get_users_in_project")
+            raise
 
     async def create_project(self, group_id: int, user_id: int, project: CreateProject):
         try:
@@ -164,9 +163,9 @@ class ProjectService:
             )
 
             return {"detail": "Se ha creado un nuevo proyecto de forma exitosa"}
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[project_service.create_project] Error: {e}")
-            raise DatabaseError(e, "project_service.create_project")
+            raise
 
     async def update_project(
         self, group_id: int, project_id: int, update_project: UpdateProject
@@ -182,9 +181,9 @@ class ProjectService:
 
             return {"detail": "Se ha actualizado la informacion del projecto"}
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[project_service.create_project] Error: {e}")
-            raise DatabaseError(e, "project_service.create_project")
+            raise
         except Exception:
             raise
 
@@ -204,9 +203,9 @@ class ProjectService:
 
             return {"detail": "Se ha eliminado el proyecto"}
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[project_service.delete_project] Error: {e}")
-            raise DatabaseError(e, "project_service.delete_project")
+            raise
         except Exception:
             raise
 
@@ -251,9 +250,9 @@ class ProjectService:
 
             return {"detail": "El usuario ha sido agregado al proyecto"}
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[project_service.add_user] Error: {e}")
-            raise DatabaseError(e, "project_service.add_user")
+            raise
         except Exception:
             raise
 
@@ -299,9 +298,9 @@ class ProjectService:
                 )
                 raise UserNotInProjectError(user_id=user_id, project_id=project_id)
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[project_service.remove_user_from_project] Error: {e}")
-            raise DatabaseError(e, "project_service.remove_user_from_project")
+            raise
         except Exception:
             raise
 
@@ -339,11 +338,10 @@ class ProjectService:
 
             return {"detail": "Se ha cambiado los permisos del usuario en el proyecto"}
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(
                 f"[project_service.update_user_permission_in_project] Error: {e}"
             )
-            raise DatabaseError(e, "project_service.update_user_permission_in_project")
+            raise
         except Exception:
             raise
-

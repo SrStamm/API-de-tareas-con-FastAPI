@@ -10,7 +10,7 @@ class ProjectRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def get_project_by_id(self, group_id: int, project_id: int) -> Project:
+    def get_project_by_id(self, group_id: int, project_id: int):
         try:
             stmt = (
                 select(Project)
@@ -20,9 +20,9 @@ class ProjectRepository:
             return self.session.exec(stmt).first()
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.get_project_by_id] Error: {e}")
-            raise
+            raise DatabaseError(e, "get_project_by_id")
 
-    def get_user_in_project(self, project_id: int, user_id: int) -> project_user:
+    def get_user_in_project(self, project_id: int, user_id: int):
         try:
             stmt = select(project_user).where(
                 project_user.user_id == user_id, project_user.project_id == project_id
@@ -30,7 +30,7 @@ class ProjectRepository:
             return self.session.exec(stmt).first()
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.get_user_in_project] Error: {e}")
-            raise
+            raise DatabaseError(e, "get_users_in_project")
 
     def get_all_project_by_user(self, user_id: int, limit: int, skip: int):
         try:
@@ -46,7 +46,7 @@ class ProjectRepository:
             return self.session.exec(stmt).all()
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.get_all_project_by_user] Error: {e}")
-            raise
+            raise DatabaseError(e, "get_all_project_by_user")
 
     def get_all_projects(self, group_id: int, limit: int, skip: int):
         try:
@@ -60,7 +60,7 @@ class ProjectRepository:
             return self.session.exec(stmt).all()
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.get_all_projects] Error: {e}")
-            raise
+            raise DatabaseError(e, "get_all_projects")
 
     def get_users_in_project(self, project_id: int, limit: int, skip: int):
         try:
@@ -74,7 +74,7 @@ class ProjectRepository:
             return self.session.exec(stmt).all()
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.get_users_in_project] Error: {e}")
-            raise
+            raise DatabaseError(e, "get_users_in_project")
 
     def create(self, group_id: int, user_id: int, project: CreateProject):
         try:
@@ -94,7 +94,7 @@ class ProjectRepository:
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.create] Error: {e}")
             self.session.rollback()
-            raise
+            raise DatabaseError(e, "create")
         except Exception:
             self.session.rollback()
             raise
@@ -118,7 +118,7 @@ class ProjectRepository:
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.update] Error: {e}")
             self.session.rollback()
-            raise
+            raise DatabaseError(e, "update")
         except Exception:
             self.session.rollback()
             raise
@@ -130,7 +130,7 @@ class ProjectRepository:
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.delete] Error: {e}")
             self.session.rollback()
-            raise
+            raise DatabaseError(e, "delete")
         except Exception:
             self.session.rollback()
             raise
@@ -144,7 +144,7 @@ class ProjectRepository:
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.add_user] Error: {e}")
             self.session.rollback()
-            raise
+            raise DatabaseError(e, "add_user")
         except Exception:
             self.session.rollback()
             raise
@@ -157,7 +157,7 @@ class ProjectRepository:
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.remove_user] Error: {e}")
             self.session.rollback()
-            raise
+            raise DatabaseError(e, "remove_user")
         except Exception:
             self.session.rollback()
             raise
@@ -171,7 +171,7 @@ class ProjectRepository:
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.update_permission] Error: {e}")
             self.session.rollback()
-            raise
+            raise DatabaseError(e, "update_permission")
         except Exception:
             self.session.rollback()
             raise

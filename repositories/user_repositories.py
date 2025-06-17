@@ -1,4 +1,5 @@
-from models.schemas import CreateUser
+from core import logger
+from models.schemas import CreateUser, UpdateUser
 from models.db_models import User
 from models.exceptions import DatabaseError
 from db.database import Session, select, or_, SQLAlchemyError
@@ -31,7 +32,7 @@ class UserRepository:
         except SQLAlchemyError as e:
             self.session.rollback()
             raise DatabaseError(e, "create")
-        except Exception as e:
+        except Exception:
             self.session.rollback()
             raise
 
@@ -47,3 +48,15 @@ class UserRepository:
             self.session.rollback()
             raise
 
+    def update(self, user: User, update_user: UpdateUser):
+        try:
+            if user.username != update_user.username and update_user.username:
+                user.username = update_user.username
+
+            if user.email != update_user.email and update_user.email:
+                user.email = update_user.email
+
+            self.session.commit()
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, "update")

@@ -17,17 +17,11 @@ import asyncio
 import redis.asyncio as redis
 from httpx import AsyncClient, ASGITransport
 
+
 # Crea la BD, cierra las conexiones y elimina la BD
 engine = create_engine("sqlite:///./test/test.db")
 
 PASSWORD = "0000"
-
-
-@pytest_asyncio.fixture(scope="session")
-def event_loop():
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
 
 
 @pytest.fixture(scope="module")

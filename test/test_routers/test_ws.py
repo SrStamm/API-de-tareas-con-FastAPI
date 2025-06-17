@@ -202,3 +202,24 @@ async def test_websocket_endpoint_not_authorized_error(mocker):
         code=1008, reason="User not authorized for proyect 999"
     )
 
+
+"""@pytest.mark.asyncio
+async def test_websocket_endpoint_success(
+    ws_client,
+    auth_headers,
+):
+    ws_session = ws_client.websocket_connect("/ws/1")
+    try:
+        data = await ws_session.receive_text()
+        assert data == json.dumps({"message": "User 1 connected"})
+    except Exception as e:
+        # Catch any exceptions during interaction
+        pytest.fail(f"Test failed during WebSocket interaction: {e}")
+    finally:
+        try:
+            await ws_session.close(code=1000)
+        except AttributeError as e:
+            pytest.fail(
+                f"Failed to close WebSocket connection: {e}. This indicates a deep issue with Starlette's WebSocketTestSession in your environment."
+            )
+"""

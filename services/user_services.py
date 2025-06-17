@@ -9,7 +9,6 @@ from models.exceptions import (
 )
 from models.schemas import ReadUser, CreateUser, UpdateUser
 from models.db_models import User
-from db.database import redis_client, redis
 
 
 class UserService:
@@ -85,15 +84,9 @@ class UserService:
     async def update_user(self, user: User, update_user: UpdateUser):
         try:
             if user.username != update_user.username and update_user.username:
-                user.username = update_user.username
-
                 await cache_manager.delete("users:limit:*:offset:*", "update_user")
 
-            if user.email != update_user.email and update_user.email:
-                user.email = update_user.email
-
-            self.user_repo.session.commit()
-
+            self.user_repo.update(user=user, update_user=update_user)
             return {"detail": "Se ha actualizado el usuario con exito"}
 
         except DatabaseError as e:

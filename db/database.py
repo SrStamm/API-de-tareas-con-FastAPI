@@ -5,6 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from dotenv import load_dotenv
 import os
 from models import db_models
+
 load_dotenv()
 
 user = os.environ.get('POSTGRES_USER')

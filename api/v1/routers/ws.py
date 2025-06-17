@@ -6,7 +6,7 @@ from fastapi import (
     WebSocketException,
     Request,
 )
-from typing import List, Dict
+from typing import List
 from datetime import datetime
 from models import schemas, db_models, exceptions, responses
 from db.database import get_session, Session, select, SQLAlchemyError
@@ -27,7 +27,7 @@ async def get_current_user_ws(session: Session, websocket: WebSocket):
         auth_header = websocket.headers.get("Authorization")
 
         if not auth_header:
-            logger.error(f"[get_current_user_ws] Header Error | Not has a Header")
+            logger.error("[get_current_user_ws] Header Error | Not has a Header")
             await websocket.close(code=1008, reason="Authentication Error")
             raise WebSocketException(code=1008)
 
@@ -41,7 +41,7 @@ async def get_current_user_ws(session: Session, websocket: WebSocket):
 
         if not user:
             logger.info("[get_current_user_ws] Not found Error: User not found")
-            await websocket.close(code=1008, reason=f"User not found for token")
+            await websocket.close(code=1008, reason="User not found for token")
             raise WebSocketException(code=1008)
 
         return user
@@ -392,4 +392,3 @@ async def send_message_to_project(
     except SQLAlchemyError as e:
         session.rollback()
         raise exceptions.DatabaseError(error=e, func="send_message_to_project")
-

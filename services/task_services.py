@@ -6,6 +6,7 @@ from models.db_models import TypeOfLabel, State, Project_Permission, User
 from models.schemas import ReadTask, ReadUser, ReadTaskInProject, CreateTask, UpdateTask
 from models.exceptions import (
     DatabaseError,
+    NotAuthorized,
     TaskNotFound,
     TaskIsAssignedError,
     TaskIsNotAssignedError,
@@ -81,9 +82,9 @@ class TaskService:
             await cache_manager.set(key, to_cache, "get_all_task_for_user")
 
             return to_cache
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[TaskService.get_all_task_for_user] Error: {e}")
-            raise DatabaseError(e, "get_all_task_for_user")
+            raise
 
     async def get_users_for_task(self, task_id: int, limit: int, skip: int):
         try:
@@ -103,9 +104,9 @@ class TaskService:
             await cache_manager.set(key, to_cache, "get_user_for_task")
 
             return to_cache
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[TaskService.get_user_for_task] Error: {e}")
-            raise DatabaseError(e, "TaskService.get_user_for_task")
+            raise
 
     async def get_all_task_for_project(
         self,
@@ -146,9 +147,9 @@ class TaskService:
             )
 
             return to_cache
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[TaskService.get_all_task_for_project] Error: {e}")
-            raise DatabaseError(e, "TaskService.get_all_task_for_project")
+            raise
 
     async def create(self, task: CreateTask, project_id: int):
         try:
@@ -172,9 +173,9 @@ class TaskService:
             return {
                 "detail": "A new task has been created and users have been successusfully assigned"
             }
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[TaskService.create] Error: {e}")
-            raise DatabaseError(e, "TaskService.create")
+            raise
         except Exception:
             raise
 
@@ -194,9 +195,9 @@ class TaskService:
 
             return {"detail": "Task successfully deleted"}
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[TaskService.delete] Error: {e}")
-            raise DatabaseError(e, "TaskService.delete")
+            raise
         except Exception:
             raise
 
@@ -235,6 +236,7 @@ class TaskService:
                     logger.error(
                         f"[update_task] Unauthorized | User {user.user_id} not authorized for this action"
                     )
+                    raise NotAuthorized(user.user_id)
 
             if update_task.exclude_user_ids:
                 if permission == "admin":
@@ -256,6 +258,7 @@ class TaskService:
                     logger.error(
                         f"[update_task] Unauthorized | User {user.user_id} not authorized for this action"
                     )
+                    raise NotAuthorized(user.user_id)
 
             if update_task.append_label:
                 if permission in ("admin", "editor"):
@@ -350,8 +353,8 @@ class TaskService:
 
             return {"detail": "A task has been successfully updated"}
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[TaskService.update_task] Error: {e}")
-            raise DatabaseError(e, "TaskService.update_task")
+            raise
         except Exception:
             raise

@@ -9,7 +9,6 @@ from core.logger import logger
 from core.socket_manager import manager
 from core.event_ws import format_notification
 from typing import List
-from db.database import SQLAlchemyError
 
 
 class GroupService:
@@ -62,9 +61,9 @@ class GroupService:
             )
 
             return to_cache
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[GroupService.get_groups_with_cache] Error: {e}")
-            raise DatabaseError(e, "get_groups_with_cache")
+            raise
 
     async def get_groups_where_user_in(self, user_id: int, limit: int, skip: int):
         try:
@@ -90,9 +89,9 @@ class GroupService:
             await cache_manager.set(key, to_cache, "get_groups_wher_user_in")
 
             return to_cache
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[GroupService.get_groups_where_user_in] Error: {e}")
-            raise DatabaseError(e, "get_groups_where_user_in")
+            raise
 
     async def get_users_in_group(self, group_id: int, limit: int, skip: int):
         try:
@@ -120,9 +119,9 @@ class GroupService:
 
             return to_cache
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[GroupService.get_users_in_group] Error: {e}")
-            raise DatabaseError(e, "get_users_in_group")
+            raise
 
     async def create_group(self, new_group: CreateGroup, user_id: int):
         try:
@@ -133,9 +132,9 @@ class GroupService:
             await cache_manager.delete("groups:limit:*:offset:*", "create_group")
 
             return {"detail": "Se ha creado un nuevo grupo de forma exitosa"}
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[services.create_group] Repo failed: {str(e)}")
-            raise DatabaseError(e, "create_group")
+            raise
 
     async def update_group(
         self,
@@ -156,9 +155,9 @@ class GroupService:
 
             return {"detail": "Se ha actualizado la informacion del grupo"}
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[services.update_group] Repo failed: {str(e)}")
-            raise DatabaseError(e, "update_group")
+            raise
 
     async def delete_group(self, group_id: int):
         try:
@@ -170,9 +169,9 @@ class GroupService:
 
             return {"detail": "Se ha eliminado el grupo"}
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[services.delete_group] Repo failed: {str(e)}")
-            raise DatabaseError(e, "delete_group")
+            raise
 
     async def append_user(self, group_id, user_id: int, actual_user_id: int):
         try:
@@ -212,9 +211,9 @@ class GroupService:
             )
             return {"detail": "El usuario ha sido agregado al grupo"}
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[services.delete_group] Repo failed: {str(e)}")
-            raise DatabaseError(e, "delete_group")
+            raise
 
     async def delete_user(
         self,
@@ -277,9 +276,9 @@ class GroupService:
                 )
                 raise exceptions.UserNotFoundError(user_id)
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[services.delete_user_group] Repo failed: {str(e)}")
-            raise DatabaseError(e, "delete_user_group")
+            raise
 
     async def update_user_role(
         self, group_id: int, user_id: int, role: Group_Role, actual_user_id: int
@@ -311,6 +310,6 @@ class GroupService:
 
             return {"detail": "Se ha cambiado los permisos del usuario en el grupo"}
 
-        except SQLAlchemyError as e:
+        except DatabaseError as e:
             logger.error(f"[services.update_user_role] Repo failed: {str(e)}")
-            raise DatabaseError(e, "update_user_role")
+            raise
