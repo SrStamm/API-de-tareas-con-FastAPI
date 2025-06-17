@@ -208,6 +208,7 @@ async def test_auth_user_expired_token(mocker):
     mock_session.get.assert_not_called()
 """
 
+
 @pytest.mark.asyncio
 async def test_logout(client, auth_headers):
     response = client.post("/logout", headers=auth_headers)
@@ -549,4 +550,3 @@ async def test_refresh_database_error(mocker):
 def test_get_expired_sessions(client):
     response = client.get("/expired")
     assert response.status_code == 200
-

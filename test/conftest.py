@@ -4,8 +4,6 @@ import pytest
 import pytest_asyncio
 import errno
 
-# pytest_plugins = ["pytest_asyncio.plugin"]
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from fastapi.testclient import TestClient

@@ -148,8 +148,8 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
             1000,
             1,
             {"description": "probando el testing", "date_exp": "2025-10-10"},
-            404,
-            "Project with project_id 1000 not found",
+            400,
+            "User with user_id 1 is not in project with project_id 1000",
         ),
         (
             1,

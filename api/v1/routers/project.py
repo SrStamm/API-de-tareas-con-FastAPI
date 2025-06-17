@@ -13,6 +13,7 @@ router = APIRouter(prefix="/project", tags=["Project"])
 
 @router.get(
     "/me",
+    summary="Get projects where user is in",
     description="""  Obtained all projects where user is part.
                     'skip' receives an "int" that skips the result obtained.
                     'limit' receives an "int" that limits the result obtained.""",
@@ -40,6 +41,7 @@ async def get_projects_iam(
 
 @router.get(
     "/{group_id}",
+    summary="Get all projects on the group",
     description=""" Obtained all of projects of the group.
                         'skip' receives an "int" that skips the result obtained.
                         'limit' receives an "int" that limits the result obtained.""",
@@ -72,6 +74,7 @@ async def get_projects(
 
 @router.post(
     "/{group_id}",
+    summary="Create a new project",
     description="""Allows create an new proyect on the group to authenticated user.
                         To create it, you need an 'title', optional 'description'""",
     responses={
@@ -105,6 +108,7 @@ async def create_project(
 
 @router.patch(
     "/{group_id}/{project_id}",
+    summary="Update the project",
     description="""Allows update an proyect of the grupo if user has Administrator permissions on the proyect.
                         Allows modificate 'title' and 'description' """,
     responses={
@@ -131,6 +135,7 @@ async def update_project(
 
 @router.delete(
     "/{group_id}/{project_id}",
+    summary="Delete the project",
     description="""Allows remove an project of the group if an authenticated user has Administrator permissions on the proyect""",
     responses={
         200: {"description": "Proyect deleted", "model": responses.ProjectDeleteSucces},
@@ -155,6 +160,7 @@ async def delete_project(
 
 @router.post(
     "/{group_id}/{project_id}/{user_id}",
+    summary="Append a user to project",
     description="""Allows an authenticated user with Administrator permissions
                         to add a new user to the proyect if it exists in the group.""",
     responses={
@@ -185,6 +191,7 @@ async def add_user_to_project(
 
 @router.delete(
     "/{group_id}/{project_id}/{user_id}",
+    summary="Remove a user to project",
     description="""Allow an authenticated user with Administrator permission
                         to remove an user of the proyect""",
     responses={
@@ -218,6 +225,7 @@ async def remove_user_from_project(
 
 @router.patch(
     "/{group_id}/{project_id}/{user_id}",
+    summary="Update user permissions in the project",
     description="""Allow an authenticated user whit Administrator permission
                         to update a user's permission on a project""",
     responses={
@@ -251,6 +259,7 @@ async def update_user_permission_in_project(
 
 @router.get(
     "/{group_id}/{project_id}/users",
+    summary="Get users from the projecy",
     description=""" Obtained all users of the project.
                     'skip' receives an "int" that skips the result obtained.
                     'limit' receives an "int" that limits the result obtained.""",

@@ -13,6 +13,7 @@ router = APIRouter(prefix="/task", tags=["Task"])
 
 @router.get(
     "",
+    summary="Get all tasks assigned to the user",
     description=""" Obtain all of assigned tasks this user.
                     'skip' receives an "int" that skips the result obtained.
                     'limit' receives an "int" that limits the result obtained.
@@ -43,6 +44,7 @@ async def get_task(
 
 @router.get(
     "/{task_id}/users",
+    summary="Get users assigned to the task",
     description=""" Obtain all of asigned users to task.
                         'skip' receives an "int" that skips the result obtained.
                         'limit' receives an "int" that limits the result obtained.""",
@@ -71,6 +73,7 @@ async def get_users_for_task(
 
 @router.get(
     "/{project_id}",
+    summary="Get all task to the project",
     description=""" Obtain all assigned proyect tasks.
                         'skip' receives an "int" that skips the result obtained.
                         'limit' receives an "int" that limits the result obtained.
@@ -105,7 +108,8 @@ async def get_task_in_project(
 
 @router.post(
     "/{project_id}",
-    description="Create a new task from the proyect",
+    summary="Create a new task",
+    description="Create a new task to the project. Need a description, expiration date, users_ids to assign the task, and a label to task",
     responses={
         201: {"description": "Task created", "model": responses.TaskCreateSucces},
         404: {"description": "Data not found", "model": responses.DataNotFound},
@@ -128,6 +132,7 @@ async def create_task(
 
 @router.patch(
     "/{project_id}/{task_id}",
+    summary="",
     description="Update a specific task from the proyect",
     responses={
         200: {"description": "Task updated", "model": responses.TaskUpdateSucces},
@@ -164,7 +169,8 @@ async def update_task(
 
 @router.delete(
     "/{project_id}/{task_id}",
-    description="Removes a specific task from a project",
+    summary="Delete the task",
+    description="Removes a specific task from a project. Need a task_id",
     responses={
         200: {"description": "Task removed", "model": responses.TaskDeleteSucces},
         400: {"description": "Error in request", "model": responses.ErrorInRequest},

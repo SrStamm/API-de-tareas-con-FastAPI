@@ -13,9 +13,10 @@ router = APIRouter(prefix="/group", tags=["Group"])
 
 @router.get(
     "",
-    description=""" Read all groups with limited data.
-                        'skip' receives an "int" that skips the result obtained.
-                        'limit' receives an "int" that limits the result obtained.""",
+    summary="Obtain all groups",
+    description=""" Obtain all groups with paginated with name and her users.
+                        'skip' is a value to skip the results obtained.
+                        'limit' is a value to limit the result obtained.""",
     responses={
         200: {"description": "Groups obtained", "model": schemas.ReadBasicDataGroup},
         500: {
@@ -36,7 +37,8 @@ async def get_groups(
 
 @router.post(
     "",
-    description=""" The authenticated user creates a new group, needs a 'name' string, and an optional 'description' string.
+    summary="Create a new group",
+    description=""" The authenticated user creates a new group, needs a 'name', and an optional 'description'.
                         The user is automatically part of the group """,
     responses={
         201: {"description": "Group created", "model": responses.GroupCreateSucces},
@@ -58,6 +60,7 @@ async def create_group(
 
 @router.patch(
     "/{group_id}",
+    summary="Update the group",
     description="""
         Allows an authenticated user with Administrator or Editor rol to change group information,
         such as 'name' or 'description'""",
@@ -94,6 +97,7 @@ async def update_group(
 
 @router.delete(
     "/{group_id}",
+    summary="Delete the group",
     description="Allows an authenticated user with Administrator or Editor rol to delete the group.",
     responses={
         200: {"description": "Group deleted", "model": responses.GroupDeleteSucces},
@@ -117,6 +121,7 @@ async def delete_group(
 
 @router.get(
     "/me",
+    summary="Get the groups the user is in",
     description=""" Read all groups where user is part with limit information.
                         'skip' receives an "int" that skips the result obtained.
                         'limit' receives an "int" that limits the result obtained.""",
@@ -144,6 +149,7 @@ async def get_groups_in_user(
 
 @router.post(
     "/{group_id}/{user_id}",
+    summary="Append a new user to group",
     description="Allows an authenticated user with Administrator or Editor rol to append a new user to group.",
     responses={
         201: {
@@ -179,6 +185,7 @@ async def append_user_group(
 
 @router.delete(
     "/{group_id}/{user_id}",
+    summary="Remove a user to group",
     description="Allows an authenticated user with Administrator or Editor role to remove a user from a group.",
     responses={
         200: {
@@ -219,6 +226,7 @@ async def delete_user_group(
 
 @router.patch(
     "/{group_id}/{user_id}",
+    summary="Update role of user in group",
     description="Permite al usuario autenticado con rol Administrador el modificar el rol de un usuario en el grupo",
     responses={
         200: {
@@ -257,6 +265,7 @@ async def update_user_group(
 
 @router.get(
     "/{group_id}/users",
+    summary="Get users in the group",
     description=""" Obtained all the users of the group.
                         'skip' receives an "int" that skips the result obtained.
                         'limit' receives an "int" that limits the result obtained.""",

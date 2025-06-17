@@ -12,6 +12,7 @@ router = APIRouter(prefix="/task/{task_id}", tags=["Comment"])
 
 @router.get(
     "/comments",
+    summary="Obtain visible comments",
     description="Read the comments of a specific Task",
     responses={
         200: {"detail": "Comments successfully obtained", "model": schemas.ReadComment},
@@ -30,6 +31,7 @@ def get_comments(
 
 @router.get(
     "/comments/all",
+    summary="Get all comments",
     description="Read all the comments, included deleted comments, of a specific Task",
     responses={
         200: {
@@ -52,7 +54,8 @@ def get_all_comments(
 
 @router.post(
     "/comments",
-    description='Create a new comment on a specific task. Need "content" data string',
+    summary="Create a new comment",
+    description='Create a new comment on a specific task. Need a "content". If mentionated a user, he receives a notification',
     response_model=responses.CommentCreateSucces,
     responses={
         201: {"detail": "Comment successfully created", "model": schemas.CreateComment},
@@ -73,6 +76,7 @@ async def create_comment(
 
 @router.patch(
     "/comments/{comment_id}",
+    summary="Update the comment",
     description='Update a comment on a specific Task. You can change "content" string, "is_deleted" bool if you want to hide the commentary, and the update date will be saved',
     responses={
         200: {"detail": "Comment successfully updated", "model": schemas.UpdateComment},
@@ -98,6 +102,7 @@ def update_comment(
 
 @router.delete(
     "/comments/{comment_id}",
+    summary="Delete the comment",
     description="Delete the comment on a specific task. It will not be completely eliminated, but will be available to those who have permissions. ",
     responses={
         200: {"detail": "Comment successfully deleted"},

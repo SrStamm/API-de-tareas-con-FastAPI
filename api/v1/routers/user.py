@@ -12,6 +12,7 @@ router = APIRouter(prefix="/user", tags=["User"])
 
 @router.get(
     "",
+    summary="Get all users",
     description=""" Obtain all of users.
                     'skip' receives an "int" that skips the result obtained.
                     'limit' receives an "int" that limits the result obtained.""",
@@ -35,7 +36,8 @@ async def get_users(
 
 @router.post(
     "",
-    description="""Create a new user. Nedd a username, an email and a password""",
+    summary="Create a new user",
+    description="""Create a new user. Need a username, an email and a password""",
     responses={
         201: {"description": "User created", "model": responses.UserCreateSucces},
         406: {"description": "Data conflict", "model": responses.UserConflictError},
@@ -56,6 +58,7 @@ async def create_user(
 
 @router.get(
     "/me",
+    summary="Get data from user",
     description="Obtain current user information",
     responses={
         200: {"description": "Obtained current user", "model": schemas.ReadUser},
@@ -78,6 +81,7 @@ def get_user_me(
 
 @router.patch(
     "/me",
+    summary="Update the user",
     description="Update current user",
     responses={
         200: {
@@ -102,6 +106,7 @@ async def update_user_me(
 
 @router.delete(
     "/me",
+    summary="Delete the user",
     description="Delete current user",
     responses={
         200: {

@@ -104,9 +104,10 @@ class TaskRepository:
             stmt = (
                 select(Task)
                 .join(tasks_user, tasks_user.task_id == Task.task_id)
+                .join(project_user, project_user.project_id == Task.project_id)
                 .where(
                     project_user.project_id == project_id,
-                    project_user.user_id == user_id,
+                    project_user.user_id == user_id
                 )
                 .options(joinedload(Task.asigned))
             )
