@@ -60,14 +60,10 @@ if redis_url:
     redis_password = parsed.password
     redis_db = int(parsed.path.replace("/", "") or 0)
 
-    logger.info(f'URL de Redis {redis_host}')
-    logger.info(f'URL de Redis {redis_port}')
-    logger.info(f'URL de Redis {redis_password}')
-    logger.info(f'URL de Redis {redis_db}')
-
     redis_client = redis.Redis(
         host=redis_host,
         port=redis_port,
+        password=redis_password,
         db=redis_db
     )
 else:
@@ -77,6 +73,3 @@ else:
         port=int(os.getenv("REDIS_PORT", 6379)),
         db=int(os.getenv("REDIS_DB", 0))
     )
-    logger.info(f"redis_DB: {os.getenv("REDIS_DB")}")
-    logger.info(f"redis_PORT: {os.getenv("REDIS_PORT")}")
-    logger.info(f"redis_HOST: {os.getenv("REDIS_HOST")}")
