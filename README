@@ -1,8 +1,9 @@
 # 🗂️ API de Tareas con FastAPI
 
 Una API REST para gestionar tareas y usuarios en proyectos dentro de grupos.
-Permite crear, asignar y completar tareas, con autenticación y control de permisos.  
+Permite crear, asignar y completar tareas, con autenticación y control de permisos.
 Incluye un sistema de chat por proyecto, comentarios en tareas asignadas, control de estado y vencimiento.
+Además de contar con notificaciones al asignarse una tarea, actualizar una tarea asignada, mencionar en un comentario, entre otras.
 
 ---
 
@@ -30,6 +31,7 @@ Incluye un sistema de chat por proyecto, comentarios en tareas asignadas, contro
 - PostgreSQL
 - Redis (cache y pub/sub)
 - Docker & Docker Compose
+- Celery (almacenar / enviar notificaciones pendientes)
 
 ---
 
