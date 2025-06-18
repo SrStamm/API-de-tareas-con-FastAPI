@@ -11,6 +11,7 @@ from models.exceptions import (
     UserInProjectError,
 )
 from models.schemas import (
+    ReadProject,
     ReadBasicProject,
     CreateProject,
     UpdateProject,
@@ -61,7 +62,7 @@ class ProjectService:
 
             # Devuelve si es verdad
             if cached:
-                return cached
+                return [ReadBasicProject(project) for project in cached]
 
             found_projects = self.project_repo.get_all_project_by_user(
                 user_id, limit, skip
@@ -88,7 +89,7 @@ class ProjectService:
 
             # Devuelve si es verdad
             if cached:
-                return cached
+                return [ReadProject(project) for project in cached]
 
             self.group_serv.get_group_or_404(group_id)
 

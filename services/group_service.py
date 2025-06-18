@@ -39,7 +39,7 @@ class GroupService:
             cached = await cache_manager.get(key, "get_groups_with_cache")
 
             if cached:
-                return cached
+                return [ReadGroup(**group) for group in cached]
 
             # Get from repository
             found_groups = self.group_repo.get_all_groups(limit, skip)
@@ -71,7 +71,7 @@ class GroupService:
             key = f"groups:user_id:{user_id}:limit:{limit}:offset:{skip}"
             cached = await cache_manager.get(key, "get_groups_wher_user_in")
             if cached:
-                return cached
+                return [ReadGroup(**group) for group in cached]
 
             # Get from repository
             found_groups = self.group_repo.get_groups_for_user(user_id, limit, skip)

@@ -61,7 +61,7 @@ class TaskService:
             cached = await cache_manager.get(key, "get_all_task_for_user")
 
             if cached:
-                return cached
+                return [ReadTask(task) for task in cached]
 
             found_tasks = self.task_repo.get_all_task_for_user(
                 user_id, limit, skip, labels, state
@@ -92,7 +92,7 @@ class TaskService:
             cached = await cache_manager.get(key, "get_user_for_task")
 
             if cached:
-                return cached
+                return [ReadUser(user) for user in cached]
 
             results = self.task_repo.get_user_for_task(task_id, limit, skip)
 
@@ -122,7 +122,7 @@ class TaskService:
             cached = await cache_manager.get(key, "get_all_task_for_project")
 
             if cached:
-                return cached
+                return [ReadTaskInProject(task) for task in cached]
 
             results = self.task_repo.get_all_task_to_project(
                 project_id, user_id, limit, skip, labels, state

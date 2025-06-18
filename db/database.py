@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import os
 from models import db_models
 from urllib.parse import urlparse
+from core.logger import logger
 
 load_dotenv()
 
@@ -36,6 +37,7 @@ SessionLocal = sessionmaker(autoflush=False, autocommit=False, bind=engine)
 sessionlocal = Session(engine)
 
 def get_session():
+
     session = Session(engine)
     try:
         yield session
@@ -49,7 +51,7 @@ redis_port = int(os.getenv("REDIS_PORT", '6379'))
 redis_db = int(os.getenv("REDIS_DB", '0'))
 
 redis_url = os.getenv("REDIS_URL")
-
+print(f'URL de Redis {redis_url}')
 if redis_url:
     parsed = urlparse(redis_url)
 
@@ -58,10 +60,14 @@ if redis_url:
     redis_password = parsed.password
     redis_db = int(parsed.path.replace("/", "") or 0)
 
+    logger.info(f'URL de Redis {redis_host}')
+    logger.info(f'URL de Redis {redis_port}')
+    logger.info(f'URL de Redis {redis_password}')
+    logger.info(f'URL de Redis {redis_db}')
+
     redis_client = redis.Redis(
         host=redis_host,
         port=redis_port,
-        password=redis_password,
         db=redis_db
     )
 else:
@@ -71,3 +77,6 @@ else:
         port=int(os.getenv("REDIS_PORT", 6379)),
         db=int(os.getenv("REDIS_DB", 0))
     )
+    logger.info(f"redis_DB: {os.getenv("REDIS_DB")}")
+    logger.info(f"redis_PORT: {os.getenv("REDIS_PORT")}")
+    logger.info(f"redis_HOST: {os.getenv("REDIS_HOST")}")

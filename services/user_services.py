@@ -45,7 +45,7 @@ class UserService:
             key = f"users:limit:{limit}:offset:{skip}"
             cached = await cache_manager.get(key, "get_all_users")
             if cached:
-                return cached
+                return [ReadUser(**user) for user in cached]
 
             results = self.user_repo.get_all_users(limit, skip)
 
