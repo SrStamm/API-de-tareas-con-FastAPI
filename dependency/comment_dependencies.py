@@ -5,10 +5,13 @@ from fastapi import Depends
 
 from services.comment_services import CommentService
 
+
 def get_comment_repository(session: Session = Depends(get_session)):
     return CommentRepository(session)
 
+
 def get_comment_service(
-        comment_repo: CommentRepository = Depends(get_comment_repository),
-        task_ser: TaskService = Depends(get_task_service)) -> CommentService:
+    comment_repo: CommentRepository = Depends(get_comment_repository),
+    task_ser: TaskService = Depends(get_task_service),
+) -> CommentService:
     return CommentService(comment_repo, task_ser)

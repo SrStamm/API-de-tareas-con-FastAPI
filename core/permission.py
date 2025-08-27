@@ -1,5 +1,10 @@
 from fastapi import Depends
-from models.exceptions import GroupNotFoundError, UserNotInGroupError, NotAuthorized, UserNotInProjectError
+from models.exceptions import (
+    GroupNotFoundError,
+    UserNotInGroupError,
+    NotAuthorized,
+    UserNotInProjectError,
+)
 from models.schemas import ReadUser
 from typing import Callable, List
 from dependency.project_dependencies import get_project_repository
@@ -46,14 +51,12 @@ def require_permission(permissions: List[str]) -> Callable:
     def dependency(
         project_id: int,
         user: ReadUser = Depends(get_current_user),
-        project_repo: ProjectRepository = Depends(get_project_repository)
+        project_repo: ProjectRepository = Depends(get_project_repository),
     ):
         found_user = project_repo.get_user_in_project(project_id, user.user_id)
 
         if not found_user:
-            raise UserNotInProjectError(
-                user_id=user.user_id, project_id=project_id
-            )
+            raise UserNotInProjectError(user_id=user.user_id, project_id=project_id)
 
         if found_user.permission not in permissions:
             raise NotAuthorized(user.user_id)
@@ -63,10 +66,15 @@ def require_permission(permissions: List[str]) -> Callable:
     return dependency
 
 
-def permission_of_user_in_project(user_id: int, project_id: int, project_repo: ProjectRepository = Depends(get_project_repository)):
+def permission_of_user_in_project(
+    user_id: int,
+    project_id: int,
+    project_repo: ProjectRepository = Depends(get_project_repository),
+):
     found_user = project_repo.get_user_in_project(project_id, user_id)
 
     if not found_user:
         raise UserNotInProjectError(user_id=user_id, project_id=project_id)
 
     return found_user.permission.value
+

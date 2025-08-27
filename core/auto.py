@@ -1,33 +1,38 @@
 from db.database import Session, select, get_session, or_, SQLAlchemyError
-from models import db_models, exceptions
+from models import exceptions
+from models.db_models import Session as SessionDB
 from datetime import datetime, timezone
 from core.logger import logger
 
+
 def clean_database(session: Session):
     try:
-        stmt = (select(db_models.Session)
-                .where(or_(
-                    db_models.Session.is_active == False,
-                    db_models.Session.expires_at < datetime.now(timezone.utc))))
+        stmt = select(SessionDB).where(
+            or_(
+                SessionDB.is_active == False,
+                SessionDB.expires_at < datetime.now(timezone.utc),
+            )
+        )
 
         results = session.exec(stmt).all()
 
         if results:
-            logger.info('Encontradas las sesiones')
+            logger.info("Encontradas las sesiones")
             for result in results:
                 session.delete(result)
 
             session.commit()
-            logger.info('Sessiones eliminadas con suceso')
+            logger.info("Sessiones eliminadas con suceso")
             logger.info(f"Se eliminaron {len(results)} sesiones expiradas")
 
             return
 
-        logger.error('No hay o no se encontraron sesiones expiradas')
+        logger.error("No hay o no se encontraron sesiones expiradas")
         return
 
     except SQLAlchemyError as e:
-        raise exceptions.DatabaseError(e, func='get_expired_sessions')
+        raise exceptions.DatabaseError(e, func="get_expired_sessions")
+
 
 async def run_scheduler_job():
     logger.info("Iniciando trabajo de limpieza de base de datos...")
@@ -45,7 +50,8 @@ async def run_scheduler_job():
             session_generator.close()
 
         except RuntimeError as e:
-            logger.error(f'Error RuntimeError: {e}')
+            logger.error(f"Error RuntimeError: {e}")
             pass
 
     logger.info("Trabajo de limpieza de base de datos finalizado.")
+

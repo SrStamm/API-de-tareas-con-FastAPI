@@ -39,4 +39,6 @@ class CacheManager:
         except redis.RedisError as e:
             logger.error(f"[{func}] Cache DELETE FAIL - Key: {key} | Error: {e}")
 
+
 cache_manager = CacheManager()
+

@@ -1,5 +1,9 @@
 from models.schemas import CreateComment, UpdateComment
-from models.exceptions import CommentNotFoundError, DatabaseError, UserNotAuthorizedInCommentError
+from models.exceptions import (
+    CommentNotFoundError,
+    DatabaseError,
+    UserNotAuthorizedInCommentError,
+)
 from repositories.comment_repositories import CommentRepository
 from services.task_services import TaskService
 from core.event_ws import format_notification
@@ -48,10 +52,10 @@ class CommentService:
 
             return {"detail": "New comment created"}
         except DatabaseError as e:
-            logger.error(f'[CommentService.create] Repo failed: {str(e)}')
+            logger.error(f"[CommentService.create] Repo failed: {str(e)}")
             raise
         except Exception as e:
-            logger.error(f'[CommentService.create] Unknown Error: {str(e)}')
+            logger.error(f"[CommentService.create] Unknown Error: {str(e)}")
             raise
 
     def update(
@@ -75,10 +79,10 @@ class CommentService:
             self.comment_repo.update(update_comment, comment_found)
             return {"detail": "Comment successfully updated"}
         except DatabaseError as e:
-            logger.error(f'[CommentService.update] Repo failed: {str(e)}')
+            logger.error(f"[CommentService.update] Repo failed: {str(e)}")
             raise
         except Exception as e:
-            logger.error(f'[CommentService.update] Unknown Error: {str(e)}')
+            logger.error(f"[CommentService.update] Unknown Error: {str(e)}")
             raise
 
     def delete(self, task_id: int, comment_id: int, user_id: int):
@@ -100,8 +104,9 @@ class CommentService:
 
             return {"detail": "Comment successfully deleted"}
         except DatabaseError as e:
-            logger.error(f'[CommentService.delete] Repo failed: {str(e)}')
+            logger.error(f"[CommentService.delete] Repo failed: {str(e)}")
             raise
         except Exception as e:
-            logger.error(f'[CommentService.delete] Unknown Error: {str(e)}')
+            logger.error(f"[CommentService.delete] Unknown Error: {str(e)}")
             raise
+

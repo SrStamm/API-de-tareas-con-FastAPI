@@ -231,7 +231,7 @@ class AuthService:
 
     def logout(self, user_id: int):
         try:
-            active_sessions = self.auth_repo.get_active_sessions(user_id)
+            active_sessions = self.auth_repo.get_active_sessions(str(user_id))
             if not active_sessions:
                 logger.error(
                     f"[AuthService.logout] Not found active sessions for User {user_id}"
