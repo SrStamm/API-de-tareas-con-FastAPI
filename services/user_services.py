@@ -71,7 +71,7 @@ class UserService:
 
             self.user_repo.create(new_user)
 
-            await cache_manager.delete("users:limit:*:offset:*", "create_user")
+            await cache_manager.delete_pattern("users:limit:*:offset:*", "create_user")
 
             return {"detail": "Se ha creado un nuevo usuario con exito"}
         except DatabaseError as e:
@@ -84,7 +84,9 @@ class UserService:
     async def update_user(self, user: User, update_user: UpdateUser):
         try:
             if user.username != update_user.username and update_user.username:
-                await cache_manager.delete("users:limit:*:offset:*", "update_user")
+                await cache_manager.delete_pattern(
+                    "users:limit:*:offset:*", "update_user"
+                )
 
             self.user_repo.update(user=user, update_user=update_user)
             return {"detail": "Se ha actualizado el usuario con exito"}
@@ -99,7 +101,7 @@ class UserService:
         try:
             self.user_repo.delete(user)
 
-            await cache_manager.delete("users:limit:*:offset:*", "delete_user")
+            await cache_manager.delete_pattern("users:limit:*:offset:*", "delete_user")
 
             return {"detail": "Se ha eliminado el usuario"}
         except DatabaseError as e:

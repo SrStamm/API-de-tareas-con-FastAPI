@@ -35,7 +35,12 @@ class ProjectRepository:
     def get_all_project_by_user(self, user_id: int, limit: int, skip: int):
         try:
             stmt = (
-                select(Project.project_id, Project.group_id, Project.title)
+                select(
+                    Project.project_id,
+                    Project.group_id,
+                    Project.title,
+                    Project.description,
+                )
                 .where(
                     Project.project_id == project_user.project_id,
                     project_user.user_id == user_id,

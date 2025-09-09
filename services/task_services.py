@@ -11,7 +11,7 @@ from models.exceptions import (
     TaskIsAssignedError,
     TaskIsNotAssignedError,
 )
-from db.database import IntegrityError, SQLAlchemyError
+from db.database import IntegrityError
 from typing import List
 from core.logger import logger
 from core.event_ws import format_notification
@@ -122,10 +122,10 @@ class TaskService:
             cached = await cache_manager.get(key, "get_all_task_for_project")
 
             if cached:
-                return [ReadTaskInProject(task) for task in cached]
+                return [ReadTaskInProject(**task) for task in cached]
 
             results = self.task_repo.get_all_task_to_project(
-                project_id, user_id, limit, skip, labels, state
+                project_id, limit, skip, labels, state
             )
 
             to_cache = [
@@ -170,6 +170,12 @@ class TaskService:
                 # Envia el evento
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
+                # Elimina cache existente
+                await cache_manager.delete_pattern(
+                    f"task:users:project_id:{project_id}:user_id:*:labels:*:state:*:limit:*:offset:*",
+                    "create",
+                )
+
             return {
                 "detail": "A new task has been created and users have been successusfully assigned"
             }
@@ -185,10 +191,10 @@ class TaskService:
 
             self.task_repo.delete(task)
 
-            await cache_manager.delete(
+            await cache_manager.delete_pattern(
                 f"task:users:task_id:{task_id}:limit:*:offset:*", "delete"
             )
-            await cache_manager.delete(
+            await cache_manager.delete_pattern(
                 f"task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*",
                 "delete",
             )
@@ -346,7 +352,7 @@ class TaskService:
                         message=outgoing_event_json, user_id=user_id
                     )
 
-            await cache_manager.delete(
+            await cache_manager.delete_pattern(
                 f"task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*",
                 "update_task",
             )

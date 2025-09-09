@@ -71,7 +71,7 @@ async def login(
             "model": schemas.Token,
         },
         401: {"detail": "Token incorrect", "model": responses.InvalidToken},
-        404: {"detail": "User not found", "model": responses.NotFound},
+        404: {"detail": "User not found"},
         500: {"detail": "Internal error", "model": responses.DatabaseErrorResponse},
     },
 )
@@ -122,4 +122,3 @@ def get_expired_sessions(auth_serv: AuthService = Depends(get_auth_serv)):
     except SQLAlchemyError as e:
         logger.error(f"[get_expired_sessions] Database Error | Error: {str(e)}")
         raise DatabaseError(e, func="get_expired_sessions")
-

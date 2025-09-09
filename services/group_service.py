@@ -129,7 +129,13 @@ class GroupService:
             self.group_repo.create(new_group, user_id)
 
             # Delete cache
-            await cache_manager.delete("groups:limit:*:offset:*", "create_group")
+            await cache_manager.delete_pattern(
+                "groups:limit:*:offset:*", "create_group"
+            )
+            # Invalida el cache del usuario que lo crea
+            await cache_manager.delete_pattern(
+                f"groups:user_id:{user_id}:limit:*:offset:*", "create_group"
+            )
 
             return {"detail": "Se ha creado un nuevo grupo de forma exitosa"}
         except DatabaseError as e:
@@ -151,7 +157,13 @@ class GroupService:
 
             self.group_repo.update(actual_group, update_group)
 
-            await cache_manager.delete("groups:limit:*:offset:*", "update_group")
+            await cache_manager.delete_pattern(
+                "groups:limit:*:offset:*", "update_group"
+            )
+            # Invalida el cache del usuario actual que lo modifica
+            await cache_manager.delete_pattern(
+                f"groups:user_id:{user_id}:limit:*:offset:*", "update_group"
+            )
 
             return {"detail": "Se ha actualizado la informacion del grupo"}
 
@@ -159,13 +171,24 @@ class GroupService:
             logger.error(f"[services.update_group] Repo failed: {str(e)}")
             raise
 
-    async def delete_group(self, group_id: int):
+    async def delete_group(
+        self, group_id: int, user_id: int
+    ):  # Se agregó el parámetro user_id
         try:
             group = self.get_group_or_404(group_id)
 
             self.group_repo.delete(group)
 
-            await cache_manager.delete("groups:limit:*:offset:*", "delete_group")
+            await cache_manager.delete_pattern(
+                "groups:limit:*:offset:*", "delete_group"
+            )
+            await cache_manager.delete_pattern(
+                f"groups:users:group_id:{group_id}:limit:*:offset:*", "delete_group"
+            )
+            # Invalida el cache del usuario actual que lo elimina
+            await cache_manager.delete_pattern(
+                f"groups:user_id:{user_id}:limit:*:offset:*", "delete_group"
+            )
 
             return {"detail": "Se ha eliminado el grupo"}
 
@@ -196,14 +219,23 @@ class GroupService:
             # Se crea la notificacion
             outgoing_event_json = format_notification(
                 notification_type="append_to_group",
-                message="You were added to group {group_id}",
+                message=f"You were added to group {group_id}",
             )
 
             # Envia el evento
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
-            await cache_manager.delete(
+            # Invalida el cache del usuario actual
+            await cache_manager.delete_pattern(
                 f"groups:user_id:{actual_user_id}:limit:*:offset:*", "append_user"
+            )
+            # Invalida el cache del usuario target
+            await cache_manager.delete_pattern(
+                f"groups:user_id:{user_id}:limit:*:offset:*", "append_user"
+            )
+            # Invalida el cache del grupo
+            await cache_manager.delete_pattern(
+                f"groups:users:group_id:{group_id}:limit:*:offset:*", "append_user"
             )
 
             logger.info(
@@ -248,7 +280,7 @@ class GroupService:
                     # Se crea la notificacion
                     outgoing_event_json = format_notification(
                         notification_type="remove_user_to_group",
-                        message="You were removed to group {group_id}",
+                        message=f"You were removed to group {group_id}",
                     )
 
                     # Envia el evento
@@ -256,15 +288,26 @@ class GroupService:
                         message=outgoing_event_json, user_id=user_id
                     )
 
-                    await cache_manager.delete(
+                    # Invalida el cache del usuario actual
+                    await cache_manager.delete_pattern(
                         f"groups:user_id:{actual_user_id}:limit:*:offset:*",
+                        "delete_user",
+                    )
+                    # Invalida el cache del usuario target
+                    await cache_manager.delete_pattern(
+                        f"groups:user_id:{user_id}:limit:*:offset:*",
+                        "delete_user",
+                    )
+                    # Invalida el cache del grupo
+                    await cache_manager.delete_pattern(
+                        f"groups:users:group_id:{group_id}:limit:*:offset:*",
                         "delete_user",
                     )
 
                     logger.info(
                         f"[delete_user] User {user_id} Delete to Group {group_id} Success"
                     )
-                    return {"detail": "El usuario ha sido eliminado al grupo"}
+                    return {"detail": "El usuario ha sido eliminado del grupo"}
                 else:
                     logger.info(
                         f"[delete_user_group] Unauthorized Error | User {actual_user_id} not authorized in group {group_id}"
@@ -304,8 +347,8 @@ class GroupService:
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
             # Elimina cache existente
-            await cache_manager.delete(
-                "groups:user_id:{actual_user_id}:limit:*:offset:*", "update_user_role"
+            await cache_manager.delete_pattern(
+                f"groups:user_id:{actual_user_id}:limit:*:offset:*", "update_user_role"
             )
 
             return {"detail": "Se ha cambiado los permisos del usuario en el grupo"}

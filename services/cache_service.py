@@ -8,7 +8,7 @@ class CacheManager:
     def __init__(self, manager: redis.Redis = redis_client):
         self.manager = manager
 
-    async def set(self, key: str, content: Dict, func: str, ttl: int = 300):
+    async def set(self, key: str, content: Dict, func: str, ttl: int = 60):
         try:
             payload = json.dumps(content, default=str)
             await self.manager.setex(key, ttl, payload)
@@ -39,6 +39,25 @@ class CacheManager:
         except redis.RedisError as e:
             logger.error(f"[{func}] Cache DELETE FAIL - Key: {key} | Error: {e}")
 
+    async def delete_pattern(self, pattern: str, func: str):
+        try:
+            cursor = 0
+            while True:
+                cursor, batch = await self.manager.scan(
+                    cursor=cursor, match=pattern, count=100
+                )
+                if batch:
+                    logger.info(f"[{func}] Cache MATCH - Found: {batch}")
+                    await self.manager.delete(*batch)
+                    logger.info(f"[{func}] Cache DELETE - Deleted: {batch}")
+                else:
+                    logger.info(f"[{func}] Cache MATCH - No keys for pattern {pattern}")
+                if cursor == 0:
+                    break
+        except redis.RedisError as e:
+            logger.error(
+                f"[{func}] Cache DELETE FAIL - Pattern: {pattern} | Error: {e}"
+            )
+
 
 cache_manager = CacheManager()
-

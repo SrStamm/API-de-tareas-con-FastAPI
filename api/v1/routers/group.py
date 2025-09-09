@@ -82,17 +82,12 @@ async def update_group(
     auth_data: dict = Depends(require_role(roles=["admin", "editor"])),
     group_service: GroupService = Depends(get_group_service),
 ):
-    try:
-        actual_role = auth_data["role"]
-        actual_user_id = auth_data["user"]
+    actual_role = auth_data["role"]
+    actual_user_id = auth_data["user"]
 
-        return await group_service.update_group(
-            group_id, updated_group, actual_role, actual_user_id
-        )
-
-    except Exception as e:
-        logger.error(f"[update_group] Unexpected Error:  {str(e)}")
-        raise
+    return await group_service.update_group(
+        group_id, updated_group, actual_role, actual_user_id
+    )
 
 
 @router.delete(
@@ -116,7 +111,7 @@ async def delete_group(
     auth_data: dict = Depends(require_role(roles=["admin"])),
     group_service: GroupService = Depends(get_group_service),
 ):
-    return await group_service.delete_group(group_id)
+    return await group_service.delete_group(group_id, auth_data["user"].user_id)
 
 
 @router.get(
@@ -173,14 +168,8 @@ async def append_user_group(
     auth_data: dict = Depends(require_role(roles=["admin", "editor"])),
     group_service: GroupService = Depends(get_group_service),
 ):
-    try:
-        actual_user = auth_data["user"]
-
-        return await group_service.append_user(group_id, user_id, actual_user.user_id)
-
-    except Exception as e:
-        logger.error(f"[append_user_group] Unexpected Error:  {str(e)}")
-        raise
+    actual_user = auth_data["user"]
+    return await group_service.append_user(group_id, user_id, actual_user.user_id)
 
 
 @router.delete(
@@ -209,19 +198,15 @@ async def delete_user_group(
     auth_data: dict = Depends(require_role(roles=["admin", "editor"])),
     group_service: GroupService = Depends(get_group_service),
 ):
-    try:
-        actual_role = auth_data["role"]
-        actual_user: User = auth_data["user"]
+    actual_role = auth_data["role"]
+    actual_user: User = auth_data["user"]
 
-        return await group_service.delete_user(
-            group_id=group_id,
-            user_id=user_id,
-            actual_user_id=actual_user.user_id,
-            actual_user_role=actual_role,
-        )
-    except Exception as e:
-        logger.error(f"[delete_user_group] Unexpected Error:  {str(e)}")
-        raise
+    return await group_service.delete_user(
+        group_id=group_id,
+        user_id=user_id,
+        actual_user_id=actual_user.user_id,
+        actual_user_role=actual_role,
+    )
 
 
 @router.patch(
@@ -248,19 +233,11 @@ async def update_user_group(
     auth_data: dict = Depends(require_role(roles=["admin"])),
     group_service: GroupService = Depends(get_group_service),
 ):
-    try:
-        actual_user = auth_data["user"]
+    actual_user = auth_data["user"]
 
-        return await group_service.update_user_role(
-            group_id, user_id, update_role.role, actual_user.user_id
-        )
-
-    except RecursionError as e:
-        logger.error(f"[update_user_group] Recursion Error: {e}")
-        raise
-    except Exception as e:
-        logger.error(f"[update_user_group] Unexpected Error:  {str(e)}")
-        raise
+    return await group_service.update_user_role(
+        group_id, user_id, update_role.role, actual_user.user_id
+    )
 
 
 @router.get(

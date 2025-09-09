@@ -94,16 +94,9 @@ async def create_project(
     auth_data: dict = Depends(require_role(roles=["admin"])),
     project_serv: ProjectService = Depends(get_project_service),
 ):
-    try:
-        actual_user: User = auth_data["user"]
+    actual_user: User = auth_data["user"]
 
-        return await project_serv.create_project(
-            group_id, actual_user.user_id, new_project
-        )
-
-    except Exception as e:
-        logger.error(f"[create_project] Unexpected error in group {group_id}: {e}")
-        raise
+    return await project_serv.create_project(group_id, actual_user.user_id, new_project)
 
 
 @router.patch(

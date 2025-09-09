@@ -72,11 +72,7 @@ async def create_user(
 def get_user_me(
     request: Request, user: User = Depends(get_current_user)
 ) -> schemas.ReadUser:
-    try:
-        return user
-    except Exception as e:
-        logger.error(f"[get_user_me] Unknown Error | Error: {str(e)}")
-        raise
+    return user
 
 
 @router.patch(

@@ -154,17 +154,12 @@ async def update_task(
     auth_data: dict = Depends(require_permission(permissions=["admin", "write"])),
     task_serv: TaskService = Depends(get_task_service),
 ):
-    try:
-        actual_permission = auth_data["permission"]
-        user: User = auth_data["user"]
+    actual_permission = auth_data["permission"]
+    user: User = auth_data["user"]
 
-        return await task_serv.update_task(
-            task_id, project_id, update_task, user, actual_permission
-        )
-
-    except Exception as e:
-        logger.error(f"[update_task] Unknown Error | Error: {str(e)}")
-        raise
+    return await task_serv.update_task(
+        task_id, project_id, update_task, user, actual_permission
+    )
 
 
 @router.delete(

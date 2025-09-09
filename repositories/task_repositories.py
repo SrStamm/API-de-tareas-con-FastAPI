@@ -94,7 +94,6 @@ class TaskRepository:
     def get_all_task_to_project(
         self,
         project_id: int,
-        user_id: int,
         limit: int,
         skip: int,
         labels: List[TypeOfLabel] | None,
@@ -103,12 +102,7 @@ class TaskRepository:
         try:
             stmt = (
                 select(Task)
-                .join(tasks_user, tasks_user.task_id == Task.task_id)
-                .join(project_user, project_user.project_id == Task.project_id)
-                .where(
-                    project_user.project_id == project_id,
-                    project_user.user_id == user_id
-                )
+                .where(Task.project_id == project_id)
                 .options(joinedload(Task.asigned))
             )
 

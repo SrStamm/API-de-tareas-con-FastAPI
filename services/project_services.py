@@ -62,7 +62,7 @@ class ProjectService:
 
             # Devuelve si es verdad
             if cached:
-                return [ReadBasicProject(project) for project in cached]
+                return [ReadBasicProject.model_validate(project) for project in cached]
 
             found_projects = self.project_repo.get_all_project_by_user(
                 user_id, limit, skip
@@ -70,8 +70,14 @@ class ProjectService:
 
             # Cachea la respuesta
             to_cache = [
-                ReadBasicProject(group_id=group_id, project_id=project_id, title=title)
-                for group_id, project_id, title in found_projects
+                {
+                    "group_id": group_id,
+                    "project_id": project_id,
+                    "title": title,
+                    "description": description,
+                    # Nota: no hay usuarios en esta tupla, así que quizás no debas incluir "users"
+                }
+                for (project_id, group_id, title, description) in found_projects
             ]
 
             # Guarda la respuesta
@@ -89,7 +95,7 @@ class ProjectService:
 
             # Devuelve si es verdad
             if cached:
-                return [ReadProject(project) for project in cached]
+                return [ReadProject.model_validate(project) for project in cached]
 
             self.group_serv.get_group_or_404(group_id)
 
@@ -159,8 +165,8 @@ class ProjectService:
 
             self.project_repo.create(group_id, user_id, project)
 
-            await cache_manager.delete(
-                "projects:group_id:{group_id}:limit:*:offset:*", "create_project"
+            await cache_manager.delete_pattern(
+                f"projects:group_id:{group_id}:limit:*:offset:*", "create_project"
             )
 
             return {"detail": "Se ha creado un nuevo proyecto de forma exitosa"}
@@ -176,8 +182,8 @@ class ProjectService:
 
             self.project_repo.update(found_project, update_project)
 
-            await cache_manager.delete(
-                "projects:group_id:{group_id}:limit:*:offset:*", "update_project"
+            await cache_manager.delete_pattern(
+                f"projects:group_id:{group_id}:limit:*:offset:*", "update_project"
             )
 
             return {"detail": "Se ha actualizado la informacion del projecto"}
@@ -194,11 +200,11 @@ class ProjectService:
 
             self.project_repo.delete(found_project)
 
-            await cache_manager.delete(
-                "projects:group_id:{group_id}:limit:*:offset:*", "delete_project"
+            await cache_manager.delete_pattern(
+                f"projects:group_id:{group_id}:limit:*:offset:*", "delete_project"
             )
-            await cache_manager.delete(
-                "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
+            await cache_manager.delete_pattern(
+                f"project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
                 "delete_project",
             )
 
@@ -241,12 +247,12 @@ class ProjectService:
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
             # Elimina cache
-            await cache_manager.delete(
-                "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
+            await cache_manager.delete_pattern(
+                f"project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
                 "add_user",
             )
-            await cache_manager.delete(
-                "projects:group_id:{group_id}:limit:*:offset:*", "add_user"
+            await cache_manager.delete_pattern(
+                f"projects:group_id:{group_id}:limit:*:offset:*", "add_user"
             )
 
             return {"detail": "El usuario ha sido agregado al proyecto"}
@@ -284,12 +290,12 @@ class ProjectService:
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
                 # Elimina cache
-                await cache_manager.delete(
-                    "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
+                await cache_manager.delete_pattern(
+                    f"project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
                     "remove_user",
                 )
-                await cache_manager.delete(
-                    "projects:group_id:{group_id}:limit:*:offset:*", "remove_user"
+                await cache_manager.delete_pattern(
+                    f"projects:group_id:{group_id}:limit:*:offset:*", "remove_user"
                 )
 
                 return {"detail": "El usuario ha sido eliminado del proyecto"}
@@ -332,8 +338,8 @@ class ProjectService:
 
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
-            await cache_manager.delete(
-                "project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
+            await cache_manager.delete_pattern(
+                f"project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
                 "update_user_permission_in_project",
             )
 
