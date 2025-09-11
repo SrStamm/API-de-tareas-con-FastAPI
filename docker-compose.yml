@@ -11,6 +11,11 @@ services:
     ports:
       - "5432:5432"
     env_file: .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      retries: 5
+      timeout: 5s
 
   redis:
     image: redis/redis-stack:latest
@@ -42,8 +47,8 @@ services:
   api:
     build: .
     depends_on:
-      - task-db
-      - redis
+      task-db:
+        condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_HOST: redis

@@ -128,6 +128,8 @@ class TaskService:
                 project_id, limit, skip, labels, state
             )
 
+            print("Resultado de tareas en proyecto", results)
+
             to_cache = [
                 ReadTaskInProject(
                     task_id=task.task_id,

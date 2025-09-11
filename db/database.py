@@ -17,15 +17,12 @@ password = os.environ.get("POSTGRES_PASSWORD")
 db_host = os.environ.get("POSTGRES_HOST")
 db_port = os.environ.get("POSTGRES_PORT")
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-
 # url = f'postgresql+psycopg2://{user}:{password}@localhost:5432/{db_name}'
 
-url = os.environ.get(
-    "DATABASE_URL",
-    f"postgresql+psycopg2://{user}:amaterasu@{db_host}:{db_port}/{db_name}",
-)
-engine = create_engine(url)  # echo=True, pool_pre_ping=True
+DATABASE_URL = os.environ.get("DATABASE_URL")
+print("DEBUG DATABASE_URL:", DATABASE_URL)
+
+engine = create_engine(DATABASE_URL, echo=True, pool_pre_ping=True)
 
 
 def create_db_and_tables():
@@ -78,4 +75,3 @@ else:
         port=int(os.getenv("REDIS_PORT", 6379)),
         db=int(os.getenv("REDIS_DB", 0)),
     )
-

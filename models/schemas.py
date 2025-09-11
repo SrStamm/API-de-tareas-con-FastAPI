@@ -99,6 +99,7 @@ class ReadTask(BaseModel):
 
 class ReadTaskInProject(BaseModel):
     task_id: int = Field(examples=[1])
+    title: str | None = Field(default=None, examples=["TaskAPI"])
     description: str = Field(examples=[])
     date_exp: dt = Field(examples=[])
     state: State = Field(examples=[])
