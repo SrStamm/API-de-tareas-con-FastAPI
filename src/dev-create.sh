@@ -1,4 +1,4 @@
-#! /bin/bash 
+#! /bin/bash
 echo "Creando con Docker-Compose los contenedores de desarrollo"
 docker-compose down
 

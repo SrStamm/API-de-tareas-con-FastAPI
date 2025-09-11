@@ -5,10 +5,10 @@ FROM python:3.12-alpine AS builder
 WORKDIR /app
 
 # Se copia solo el archivo de requisitos primero
-COPY requeriments.txt .
+COPY requirements.txt .
 
 # Instala las dependencias.
-RUN pip install --no-cache-dir -r requeriments.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copia el resto del código fuente.
 COPY . .

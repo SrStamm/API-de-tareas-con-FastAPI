@@ -133,6 +133,7 @@ class TaskService:
             to_cache = [
                 ReadTaskInProject(
                     task_id=task.task_id,
+                    title=task.title,
                     description=task.description,
                     date_exp=task.date_exp,
                     state=task.state,
@@ -178,6 +179,11 @@ class TaskService:
                     "create",
                 )
 
+                await cache_manager.delete_pattern(
+                    f"task:user:user_id:{user_id}:labels:*:state:*:limit:*:offset:*",
+                    "create",
+                )
+
             return {
                 "detail": "A new task has been created and users have been successusfully assigned"
             }
@@ -196,6 +202,7 @@ class TaskService:
             await cache_manager.delete_pattern(
                 f"task:users:task_id:{task_id}:limit:*:offset:*", "delete"
             )
+
             await cache_manager.delete_pattern(
                 f"task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*",
                 "delete",
@@ -240,6 +247,16 @@ class TaskService:
                             raise TaskIsAssignedError(user_id=user_id, task_id=task_id)
 
                         self.task_repo.add_user(user_id, task_id)
+
+                        await cache_manager.delete_pattern(
+                            f"task:user:user_id:{user_id}:labels:*:state:*:limit:*:offset:*",
+                            "update_task",
+                        )
+
+                        await cache_manager.delete_pattern(
+                            f"task:users:task_id:{task_id}:limit:*:offset:*",
+                            "update_task",
+                        )
                 else:
                     logger.error(
                         f"[update_task] Unauthorized | User {user.user_id} not authorized for this action"
@@ -262,6 +279,16 @@ class TaskService:
                             )
 
                         self.task_repo.remove_user(user_in_task)
+
+                        await cache_manager.delete_pattern(
+                            f"task:user:user_id:{user_id}:labels:*:state:*:limit:*:offset:*",
+                            "update_task",
+                        )
+
+                        await cache_manager.delete_pattern(
+                            f"task:users:task_id:{task_id}:limit:*:offset:*",
+                            "update_task",
+                        )
                 else:
                     logger.error(
                         f"[update_task] Unauthorized | User {user.user_id} not authorized for this action"
@@ -343,6 +370,15 @@ class TaskService:
                         message=outgoing_event_json, user_id=user_id
                     )
 
+                    await cache_manager.delete_pattern(
+                        f"task:user:user_id:{user_id}:labels:*:state:*:limit:*:offset:*",
+                        "update_task",
+                    )
+
+                    await cache_manager.delete_pattern(
+                        f"task:users:task_id:{task_id}:limit:*:offset:*", "update_task"
+                    )
+
             if update_task.exclude_user_ids:
                 for user_id in update_task.exclude_user_ids:
                     outgoing_event_json = format_notification(
@@ -352,6 +388,15 @@ class TaskService:
 
                     await manager.send_to_user(
                         message=outgoing_event_json, user_id=user_id
+                    )
+
+                    await cache_manager.delete_pattern(
+                        f"task:user:user_id:{user_id}:labels:*:state:*:limit:*:offset:*",
+                        "update_task",
+                    )
+
+                    await cache_manager.delete_pattern(
+                        f"task:users:task_id:{task_id}:limit:*:offset:*", "update_task"
                     )
 
             await cache_manager.delete_pattern(

@@ -57,7 +57,13 @@ class ReadProjectUser(BaseModel):
 
 
 class CreateTask(BaseModel):
-    description: str = Field(examples=["Actualizar la API"])
+    title: str = Field(examples=["Actualizar la API"])
+    description: str | None = Field(
+        default=None,
+        examples=[
+            "Debido a varios cambios, se debe actualizar en las siguientes partes..."
+        ],
+    )
     date_exp: dt = Field(examples=["2025-10-28"])
     user_ids: List[int] = Field(examples=[[1, 5, 88]])
     label: List[TypeOfLabel] | None = None
@@ -89,7 +95,8 @@ class ReadLabel(BaseModel):
 class ReadTask(BaseModel):
     task_id: int = Field(examples=[1])
     project_id: int = Field(examples=[1])
-    description: str = Field(examples=["Actualizar los datos"])
+    title: str = Field(examples=["TaskAPI"])
+    description: str | None = Field(default=None, examples=["Actualizar los datos"])
     date_exp: dt = Field(examples=["2025-10-24"])
     state: State = Field(examples=[State.EN_PROCESO])
     task_label_links: List[ReadLabel] | None = None
@@ -99,8 +106,8 @@ class ReadTask(BaseModel):
 
 class ReadTaskInProject(BaseModel):
     task_id: int = Field(examples=[1])
-    title: str | None = Field(default=None, examples=["TaskAPI"])
-    description: str = Field(examples=[])
+    title: str = Field(examples=["TaskAPI"])
+    description: str | None = Field(default=None, examples=[])
     date_exp: dt = Field(examples=[])
     state: State = Field(examples=[])
     asigned: List[ReadUser] = Field(
@@ -117,6 +124,7 @@ class ReadTaskInProject(BaseModel):
 
 
 class UpdateTask(BaseModel):
+    title: str | None = Field(default=None, examples=["Error en Front"])
     description: str | None = Field(
         default=None, examples=["Eliminar los datos duplicados"]
     )

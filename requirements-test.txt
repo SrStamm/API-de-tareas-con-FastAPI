@@ -35,7 +35,6 @@ packaging==24.2
 passlib==1.7.4
 pluggy==1.5.0
 psutil==7.0.0
-psycopg2==2.9.10
 pyasn1==0.4.8
 pycparser==2.22
 pycryptodome==3.22.0
@@ -87,3 +86,6 @@ python-dateutil==2.9.0.post0
 tzdata==2025.2
 vine==5.1.0
 wcwidth==0.2.13
+
+
+psycopg2-binary==2.9.10

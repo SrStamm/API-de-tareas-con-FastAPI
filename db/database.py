@@ -53,7 +53,7 @@ redis_port = int(os.getenv("REDIS_PORT", "6379"))
 redis_db = int(os.getenv("REDIS_DB", "0"))
 
 redis_url = os.getenv("REDIS_URL")
-print(f"URL de Redis {redis_url}")
+
 if redis_url:
     parsed = urlparse(redis_url)
 

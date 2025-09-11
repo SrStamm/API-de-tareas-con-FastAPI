@@ -156,6 +156,7 @@ class TaskRepository:
         try:
             new_task = Task(
                 project_id=project_id,
+                title=task.title,
                 description=task.description,
                 date_exp=task.date_exp,
             )
