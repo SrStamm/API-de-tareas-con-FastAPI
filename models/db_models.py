@@ -87,6 +87,9 @@ class Group(SQLModel, table=True):
     users: Mapped[List["User"]] = Relationship(
         back_populates="groups", link_model=group_user
     )
+    projects: Mapped[List["Project"]] = Relationship(
+        back_populates="group", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+    )
 
 
 class Project(SQLModel, table=True):
@@ -101,6 +104,7 @@ class Project(SQLModel, table=True):
     )
     tasks: Mapped[List["Task"]] = Relationship(back_populates="project")
     chats: Mapped[List["ProjectChat"]] = Relationship(back_populates="project")
+    group: "Group" = Relationship(back_populates="projects")
 
 
 class User(SQLModel, table=True):
@@ -126,6 +130,7 @@ class User(SQLModel, table=True):
 class Task(SQLModel, table=True):
     task_id: Optional[int] = Field(default=None, primary_key=True)
     project_id: int = Field(foreign_key="project.project_id", index=True)
+    title: str | None = Field(default=None)
     description: str | None = Field(default=None)
     date_exp: dt
     state: State = Field(default=State.SIN_EMPEZAR)
@@ -189,4 +194,3 @@ class Notifications(SQLModel, table=True):
     timestamp: dt = Field(default_factory=lambda: dt.now(timezone.utc))
 
     user: User = Relationship(back_populates="notifications")
-
