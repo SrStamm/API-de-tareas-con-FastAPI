@@ -174,6 +174,8 @@ class TaskRepository:
             for user_id in task.user_ids:
                 task_user = tasks_user(task_id=new_task.task_id, user_id=user_id)
                 self.session.add(task_user)
+                print(f"Usuario agredado: {user_id}")
+
             self.session.commit()
             return new_task
         except SQLAlchemyError as e:

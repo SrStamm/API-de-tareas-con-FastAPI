@@ -39,10 +39,10 @@ class TaskService:
         return task_found
 
     def found_user_assigned_to_task(self, task_id: int, user_id: int):
-        user = self.task_repo.get_task_is_asigned(task_id, user_id)
+        user = self.task_repo.get_task_is_asigned(task_id=task_id, user_id=user_id)
 
         if not user:
-            raise TaskIsAssignedError(user_id=user_id, task_id=task_id)
+            raise TaskIsNotAssignedError(task_id=task_id, user_id=user_id)
         return user
 
     def validate_in_task(self, users: List[User], task_id: int):
@@ -237,7 +237,7 @@ class TaskService:
                         self.proj_ser.found_user_in_project_or_404(user_id, project_id)
 
                         user_in_task = self.task_repo.get_task_is_asigned(
-                            task_id, user_id
+                            task_id=task_id, user_id=user_id
                         )
 
                         if user_in_task:
