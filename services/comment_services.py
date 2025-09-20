@@ -12,7 +12,11 @@ from core.logger import logger
 
 
 class CommentService:
-    def __init__(self, comment_repo: CommentRepository, task_serv: TaskService):
+    def __init__(
+        self,
+        comment_repo: CommentRepository,
+        task_serv: TaskService,
+    ):
         self.comment_repo = comment_repo
         self.task_serv = task_serv
 
@@ -36,8 +40,6 @@ class CommentService:
 
     async def create(self, comment: CreateComment, task_id: int, user_id: int):
         try:
-            self.task_serv.found_user_assigned_to_task(task_id, user_id)
-
             self.comment_repo.create(comment, task_id, user_id)
 
             users = self.comment_repo.extract_valid_mentions(comment.content)
@@ -109,4 +111,3 @@ class CommentService:
         except Exception as e:
             logger.error(f"[CommentService.delete] Unknown Error: {str(e)}")
             raise
-
