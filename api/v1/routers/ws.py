@@ -245,15 +245,17 @@ async def websocket_endpoint(
                 )
 
             except ValueError as ve:  # Captura errores de validación
-                event_type = data_json.get("type") if "data_json" in locals() else "unknown"
+                event_type = (
+                    data_json.get("type") if "data_json" in locals() else "unknown"
+                )
                 logger.error(
-                    f"Payload validation error for event type {event.type}: {ve} from user {user.user_id} in project {project_id}"
+                    f"Payload validation error for event type {event_type}: {ve} from user {user.user_id} in project {project_id}"
                 )
                 await websocket.send_json(
                     {
                         "type": "error",
                         "payload": {
-                            "message": f"Invalid payload for type {event.type}."
+                            "message": f"Invalid payload for type {event_type}."
                         },
                     }
                 )
