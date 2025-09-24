@@ -25,20 +25,19 @@ router = APIRouter(tags=["WebSocket"])
 async def get_current_user_ws(session: Session, websocket: WebSocket):
     try:
         auth_header = websocket.headers.get("Authorization")
+        token = None
 
-        if not auth_header:
-            logger.error("[get_current_user_ws] Header Error | Not has a Header")
-            await websocket.close(code=1008, reason="Authentication Error")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")
+        else:
+            token = websocket.query_params.get("token")
+
+        if not token:
+            logger.error("[get_current_user_ws] Not found Error: User not found")
+            await websocket.close(code=1008, reason="User not found for token")
             raise WebSocketException(code=1008)
 
-        if not auth_header.startswith("Bearer "):
-            logger.error("[get_current_user_ws] Invalid Token | Invalid Format")
-            await websocket.close(code=1008, reason="Invalid token format")
-            raise WebSocketException(code=1008)
-
-        token = auth_header.replace("Bearer ", "")
         user = await auth_user_ws(token, session)
-
         if not user:
             logger.info("[get_current_user_ws] Not found Error: User not found")
             await websocket.close(code=1008, reason="User not found for token")
@@ -246,6 +245,7 @@ async def websocket_endpoint(
                 )
 
             except ValueError as ve:  # Captura errores de validación
+                event_type = data_json.get("type") if "data_json" in locals() else "unknown"
                 logger.error(
                     f"Payload validation error for event type {event.type}: {ve} from user {user.user_id} in project {project_id}"
                 )

@@ -20,7 +20,7 @@ db_port = os.environ.get("POSTGRES_PORT")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL, echo=True, pool_pre_ping=True)
+engine = create_engine(DATABASE_URL) # echo=True, pool_pre_ping=True
 
 
 def create_db_and_tables():
