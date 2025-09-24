@@ -20,14 +20,10 @@ class CommentService:
         self.comment_repo = comment_repo
         self.task_serv = task_serv
 
-    def get_comments(self, task_id: int, user_id: int):
-        self.task_serv.found_user_assigned_to_task(task_id, user_id)
-
+    def get_comments(self, task_id: int):
         return self.comment_repo.get_comments(task_id)
 
-    def get_all_comments(self, task_id: int, user_id: int):
-        self.task_serv.found_user_assigned_to_task(task_id, user_id)
-
+    def get_all_comments(self, task_id: int):
         comments = self.comment_repo.get_all_comments(task_id)
 
         if not comments:

@@ -26,7 +26,7 @@ def get_comments(
     user: User = Depends(get_current_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ) -> List[schemas.ReadComment]:
-    return comment_serv.get_comments(task_id, user.user_id)
+    return comment_serv.get_comments(task_id)
 
 
 @router.get(
@@ -49,7 +49,7 @@ def get_all_comments(
     user: User = Depends(get_current_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ) -> List[schemas.ReadComment]:
-    return comment_serv.get_all_comments(task_id, user.user_id)
+    return comment_serv.get_all_comments(task_id)
 
 
 @router.post(

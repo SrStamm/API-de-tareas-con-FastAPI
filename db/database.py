@@ -4,10 +4,9 @@ from sqlalchemy.orm import selectinload, joinedload, sessionmaker
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import redis.asyncio as redis
 from dotenv import load_dotenv
-import os
 from models import db_models
 from urllib.parse import urlparse
-from core.logger import logger
+import os
 
 load_dotenv()
 
@@ -20,13 +19,14 @@ db_port = os.environ.get("POSTGRES_PORT")
 # url = f'postgresql+psycopg2://{user}:{password}@localhost:5432/{db_name}'
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-print("DEBUG DATABASE_URL:", DATABASE_URL)
 
 engine = create_engine(DATABASE_URL, echo=True, pool_pre_ping=True)
 
 
 def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
+    ## Solo para entornos de testing/ local muy iniciales
+    # SQLModel.metadata.create_all(engine)
+
     try:
         with engine.connect() as connection:
             result = connection.execute(text("SELECT 1"))

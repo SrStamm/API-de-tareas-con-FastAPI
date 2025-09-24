@@ -102,7 +102,10 @@ class Project(SQLModel, table=True):
     users: Mapped[List["User"]] = Relationship(
         back_populates="projects", link_model=project_user
     )
-    tasks: Mapped[List["Task"]] = Relationship(back_populates="project")
+    tasks: Mapped[List["Task"]] = Relationship(
+        back_populates="project",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"},
+    )
     chats: Mapped[List["ProjectChat"]] = Relationship(back_populates="project")
     group: "Group" = Relationship(back_populates="projects")
 
