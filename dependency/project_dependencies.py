@@ -18,4 +18,3 @@ def get_project_service(
     group_serv: GroupService = Depends(get_group_service),
 ) -> ProjectService:
     return ProjectService(project_repo, group_serv, user_serv)
-

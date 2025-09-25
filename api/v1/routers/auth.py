@@ -32,11 +32,13 @@ async def auth_user_ws(token: str, session: Session):
     try:
         payload = jwt.decode(token, SECRET, algorithms=[ALGORITHM])
 
-        user_id: str = payload.get("sub")
+        user_id = payload.get("sub")
+
         if user_id is None:
             return None
 
         user = session.get(User, int(user_id))
+
         if user is None:
             return None
 

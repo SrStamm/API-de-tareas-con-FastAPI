@@ -17,7 +17,6 @@ from core.limiter import limiter
 from core.socket_manager import manager, send_pending_notifications
 from core.event_ws import format_personal_message
 from core.utils import found_user_in_project_or_404
-from dependency.project_dependencies import ProjectService, get_project_service
 import json
 
 router = APIRouter(tags=["WebSocket"])
@@ -39,6 +38,7 @@ async def get_current_user_ws(session: Session, websocket: WebSocket):
             raise WebSocketException(code=1008)
 
         user = await auth_user_ws(token, session)
+
         if not user:
             logger.info("[get_current_user_ws] Not found Error: User not found")
             await websocket.close(code=1008, reason="User not found for token")
@@ -60,86 +60,25 @@ async def get_current_user_ws(session: Session, websocket: WebSocket):
         raise
 
 
-def verify_user_in_project(
-    user_id: int, project_id: int, session: Session = Depends(get_session)
-):
-    logger.info(f"Verificando usuario {user_id} en proyecto {project_id}")
-
-    project = session.get(db_models.Project, project_id)
-    if not project:
-        logger.error(
-            f"[verify_user_in_project] Not found Error | Proyect {project_id} not found"
-        )
-        raise exceptions.ProjectNotFoundError(project_id)
-
-    stmt = select(db_models.project_user).where(
-        db_models.project_user.user_id == user_id,
-        db_models.project_user.project_id == project_id,
-    )
-
-    project_user = session.exec(stmt).first()
-    if not project_user:
-        logger.error(
-            f"[verify_user_in_project] Unauthorized | User {user_id} not authorized for proyect {project_id}"
-        )
-        raise exceptions.NotAuthorized(user_id)
-
-    logger.info(
-        f"[verify_user_in_project] User founded - User {user_id} verify in proyect {project_id}"
-    )
-    return project_user
-
-
-def add_user_to_project_channel(
-    user_id: int,
-    proj_ser: ProjectService = (
-        Depends(get_project_service)
-    ),
-    websocket
-):
-    allProjects = proj_ser.get_projects_iam(user_id, 100, 0)
-    if not allProjects:
-        logger.error(
-            f"[add_user_to_project_channel] Not found Error | Projects to User {user_id} not found"
-        )
-        raise
-
-    for project in allProjects:
-        await manager.connect(websocket, user_id=user_id, project.project_id)
-
-
 @router.websocket("/ws")
 async def websocket_endpoint(
-    websocket: WebSocket, session: Session = Depends(get_session)
+    websocket: WebSocket,
+    session: Session = Depends(get_session),
 ):
     # Obtiene el usuario actual
     user = await get_current_user_ws(session, websocket)
 
-    #
+    logger.info("Usuario conectado")
 
     try:
-        verify_user_in_project(
-            user_id=user.user_id, project_id=project_id, session=session
+        # Conecta a todos los proyectos
+        conn_id = await manager.connect_to_user_projects(
+            websocket=websocket, user_id=user.user_id, session=session
         )
-
-    except exceptions.ProjectNotFoundError as e:
-        await websocket.close(code=1008, reason=f"Proyect {project_id} not found")
-        return
-
-    except exceptions.NotAuthorized as e:
-        await websocket.close(
-            code=1008, reason=f"User not authorized for proyect {project_id}"
-        )
-        return
 
     except Exception as e:
         await websocket.close(code=1008, reason=f"Internal error: {str(e)}")
         return
-
-    # Conecta el usario a websocket
-    conn_id = await manager.connect(
-        websocket=websocket, project_id=project_id, user_id=user.user_id
-    )
 
     connection_event = format_personal_message(
         user_id=user.user_id, message=f"User {user.user_id} connected"
@@ -164,7 +103,7 @@ async def websocket_endpoint(
 
                     # Crea el mensaje a guardar en BD
                     message = db_models.ProjectChat(
-                        project_id=project_id,
+                        project_id=message_payload.project_id,
                         user_id=user.user_id,
                         message=message_payload.content,
                     )
@@ -191,9 +130,9 @@ async def websocket_endpoint(
                     outgoing_event_json = outgoing_event.model_dump_json()
 
                     # Envia al broadcast
-                    await manager.broadcast(outgoing_event_json, project_id)
+                    await manager.broadcast(outgoing_event_json, message.project_id)
                     logger.info(
-                        f"Broadcast group message ID {message.chat_id} for project {project_id} via WS"
+                        f"Broadcast group message ID {message.chat_id} for project {message.project_id} via WS"
                     )
 
                 if event.type == "personal_message":
@@ -299,13 +238,14 @@ async def websocket_endpoint(
     except WebSocketDisconnect:
         await manager.disconnect(conn_id)  # Usa await para asegurar que se ejecute
         logger.info(f"El usuario con ID {user.user_id} se desconecto")
-        msg_disconnect = schemas.Message(
-            user_id=user.user_id,
-            project_id=project_id,
-            timestamp=datetime.now(),
-            content=f"El usuario {user.user_id} se ha desconectado del projecto {project_id}",
-        )
-        await manager.broadcast(msg_disconnect.model_dump_json(), project_id)
+
+        # msg_disconnect = schemas.Message(
+        #    user_id=user.user_id,
+        #    project_id=project_id,
+        #    timestamp=datetime.now(),
+        #    content=f"El usuario {user.user_id} se ha desconectado del projecto {project_id}",
+        # )
+        # await manager.broadcast(msg_disconnect.model_dump_json(), project_id)
 
     except RuntimeError as e:
         logger.error(f"Error de ejecución: {e}")

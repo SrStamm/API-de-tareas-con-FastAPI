@@ -300,6 +300,7 @@ class WebSocketEvent(BaseModel):
 
 class GroupMessagePayload(BaseModel):
     content: str
+    project_id: int
 
 
 class OutgoingGroupMessagePayload(BaseModel):

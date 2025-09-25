@@ -6,7 +6,8 @@ from models.db_models import Group_Role, Group
 from models.exceptions import DatabaseError
 from models import exceptions
 from core.logger import logger
-from core.socket_manager import manager
+
+# from core.socket_manager import manager
 from core.event_ws import format_notification
 from typing import List
 
@@ -223,7 +224,7 @@ class GroupService:
             )
 
             # Envia el evento
-            await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
+            # await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
             # Invalida el cache del usuario actual
             await cache_manager.delete_pattern(
@@ -284,9 +285,7 @@ class GroupService:
                     )
 
                     # Envia el evento
-                    await manager.send_to_user(
-                        message=outgoing_event_json, user_id=user_id
-                    )
+                    # await manager.send_to_user( message=outgoing_event_json, user_id=user_id)
 
                     # Invalida el cache del usuario actual
                     await cache_manager.delete_pattern(
@@ -344,7 +343,7 @@ class GroupService:
                 message=f"Your role in the group {group_id} was upgrated to: {role}",
             )
 
-            await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
+            # await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
             # Elimina cache existente
             await cache_manager.delete_pattern(

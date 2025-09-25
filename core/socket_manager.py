@@ -1,56 +1,42 @@
-from typing import Dict
-from fastapi import WebSocket, Depends
-
-from dependency import project_dependencies
+from typing import Dict, List
+from fastapi import WebSocket
 from .logger import logger
 from db.database import redis_client, sessionlocal
 from redis.asyncio import Redis
-from models import db_models
 from tasks import save_notification_in_db, get_pending_notifications_for_user
 from core.event_ws import format_notification
 import asyncio
 import json
 import uuid
 
+from sqlmodel import select
+from models.db_models import Project, project_user
+
 
 class RedisConnectionManager:
     def __init__(
         self,
         redis: Redis,
-        proj_ser: project_dependencies.ProjectService = Depends(
-            project_dependencies.get_project_service
-        ),
     ):
         self.redis = redis
         self.pubsub_tasks: Dict[str, asyncio.Task] = {}
-        self.proj_ser = proj_ser
-
-    async def connect(self, websocket: WebSocket, user_id: int, project_id: int):
-        await websocket.accept()
-        connection_id = str(uuid.uuid4())
-        metadata = {
-            "connection_id": connection_id,
-            "user_id": user_id,
-            "project_id": project_id,
-        }
-        await self.redis.set(f"connection:{connection_id}", json.dumps(metadata))
-        await self.redis.sadd(f"user_connections:{user_id}", connection_id)
-        await self.redis.sadd(f"project_connections:{project_id}", connection_id)
-        logger.info(
-            f"[CONNECTED] user={user_id} project={project_id} conn={connection_id}"
-        )
-
-        await self._subscribe(websocket, user_id, project_id, connection_id)
-        return connection_id
 
     async def _subscribe(
-        self, websocket: WebSocket, user_id: int, project_id: int, connection_id: str
+        self,
+        websocket: WebSocket,
+        user_id: int,
+        project_ids: List[int],
+        connection_id: str,
     ):
         pubsub = self.redis.pubsub()  # Añadir await
-        await pubsub.subscribe(f"user:{user_id}", f"project:{project_id}")
-        logger.info(
-            f"Subscribed user={user_id} to channels user:{user_id} and project:{project_id}"
-        )
+
+        # Crea una lista de canales, incluyendo el canal personal y los de los proyectos
+        channels_to_subscribe = [f"user:{user_id}"] + [
+            f"project:{p_id}" for p_id in project_ids
+        ]
+
+        await pubsub.subscribe(*channels_to_subscribe)
+        logger.info(f"Subscribed user={user_id} to channels {channels_to_subscribe}")
 
         async def reader():
             try:
@@ -74,7 +60,7 @@ class RedisConnectionManager:
                     f"Error in Pub/Sub reader for user={user_id} conn={connection_id}: {str(e)}"
                 )
             finally:
-                await pubsub.unsubscribe(f"user:{user_id}", f"project:{project_id}")
+                await pubsub.unsubscribe(*channels_to_subscribe)
                 logger.info(
                     f"Unsubscribed user={user_id} conn={connection_id} from Pub/Sub"
                 )
@@ -86,13 +72,21 @@ class RedisConnectionManager:
         if raw:
             metadata = json.loads(raw)
             user_id = metadata["user_id"]
-            project_id = metadata["project_id"]
+
+            # Obtiene la lista de IDs de proyectos
+            projects_ids = metadata.get("project_ids", [])
+
             await self.redis.delete(f"connection:{connection_id}")
             await self.redis.srem(f"user_connections:{user_id}", connection_id)
-            await self.redis.srem(f"project_connections:{project_id}", connection_id)
+
+            # Itera sobre la lista para eliminar la conexión de todos los proyectos
+            for p_id in projects_ids:
+                await self.redis.srem(f"project_connections:{p_id}", connection_id)
+
             logger.info(
-                f"Removed from Redis: conn={connection_id}, user={user_id}, project={project_id}"
+                f"Removed from Redis: conn={connection_id}, user={user_id}, projects={projects_ids}"
             )
+
         if connection_id in self.pubsub_tasks:
             self.pubsub_tasks[connection_id].cancel()
             del self.pubsub_tasks[connection_id]
@@ -113,8 +107,39 @@ class RedisConnectionManager:
         await self.redis.publish(f"project:{project_id}", message)
         logger.info(f"Published broadcast to project:{project_id}: {message}")
 
-    async def addUserChannelProject(self, user_id: int):
-        await self.proj_ser.get_projects_iam(user_id, 100, 0)
+    async def connect_to_user_projects(self, websocket, user_id: int, session):
+        await websocket.accept()
+        connection_id = str(uuid.uuid4())
+        logger.info(f"[CONNECTED] user={user_id} conn={connection_id}")
+
+        # Obtiene todos los IDs de los proyectos a los que pertenece el usuario
+        stmt = select(
+            Project.project_id,
+        ).where(
+            Project.project_id == project_user.project_id,
+            project_user.user_id == user_id,
+        )
+
+        project_ids = session.exec(stmt).all()
+
+        # Guarda la metadata de la conexión
+        metadata = {
+            "connection_id": connection_id,
+            "user_id": user_id,
+            "project_ids": project_ids,
+        }
+
+        await self.redis.set(f"connection:{connection_id}", json.dumps(metadata))
+        await self.redis.sadd(f"user_connections:{user_id}", connection_id)
+
+        for project_id in project_ids:
+            await self.redis.sadd(f"project_connections:{project_id}", connection_id)
+
+        # Suscribe al usuario a todos los canales de sus proyectos
+        await self._subscribe(websocket, user_id, project_ids, connection_id)
+
+        await send_pending_notifications(user_id)
+        return connection_id
 
 
 manager = RedisConnectionManager(redis_client)

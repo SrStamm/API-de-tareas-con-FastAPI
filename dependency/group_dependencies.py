@@ -14,4 +14,3 @@ def get_group_service(
     user_repo: user_repositories.UserRepository = Depends(get_user_repository),
 ) -> GroupService:
     return GroupService(group_repo, user_repo)
-
