@@ -1,5 +1,7 @@
 from typing import Dict
-from fastapi import WebSocket
+from fastapi import WebSocket, Depends
+
+from dependency import project_dependencies
 from .logger import logger
 from db.database import redis_client, sessionlocal
 from redis.asyncio import Redis
@@ -12,9 +14,16 @@ import uuid
 
 
 class RedisConnectionManager:
-    def __init__(self, redis: Redis):
+    def __init__(
+        self,
+        redis: Redis,
+        proj_ser: project_dependencies.ProjectService = Depends(
+            project_dependencies.get_project_service
+        ),
+    ):
         self.redis = redis
         self.pubsub_tasks: Dict[str, asyncio.Task] = {}
+        self.proj_ser = proj_ser
 
     async def connect(self, websocket: WebSocket, user_id: int, project_id: int):
         await websocket.accept()
@@ -104,6 +113,9 @@ class RedisConnectionManager:
         await self.redis.publish(f"project:{project_id}", message)
         logger.info(f"Published broadcast to project:{project_id}: {message}")
 
+    async def addUserChannelProject(self, user_id: int):
+        await self.proj_ser.get_projects_iam(user_id, 100, 0)
+
 
 manager = RedisConnectionManager(redis_client)
 
@@ -122,4 +134,3 @@ async def send_pending_notifications(user_id: int):
             n.status = db_models.Notify_State.ENVIADO
         session.commit()
         logger.info(f"[send_pending_notifications] Notifications were updated")
-

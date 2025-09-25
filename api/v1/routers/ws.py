@@ -17,6 +17,7 @@ from core.limiter import limiter
 from core.socket_manager import manager, send_pending_notifications
 from core.event_ws import format_personal_message
 from core.utils import found_user_in_project_or_404
+from dependency.project_dependencies import ProjectService, get_project_service
 import json
 
 router = APIRouter(tags=["WebSocket"])
@@ -89,12 +90,32 @@ def verify_user_in_project(
     return project_user
 
 
-@router.websocket("/ws/{project_id}")
+def add_user_to_project_channel(
+    user_id: int,
+    proj_ser: ProjectService = (
+        Depends(get_project_service)
+    ),
+    websocket
+):
+    allProjects = proj_ser.get_projects_iam(user_id, 100, 0)
+    if not allProjects:
+        logger.error(
+            f"[add_user_to_project_channel] Not found Error | Projects to User {user_id} not found"
+        )
+        raise
+
+    for project in allProjects:
+        await manager.connect(websocket, user_id=user_id, project.project_id)
+
+
+@router.websocket("/ws")
 async def websocket_endpoint(
-    websocket: WebSocket, project_id: int, session: Session = Depends(get_session)
+    websocket: WebSocket, session: Session = Depends(get_session)
 ):
     # Obtiene el usuario actual
     user = await get_current_user_ws(session, websocket)
+
+    #
 
     try:
         verify_user_in_project(
