@@ -97,7 +97,9 @@ async def websocket_endpoint(
                 # Verifica que el evento tenga estructura general de evento
                 event = schemas.WebSocketEvent(**data_json)
 
-                if event.type == "group_message":
+                event_type = event.type.strip()
+
+                if event_type == "group_message":
                     # Verifica que tenga los datos del schema
                     message_payload = schemas.GroupMessagePayload(**event.payload)
 
@@ -135,7 +137,7 @@ async def websocket_endpoint(
                         f"Broadcast group message ID {message.chat_id} for project {message.project_id} via WS"
                     )
 
-                if event.type == "personal_message":
+                if event_type == "personal_message":
                     # Verifica que tenga los datos del schema
                     message_payload = schemas.PersonalMessagePayload(**event.payload)
 
@@ -163,7 +165,7 @@ async def websocket_endpoint(
                         f"Personal message send for user with user_id {user.user_id} to user with user_id {message_payload.received_user_id}"
                     )
 
-                elif event.type == "notification":
+                elif event_type == "notification":
                     # Verifica que tenga los datos del schema
                     notification_payload = schemas.NotificationPayload(**event.payload)
 
@@ -185,20 +187,19 @@ async def websocket_endpoint(
 
                     # Envia la notificacion
                     await manager.send_to_user(outgoing_event_json, user.user_id)
-                    logger.info(
-                        f"Notification sent to user {user.user_id} for project {project_id}"
-                    )
+                    logger.info(f"Notification sent to user {user.user_id} for project")
 
                 else:
                     # Manejar tipos de eventos desconocidos
                     logger.warning(
-                        f"Received unknown event type: {event.type} from user {user.user_id} in project {project_id}"
+                        f"Received unknown event type: {event_type} from user {user.user_id} in project",
                     )
+                    logger.info(f"Evento: {event}")
 
             except json.JSONDecodeError:
                 # Error si el mensaje no es un JSON válido
                 logger.error(
-                    f"Received invalid JSON from user {user.user_id} in project {project_id}"
+                    f"Received invalid JSON from user {user.user_id} in project"
                 )
                 await websocket.send_json(
                     {"type": "error", "payload": {"message": "Invalid JSON format."}}
@@ -209,7 +210,7 @@ async def websocket_endpoint(
                     data_json.get("type") if "data_json" in locals() else "unknown"
                 )
                 logger.error(
-                    f"Payload validation error for event type {event_type}: {ve} from user {user.user_id} in project {project_id}"
+                    f"Payload validation error for event type {event_type}: {ve} from user {user.user_id} in project"
                 )
                 await websocket.send_json(
                     {
@@ -223,7 +224,7 @@ async def websocket_endpoint(
             except Exception as e:
                 # Captura cualquier otro error durante el procesamiento del mensaje
                 logger.error(
-                    f"Error processing message from user {user.user_id} in project {project_id}: {e}",
+                    f"Error processing message from user {user.user_id} in project: {e}",
                     exc_info=True,
                 )
                 await websocket.send_json(
@@ -238,14 +239,6 @@ async def websocket_endpoint(
     except WebSocketDisconnect:
         await manager.disconnect(conn_id)  # Usa await para asegurar que se ejecute
         logger.info(f"El usuario con ID {user.user_id} se desconecto")
-
-        # msg_disconnect = schemas.Message(
-        #    user_id=user.user_id,
-        #    project_id=project_id,
-        #    timestamp=datetime.now(),
-        #    content=f"El usuario {user.user_id} se ha desconectado del projecto {project_id}",
-        # )
-        # await manager.broadcast(msg_disconnect.model_dump_json(), project_id)
 
     except RuntimeError as e:
         logger.error(f"Error de ejecución: {e}")
