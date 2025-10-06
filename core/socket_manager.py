@@ -10,7 +10,7 @@ import json
 import uuid
 
 from sqlmodel import select
-from models.db_models import Project, project_user
+from models.db_models import Project, project_user, Notify_State
 
 
 class RedisConnectionManager:
@@ -55,6 +55,7 @@ class RedisConnectionManager:
                             logger.error(
                                 f"Failed to send message to WebSocket user={user_id} conn={connection_id}: {str(e)}"
                             )
+                            break
             except Exception as e:
                 logger.error(
                     f"Error in Pub/Sub reader for user={user_id} conn={connection_id}: {str(e)}"
@@ -138,7 +139,6 @@ class RedisConnectionManager:
         # Suscribe al usuario a todos los canales de sus proyectos
         await self._subscribe(websocket, user_id, project_ids, connection_id)
 
-        await send_pending_notifications(user_id)
         return connection_id
 
 
@@ -156,6 +156,6 @@ async def send_pending_notifications(user_id: int):
                 notification_type=n.type, message=n.payload
             )
             await manager.send_to_user(user_id=user_id, message=notification_to_send)
-            n.status = db_models.Notify_State.ENVIADO
+            n.status = Notify_State.ENVIADO
         session.commit()
         logger.info(f"[send_pending_notifications] Notifications were updated")

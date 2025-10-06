@@ -284,7 +284,6 @@ def get_chat(
             select(db_models.ProjectChat)
             .where(
                 db_models.ProjectChat.project_id == project_id,
-                db_models.ProjectChat.user_id == user.user_id,
             )
             .limit(limit)
             .offset(skip)
