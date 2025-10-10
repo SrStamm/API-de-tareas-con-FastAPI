@@ -102,5 +102,16 @@ REFRESH_TOKEN_DURATION=60
 - Swagger UI: [`http://localhost:8000/docs']
 - Redoc: [`http://localhost:8000/redoc']
 
+
+## Fix
+
+- Al actualizar la tarea, se debe eliminar el cache
+- Obtener datos del usuario junto con los comentarios
+- Arreglar los test (Falla Redis)
+
+## Feature
+
+- Almacenar las notificaciones durante 30 días
+
 ### Licencia
 Este proyecto está bajo la licencia MIT.
