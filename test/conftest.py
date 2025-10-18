@@ -1,8 +1,12 @@
+from dotenv import load_dotenv
+load_dotenv(".env.test")
+
 import sys
 import os
 import pytest
 import pytest_asyncio
 import errno
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
