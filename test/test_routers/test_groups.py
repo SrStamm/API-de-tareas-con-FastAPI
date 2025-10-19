@@ -1,10 +1,6 @@
 import pytest
 from conftest import auth_headers, auth_headers2, test_user2, async_client, clean_redis
-from models import db_models, exceptions, schemas
-from sqlalchemy.exc import SQLAlchemyError
-from api.v1.routers import group
-from fastapi import Request
-from core.permission import require_role
+from models import db_models
 
 
 @pytest.mark.asyncio
@@ -141,7 +137,7 @@ async def test_update_user_group(
 @pytest.mark.parametrize(
     "group_id, user_id, status, respuesta",
     [
-        (1, 2, 200, "El usuario ha sido eliminado al grupo"),
+        (1, 2, 200, "El usuario ha sido eliminado del grupo"),
         (1, 2, 404, "User with user_id 2 not found"),
     ],
 )
@@ -167,4 +163,3 @@ async def test_delete_group(async_client, auth_headers, group_id, status, respue
     response = await async_client.delete(f"/group/{group_id}", headers=auth_headers)
     assert response.status_code == status
     assert response.json() == {"detail": respuesta}
-

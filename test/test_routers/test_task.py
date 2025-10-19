@@ -6,10 +6,8 @@ from conftest import (
     async_client,
     clean_redis,
 )
-from models import schemas, db_models, exceptions
+from models import db_models
 from api.v1.routers import task
-from sqlalchemy.exc import SQLAlchemyError
-from fastapi import Request
 
 
 @pytest.mark.asyncio
@@ -19,8 +17,9 @@ from fastapi import Request
         (
             1,
             {
+                "title": "probando",
                 "description": "probando el testing",
-                "date_exp": "2025-10-10",
+                "date_exp": "2030-10-10",
                 "user_ids": [1],
                 "label": ["bug"],
             },
@@ -30,8 +29,9 @@ from fastapi import Request
         (
             1,
             {
+                "title": "probando",
                 "description": "probando el testing",
-                "date_exp": "2025-10-10",
+                "date_exp": "2030-10-10",
                 "user_ids": [3],
             },
             400,
@@ -40,8 +40,9 @@ from fastapi import Request
         (
             1,
             {
+                "title": "probando",
                 "description": "probando el testing",
-                "date_exp": "2025-10-10",
+                "date_exp": "2030-10-10",
                 "user_ids": [1000],
             },
             404,
@@ -80,6 +81,7 @@ async def test_get_task(async_client, auth_headers, clean_redis):
             key in task
             for key in [
                 "task_id",
+                "title",
                 "description",
                 "date_exp",
                 "state",
@@ -128,7 +130,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
             1,
             {
                 "description": "probando el testing... otra vez",
-                "date_exp": "2025-12-12",
+                "date_exp": "2030-10-10",
                 "state": db_models.State.EN_PROCESO,
                 "exclude_user_ids": [1],
                 "append_user_ids": [2],
@@ -147,14 +149,14 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
         (
             1000,
             1,
-            {"description": "probando el testing", "date_exp": "2025-10-10"},
+            {"description": "probando el testing", "date_exp": "2030-10-10"},
             400,
             "User with user_id 1 is not in project with project_id 1000",
         ),
         (
             1,
             1000,
-            {"description": "probando el testing", "date_exp": "2025-10-10"},
+            {"description": "probando el testing", "date_exp": "2030-10-10"},
             404,
             "Task with task_id 1000 is not in Project with project_id 1",
         ),
@@ -163,7 +165,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
             1,
             {
                 "description": "probando el testing",
-                "date_exp": "2025-10-10",
+                "date_exp": "2030-10-10",
                 "exclude_user_ids": [100000],
             },
             400,
@@ -174,7 +176,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
             1,
             {
                 "description": "probando el testing",
-                "date_exp": "2025-10-10",
+                "date_exp": "2030-10-10",
                 "append_user_ids": [3],
             },
             400,
@@ -185,7 +187,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
             1,
             {
                 "description": "probando el testing",
-                "date_exp": "2025-10-10",
+                "date_exp": "2030-10-10",
                 "append_user_ids": [2],
             },
             400,
@@ -196,7 +198,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
             1,
             {
                 "description": "probando el testing",
-                "date_exp": "2025-10-10",
+                "date_exp": "2030-10-10",
                 "append_user_ids": [100000],
             },
             404,
@@ -239,4 +241,3 @@ async def test_get_users_for_task(async_client, auth_headers, clean_redis):
 
     response = await async_client.get("/task/1/users", headers=auth_headers)
     assert response.status_code == 200
-

@@ -68,7 +68,9 @@ def test_get_all_tasks_to_project_error(mocker):
     mock_session.exec.side_effect = SQLAlchemyError("db error")
 
     with pytest.raises(DatabaseError):
-        repo.get_all_task_to_project(1, 1, 1, 1, [TypeOfLabel.API], [State.CANCELADO])
+        repo.get_all_task_to_project(
+            project_id=1, limit=1, skip=0, labels=None, state=None
+        )
 
 
 def test_get_user_for_task_error(mocker):
