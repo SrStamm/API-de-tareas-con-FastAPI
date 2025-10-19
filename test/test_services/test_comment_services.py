@@ -17,7 +17,7 @@ def test_get_all_comments_not_found_error(mocker):
     service = CommentService(mock_comment_repo, mock_task_serv)
 
     with pytest.raises(CommentNotFoundError):
-        service.get_all_comments(1, 1)
+        service.get_all_comments(task_id=1)
 
 
 @pytest.mark.asyncio
