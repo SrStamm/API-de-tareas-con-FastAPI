@@ -94,7 +94,6 @@ class ReadLabel(BaseModel):
 
 class ReadTask(BaseModel):
     task_id: int = Field(examples=[1])
-    title: str
     project_id: int = Field(examples=[1])
     title: str = Field(examples=["TaskAPI"])
     description: str | None = Field(default=None, examples=["Actualizar los datos"])

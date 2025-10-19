@@ -130,7 +130,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
             1,
             {
                 "description": "probando el testing... otra vez",
-                "date_exp": "2025-10-10",
+                "date_exp": "2030-10-10",
                 "state": db_models.State.EN_PROCESO,
                 "exclude_user_ids": [1],
                 "append_user_ids": [2],
@@ -149,7 +149,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
         (
             1000,
             1,
-            {"description": "probando el testing", "date_exp": "2025-10-10"},
+            {"description": "probando el testing", "date_exp": "2030-10-10"},
             400,
             "User with user_id 1 is not in project with project_id 1000",
         ),
