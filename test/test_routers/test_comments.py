@@ -1,46 +1,45 @@
 import pytest
 from conftest import (
     auth_headers,
-    auth_headers2,
     test_create_project_init_for_tasks,
+    test_create_task_init,
     async_client,
     client,
 )
-from models import schemas, db_models, exceptions
-from api.v1.routers import comment
-from sqlalchemy.exc import SQLAlchemyError
-from fastapi import Request
 
 
+@pytest.mark.asyncio
 async def test_create_comment(
-    async_client, auth_headers, test_create_project_init_for_tasks
+    async_client,
+    auth_headers,
+    test_create_project_init_for_tasks,
+    test_create_task_init,
 ):
     response = await async_client.post(
-        f"/task/1",
-        headers=auth_headers,
-        json={"description": "@moure aaaaa", "date_exp": "2030-12-30", "user_ids": [1]},
-    )
-    assert response.status_code == 200
-
-    response = await async_client.post(
-        f"/task/1/comments",
+        "/task/1/comments",
         headers=auth_headers,
         json={"content": "@mirko esto es un comentario"},
     )
+
+    print("Response body:", response.json())
+
     assert response.status_code == 200
     assert response.json() == {"detail": "New comment created"}
 
     response = await async_client.post(
-        f"/task/1/comments",
+        "/task/1/comments",
         headers=auth_headers,
         json={"content": "esto es otro comentario"},
     )
+
+    print("Response body:", response.json())
     assert response.status_code == 200
     assert response.json() == {"detail": "New comment created"}
 
 
+@pytest.mark.asyncio
 def test_get_comment(client, auth_headers):
-    response = client.get(f"/task/1/comments", headers=auth_headers)
+    response = client.get("/task/1/comments", headers=auth_headers)
     assert response.status_code == 200
     comments = response.json()
     assert isinstance(comments, list)
@@ -59,9 +58,10 @@ def test_get_comment(client, auth_headers):
         )
 
 
+@pytest.mark.asyncio
 def test_update_comment(client, auth_headers):
     response = client.patch(
-        f"/task/1/comments/1",
+        "/task/1/comments/1",
         headers=auth_headers,
         json={"content": "esto es un comentario actualizado"},
     )
@@ -69,15 +69,16 @@ def test_update_comment(client, auth_headers):
     assert response.json() == {"detail": "Comment successfully updated"}
 
 
+@pytest.mark.asyncio
 def test_delete_comment(client, auth_headers):
-    response = client.delete(f"/task/1/comments/2", headers=auth_headers)
+    response = client.delete("/task/1/comments/2", headers=auth_headers)
     assert response.status_code == 200
     assert response.json() == {"detail": "Comment successfully deleted"}
 
 
+@pytest.mark.asyncio
 def test_get_all_comments(client, auth_headers):
-    response = client.get(f"/task/1/comments/all", headers=auth_headers)
+    response = client.get("/task/1/comments/all", headers=auth_headers)
     assert response.status_code == 200
     comments = response.json()
     assert len(comments) == 2
-
