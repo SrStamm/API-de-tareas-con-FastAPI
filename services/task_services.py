@@ -204,7 +204,7 @@ class TaskService:
             )
 
             await cache_manager.delete_pattern(
-                f"task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*",
+                f"task:users:project_id:{project_id}:user_id:*:state:*:labels:*:limit:*:offset:*",
                 "delete",
             )
 
@@ -400,7 +400,7 @@ class TaskService:
                     )
 
             await cache_manager.delete_pattern(
-                f"task:users:project_id:{project_id}:state:*:labels:*:user_id:*:limit:*:offset:*",
+                f"task:users:project_id:{project_id}:user_id:*:state:*:labels:*:limit:*:offset:*",
                 "update_task",
             )
 
