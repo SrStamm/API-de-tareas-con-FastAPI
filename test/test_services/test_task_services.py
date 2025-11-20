@@ -2,6 +2,7 @@ from models.db_models import Project_Permission, Task, User
 from models.exceptions import (
     DatabaseError,
     TaskIsAssignedError,
+    TaskIsNotAssignedError,
     TaskNotFound,
     NotAuthorized,
 )
@@ -31,7 +32,7 @@ def test_found_user_assigned_to_task_error(mocker):
     service = TaskService(mock_task_repo, mock_user_ser, mock_proj_ser)
     mock_task_repo.get_task_is_asigned.return_value = None
 
-    with pytest.raises(TaskIsAssignedError):
+    with pytest.raises(TaskIsNotAssignedError):
         service.found_user_assigned_to_task(1, 1)
 
 

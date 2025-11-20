@@ -71,6 +71,7 @@ class TaskService:
                 ReadTask(
                     task_id=task.task_id,
                     project_id=task.project_id,
+                    title=task.title,
                     description=task.description,
                     date_exp=task.date_exp,
                     state=task.state,

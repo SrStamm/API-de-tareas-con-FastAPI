@@ -1,8 +1,13 @@
+from dotenv import load_dotenv
+
+load_dotenv(".env.test")
+
 import sys
 import os
 import pytest
 import pytest_asyncio
 import errno
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -23,11 +28,13 @@ engine = create_engine("sqlite:///./test/test.db")
 
 PASSWORD = "0000"
 
+
 @pytest_asyncio.fixture(scope="session")
 def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
 
 @pytest.fixture(scope="module")
 def test_db():
@@ -221,3 +228,19 @@ async def test_create_project_init_for_tasks(
 
     await async_client.post("/project/1/1/2", headers=auth_headers)
 
+
+@pytest.fixture
+async def test_create_task_init(async_client, auth_headers):
+    response = await async_client.post(
+        "/task/1",
+        headers=auth_headers,
+        json={
+            "title": "test",
+            "description": "probando el testing",
+            "date_exp": "2025-12-30",
+            "user_ids": [1],
+        },
+    )
+    print("Response status:", response.status_code)
+    print("Response body:", response.json())
+    assert response.status_code == 200
