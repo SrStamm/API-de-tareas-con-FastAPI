@@ -41,7 +41,7 @@ async def get_groups(
     description=""" The authenticated user creates a new group, needs a 'name', and an optional 'description'.
                         The user is automatically part of the group """,
     responses={
-        201: {"description": "Group created", "model": responses.GroupCreateSucces},
+        201: {"description": "Group created"},
         500: {
             "description": "Internal error",
             "model": responses.DatabaseErrorResponse,
@@ -54,7 +54,7 @@ async def create_group(
     new_group: schemas.CreateGroup,
     user: User = Depends(get_current_user),
     group_service: GroupService = Depends(get_group_service),
-):
+) -> schemas.ReadGroup:
     return await group_service.create_group(new_group, user.user_id)
 
 
@@ -81,12 +81,13 @@ async def update_group(
     updated_group: schemas.UpdateGroup,
     auth_data: dict = Depends(require_role(roles=["admin", "editor"])),
     group_service: GroupService = Depends(get_group_service),
-):
+) -> schemas.ReadGroup:
+
     actual_role = auth_data["role"]
-    actual_user_id = auth_data["user"]
+    actual_user = auth_data["user"]
 
     return await group_service.update_group(
-        group_id, updated_group, actual_role, actual_user_id
+        group_id, updated_group, actual_role, actual_user.user_id
     )
 
 

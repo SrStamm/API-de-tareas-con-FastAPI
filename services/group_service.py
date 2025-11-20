@@ -124,10 +124,10 @@ class GroupService:
             logger.error(f"[GroupService.get_users_in_group] Error: {e}")
             raise
 
-    async def create_group(self, new_group: CreateGroup, user_id: int):
+    async def create_group(self, new_group: CreateGroup, user_id: int) -> ReadGroup:
         try:
             # Create a new group
-            self.group_repo.create(new_group, user_id)
+            new_group = self.group_repo.create(new_group, user_id)
 
             # Delete cache
             await cache_manager.delete_pattern(
@@ -138,7 +138,7 @@ class GroupService:
                 f"groups:user_id:{user_id}:limit:*:offset:*", "create_group"
             )
 
-            return {"detail": "Se ha creado un nuevo grupo de forma exitosa"}
+            return new_group
         except DatabaseError as e:
             logger.error(f"[services.create_group] Repo failed: {str(e)}")
             raise
@@ -149,14 +149,14 @@ class GroupService:
         update_group: UpdateGroup,
         actual_user_role: Group_Role,
         user_id: int,
-    ):
+    ) -> ReadGroup :
         try:
             actual_group = self.get_group_or_404(group_id)
 
             if actual_user_role not in ("admin", "editor"):
                 raise exceptions.NotAuthorized(user_id)
 
-            self.group_repo.update(actual_group, update_group)
+            group_updated = self.group_repo.update(actual_group, update_group)
 
             await cache_manager.delete_pattern(
                 "groups:limit:*:offset:*", "update_group"
@@ -166,7 +166,7 @@ class GroupService:
                 f"groups:user_id:{user_id}:limit:*:offset:*", "update_group"
             )
 
-            return {"detail": "Se ha actualizado la informacion del grupo"}
+            return group_updated
 
         except DatabaseError as e:
             logger.error(f"[services.update_group] Repo failed: {str(e)}")

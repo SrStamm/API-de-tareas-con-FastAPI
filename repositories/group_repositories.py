@@ -92,7 +92,7 @@ class GroupRepository:
             self.session.add(user_in_group)
 
             self.session.commit()
-            self.session.refresh(new_group)
+            self.session.refresh(new_group, attribute_names=["users"])
             return new_group
 
         except SQLAlchemyError as e:
@@ -116,7 +116,8 @@ class GroupRepository:
                 actual_group.description = update_group.description
 
             self.session.commit()
-            return
+            self.session.refresh(actual_group, attribute_names=["users"])
+            return actual_group
 
         except SQLAlchemyError as e:
             logger.error(f"[GroupRepository.update] Erro: {e}")
