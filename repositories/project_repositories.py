@@ -95,6 +95,8 @@ class ProjectRepository:
 
             self.session.add(admin)
             self.session.commit()
+            self.session.refresh(new_project)
+            return new_project
 
         except SQLAlchemyError as e:
             logger.error(f"[ProjectRepository.create] Error: {e}")

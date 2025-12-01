@@ -163,13 +163,13 @@ class ProjectService:
         try:
             self.group_serv.get_group_or_404(group_id)
 
-            self.project_repo.create(group_id, user_id, project)
+            new_project = self.project_repo.create(group_id, user_id, project)
 
             await cache_manager.delete_pattern(
                 f"projects:group_id:{group_id}:limit:*:offset:*", "create_project"
             )
 
-            return {"detail": "Se ha creado un nuevo proyecto de forma exitosa"}
+            return new_project
         except DatabaseError as e:
             logger.error(f"[project_service.create_project] Error: {e}")
             raise
