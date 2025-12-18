@@ -285,7 +285,7 @@ def get_chat(
             .where(
                 db_models.ProjectChat.project_id == project_id,
             )
-            .order_by(db_models.ProjectChat.timestamp.desc())
+            .order_by(db_models.ProjectChat.timestamp.asc())
             .limit(limit)
             .offset(skip)
         )

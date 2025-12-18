@@ -56,7 +56,6 @@ def get_all_comments(
     "/comments",
     summary="Create a new comment",
     description='Create a new comment on a specific task. Need a "content". If mentionated a user, he receives a notification',
-    response_model=responses.CommentCreateSucces,
     responses={
         201: {"detail": "Comment successfully created", "model": schemas.CreateComment},
         404: {"detail": "Comments in Task not found", "model": responses.NotFound},

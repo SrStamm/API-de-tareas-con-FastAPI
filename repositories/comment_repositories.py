@@ -43,6 +43,8 @@ class CommentRepository:
             )
             self.session.add(add_comment)
             self.session.commit()
+            self.session.refresh(add_comment)
+            return add_comment
         except SQLAlchemyError as e:
             self.session.rollback()
             raise DatabaseError(e, 'create')

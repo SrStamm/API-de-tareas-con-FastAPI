@@ -36,7 +36,7 @@ class CommentService:
 
     async def create(self, comment: CreateComment, task_id: int, user_id: int):
         try:
-            self.comment_repo.create(comment, task_id, user_id)
+            new_comment = self.comment_repo.create(comment, task_id, user_id)
 
             users = self.comment_repo.extract_valid_mentions(comment.content)
 
@@ -48,7 +48,7 @@ class CommentService:
                     )
                     await manager.send_to_user(message=payload, user_id=user_id)
 
-            return {"detail": "New comment created"}
+            return new_comment
         except DatabaseError as e:
             logger.error(f"[CommentService.create] Repo failed: {str(e)}")
             raise
