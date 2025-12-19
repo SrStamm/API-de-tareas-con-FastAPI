@@ -94,7 +94,9 @@ async def test_update_group(async_client, auth_headers):
         json={"name": "probando el update", "description": "asfkasklfn"},
     )
     assert response.status_code == 200
-    assert response.json() == {"detail": "Se ha actualizado la informacion del grupo"}
+
+    group = response.json()
+    assert all(key in group for key in ["description", "group_id", "name", "users"])
 
 
 @pytest.mark.asyncio
