@@ -9,13 +9,20 @@ async def test_create_group(async_client, auth_headers, test_user2):
         "/group", headers=auth_headers, json={"name": "probando"}
     )
     assert response.status_code == 200
-    assert response.json() == {"detail": "Se ha creado un nuevo grupo de forma exitosa"}
+
+    first_group = response.json()
+    assert all(
+        key in first_group for key in ["description", "group_id", "name", "users"]
+    )
 
     response = await async_client.post(
         "/group", headers=auth_headers, json={"name": "test"}
     )
     assert response.status_code == 200
-    assert response.json() == {"detail": "Se ha creado un nuevo grupo de forma exitosa"}
+    second_group = response.json()
+    assert all(
+        key in second_group for key in ["description", "group_id", "name", "users"]
+    )
 
     hola = test_user2
 
