@@ -24,7 +24,12 @@ async def test_create_comment(
     print("Response body:", response.json())
 
     assert response.status_code == 200
-    assert response.json() == {"detail": "New comment created"}
+    first_comment = response.json()
+
+    assert all(
+        key in first_comment
+        for key in ["comment_id", "content", "created_at", "is_deleted", "task_id"]
+    )
 
     response = await async_client.post(
         "/task/1/comments",
@@ -34,7 +39,11 @@ async def test_create_comment(
 
     print("Response body:", response.json())
     assert response.status_code == 200
-    assert response.json() == {"detail": "New comment created"}
+    second_comment = response.json()
+    assert all(
+        key in second_comment
+        for key in ["comment_id", "content", "created_at", "is_deleted", "task_id"]
+    )
 
 
 @pytest.mark.asyncio

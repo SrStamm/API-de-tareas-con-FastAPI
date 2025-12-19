@@ -28,12 +28,22 @@ class CommentRepository:
             for comment_obj, username in comments
         ]
 
-        print("comentario: ", comment_model)
         return comment_model
 
     def get_all_comments(self, task_id):
-        stmt = select(Task_comments).where(Task_comments.task_id == task_id)
-        return self.session.exec(stmt).all()
+        stmt = select(Task_comments, User.username).where(
+            Task_comments.task_id == task_id,
+            Task_comments.user_id == User.user_id,
+        )
+
+        comments = self.session.exec(stmt).all()
+
+        comment_model = [
+            {**comment_obj.model_dump(), "username": username}
+            for comment_obj, username in comments
+        ]
+
+        return comment_model
 
     def extract_valid_mentions(self, content: str) -> List[User]:
         mentions_raw = re.findall(r"@(\w+)", content)
