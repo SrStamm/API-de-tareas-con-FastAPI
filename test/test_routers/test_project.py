@@ -59,7 +59,11 @@ async def test_create_project(
         json={"title": "creando un proyecto"},
     )
     assert response.status_code == status
-    assert response.json() == {"detail": detail}
+    project = response.json()
+    assert all(
+        key in project
+        for key in ["description", "group_id", "project_id", "title", "date_at"]
+    )
 
 
 @pytest.mark.asyncio
