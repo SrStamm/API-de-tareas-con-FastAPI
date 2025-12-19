@@ -158,6 +158,7 @@ class ReadComment(BaseModel):
     comment_id: int
     task_id: int
     user_id: int
+    username: str
     content: str
     created_at: dt
     update_at: dt
