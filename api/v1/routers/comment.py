@@ -23,7 +23,7 @@ router = APIRouter(prefix="/task/{task_id}", tags=["Comment"])
 def get_comments(
     request: Request,
     task_id: int,
-    user: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ) -> List[schemas.ReadComment]:
     return comment_serv.get_comments(task_id)

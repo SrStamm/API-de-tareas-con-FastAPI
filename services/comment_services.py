@@ -1,4 +1,4 @@
-from models.schemas import CreateComment, UpdateComment
+from models.schemas import CreateComment, ReadComment, UpdateComment
 from models.exceptions import (
     CommentNotFoundError,
     DatabaseError,

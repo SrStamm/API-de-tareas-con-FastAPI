@@ -15,10 +15,21 @@ class CommentRepository:
         return self.session.exec(stmt).first()
 
     def get_comments(self, task_id: int):
-        stmt = select(Task_comments).where(
-            Task_comments.task_id == task_id, Task_comments.is_deleted == False
+        stmt = select(Task_comments, User.username).where(
+            Task_comments.task_id == task_id,
+            Task_comments.is_deleted == False,
+            Task_comments.user_id == User.user_id,
         )
-        return self.session.exec(stmt).all()
+
+        comments = self.session.exec(stmt).all()
+
+        comment_model = [
+            {**comment_obj.model_dump(), "username": username}
+            for comment_obj, username in comments
+        ]
+
+        print("comentario: ", comment_model)
+        return comment_model
 
     def get_all_comments(self, task_id):
         stmt = select(Task_comments).where(Task_comments.task_id == task_id)
@@ -47,7 +58,7 @@ class CommentRepository:
             return add_comment
         except SQLAlchemyError as e:
             self.session.rollback()
-            raise DatabaseError(e, 'create')
+            raise DatabaseError(e, "create")
         except Exception:
             self.session.rollback()
             raise
@@ -61,7 +72,7 @@ class CommentRepository:
             self.session.commit()
         except SQLAlchemyError as e:
             self.session.rollback()
-            raise DatabaseError(e, 'update')
+            raise DatabaseError(e, "update")
         except Exception:
             self.session.rollback()
             raise
@@ -72,7 +83,7 @@ class CommentRepository:
             self.session.commit()
         except SQLAlchemyError as e:
             self.session.rollback()
-            raise DatabaseError(e, 'delete')
+            raise DatabaseError(e, "delete")
         except Exception:
             self.session.rollback()
             raise
