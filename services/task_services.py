@@ -277,7 +277,7 @@ class TaskService:
                         message=outgoing_event_json, user_id=user_id
                     )
 
-            return {"detail": "A task has been successfully updated"}
+            return task
 
         except DatabaseError as e:
             logger.error(f"[TaskService.update_task] Error: {e}")
