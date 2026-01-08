@@ -1,4 +1,3 @@
-from services.cache_service import cache_manager
 from repositories.user_repositories import UserRepository
 from core.logger import logger
 from models.exceptions import (
@@ -42,24 +41,7 @@ class UserService:
 
     async def get_all_users(self, limit: int, skip: int):
         try:
-            key = f"users:limit:{limit}:offset:{skip}"
-            cached = await cache_manager.get(key, "get_all_users")
-            if cached:
-                return [ReadUser(**user) for user in cached]
-
-            results = self.user_repo.get_all_users(limit, skip)
-
-            to_cache = [
-                ReadUser(user_id=user_id, username=username)
-                for user_id, username in results
-            ]
-
-            # Guarda la respuesta
-            await cache_manager.set(
-                key, [user.model_dump() for user in to_cache], "get_all_users", 600
-            )
-
-            return to_cache
+            return self.user_repo.get_all_users(limit, skip)
 
         except Exception as e:
             logger.error(f"[user_services.get_all_users] Unexpected error: {str(e)}")
@@ -71,8 +53,6 @@ class UserService:
 
             self.user_repo.create(new_user)
 
-            await cache_manager.delete_pattern("users:limit:*:offset:*", "create_user")
-
             return {"detail": "Se ha creado un nuevo usuario con exito"}
         except DatabaseError as e:
             logger.error(f"[user_services.create_user] Repo failed: {str(e)}")
@@ -83,11 +63,6 @@ class UserService:
 
     async def update_user(self, user: User, update_user: UpdateUser):
         try:
-            if user.username != update_user.username and update_user.username:
-                await cache_manager.delete_pattern(
-                    "users:limit:*:offset:*", "update_user"
-                )
-
             self.user_repo.update(user=user, update_user=update_user)
             return {"detail": "Se ha actualizado el usuario con exito"}
 
@@ -100,9 +75,6 @@ class UserService:
     async def delete_user(self, user: User):
         try:
             self.user_repo.delete(user)
-
-            await cache_manager.delete_pattern("users:limit:*:offset:*", "delete_user")
-
             return {"detail": "Se ha eliminado el usuario"}
         except DatabaseError as e:
             logger.error(f"[user_services.delete_user] Repo failed: {str(e)}")
