@@ -1,4 +1,3 @@
-from services.cache_service import cache_manager
 from repositories.project_repositories import ProjectRepository
 from services.group_service import GroupService
 from services.user_services import UserService
@@ -11,11 +10,9 @@ from models.exceptions import (
     UserInProjectError,
 )
 from models.schemas import (
-    ReadProject,
     ReadBasicProject,
     CreateProject,
     UpdateProject,
-    ReadProjectUser,
     UpdatePermissionUser,
 )
 from core.logger import logger
@@ -57,61 +54,17 @@ class ProjectService:
         self, user_id: int, limit: int, skip: int
     ) -> List[ReadBasicProject]:
         try:
-            key = f"project:user:user_id:{user_id}:limit:{limit}:offset:{skip}"
-            cached = await cache_manager.get(key, "get_projects_iam")
+            return self.project_repo.get_all_project_by_user(user_id, limit, skip)
 
-            # Devuelve si es verdad
-            if cached:
-                return [ReadBasicProject.model_validate(project) for project in cached]
-
-            found_projects = self.project_repo.get_all_project_by_user(
-                user_id, limit, skip
-            )
-
-            # Cachea la respuesta
-            to_cache = [
-                {
-                    "group_id": group_id,
-                    "project_id": project_id,
-                    "title": title,
-                    "description": description,
-                    # Nota: no hay usuarios en esta tupla, así que quizás no debas incluir "users"
-                }
-                for (project_id, group_id, title, description) in found_projects
-            ]
-
-            # Guarda la respuesta
-            await cache_manager.set(key, to_cache, "get_projects_iam")
-
-            return to_cache
         except DatabaseError as e:
             logger.error(f"[project_service.get_projects_iam] Error: {e}")
             raise
 
     async def get_all_projects(self, group_id: int, limit: int, skip: int):
         try:
-            key = f"projects:group_id:{group_id}:limit:{limit}:offset:{skip}"
-            cached = await cache_manager.get(key, "get_all_projects")
-
-            # Devuelve si es verdad
-            if cached:
-                return [ReadProject.model_validate(project) for project in cached]
-
             self.group_serv.get_group_or_404(group_id)
 
-            found_projects = self.project_repo.get_all_projects(group_id, limit, skip)
-
-            to_cache = [
-                {
-                    **project.model_dump(),
-                    "users": [user.model_dump() for user in project.users],
-                }
-                for project in found_projects
-            ]
-
-            await cache_manager.set(key, to_cache, "get_all_projects")
-
-            return to_cache
+            return self.project_repo.get_all_projects(group_id, limit, skip)
 
         except DatabaseError as e:
             logger.error(f"[project_service.get_all_projects] Error: {e}")
@@ -121,17 +74,6 @@ class ProjectService:
         self, group_id: int, project_id: int, limit: int, skip: int
     ):
         try:
-            key = f"project:users:group_id:{group_id}:project_id:{project_id}:limit:{limit}:offset:{skip}"
-            cached = await cache_manager.get(key, "get_users_in_project")
-
-            if cached:
-                try:
-                    return [ReadProjectUser.model_validate(item) for item in cached]
-                except Exception as e:
-                    logger.error(
-                        f"[get_user_in_project] Cache deserialization error: {str(e)}"
-                    )
-
             self.found_project_or_404(group_id, project_id)
 
             results = self.project_repo.get_users_in_project(project_id, limit, skip)
@@ -142,19 +84,7 @@ class ProjectService:
                 )
                 raise UsersNotFoundInProjectError(project_id=project_id)
 
-            # El resultado son tuplas, entonces se debe hacer lo siguiente para que devuelva la informacion solicitada
-            to_cache = [
-                ReadProjectUser(
-                    user_id=user_id, username=username, permission=permission
-                )
-                for user_id, username, permission in results
-            ]
-
-            await cache_manager.set(
-                key, [user.model_dump() for user in to_cache], "get_user_in_project"
-            )
-
-            return to_cache
+            return results
         except DatabaseError as e:
             logger.error(f"[project_service.get_users_in_project] Error: {e}")
             raise
@@ -164,10 +94,6 @@ class ProjectService:
             self.group_serv.get_group_or_404(group_id)
 
             new_project = self.project_repo.create(group_id, user_id, project)
-
-            await cache_manager.delete_pattern(
-                f"projects:group_id:{group_id}:limit:*:offset:*", "create_project"
-            )
 
             return new_project
         except DatabaseError as e:
@@ -182,10 +108,6 @@ class ProjectService:
 
             self.project_repo.update(found_project, update_project)
 
-            await cache_manager.delete_pattern(
-                f"projects:group_id:{group_id}:limit:*:offset:*", "update_project"
-            )
-
             return {"detail": "Se ha actualizado la informacion del projecto"}
 
         except DatabaseError as e:
@@ -199,14 +121,6 @@ class ProjectService:
             found_project = self.found_project_or_404(group_id, project_id)
 
             self.project_repo.delete(found_project)
-
-            await cache_manager.delete_pattern(
-                f"projects:group_id:{group_id}:limit:*:offset:*", "delete_project"
-            )
-            await cache_manager.delete_pattern(
-                f"project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
-                "delete_project",
-            )
 
             return {"detail": "Se ha eliminado el proyecto"}
 
@@ -246,15 +160,6 @@ class ProjectService:
             # Envia el evento
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
-            # Elimina cache
-            await cache_manager.delete_pattern(
-                f"project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
-                "add_user",
-            )
-            await cache_manager.delete_pattern(
-                f"projects:group_id:{group_id}:limit:*:offset:*", "add_user"
-            )
-
             return {"detail": "El usuario ha sido agregado al proyecto"}
 
         except DatabaseError as e:
@@ -288,15 +193,6 @@ class ProjectService:
 
                 # Envia el evento
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
-
-                # Elimina cache
-                await cache_manager.delete_pattern(
-                    f"project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
-                    "remove_user",
-                )
-                await cache_manager.delete_pattern(
-                    f"projects:group_id:{group_id}:limit:*:offset:*", "remove_user"
-                )
 
                 return {"detail": "El usuario ha sido eliminado del proyecto"}
             else:
@@ -337,11 +233,6 @@ class ProjectService:
             )
 
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
-
-            await cache_manager.delete_pattern(
-                f"project:users:group_id:{group_id}:project_id:{project_id}:limit:*:offset:*",
-                "update_user_permission_in_project",
-            )
 
             return {"detail": "Se ha cambiado los permisos del usuario en el proyecto"}
 
