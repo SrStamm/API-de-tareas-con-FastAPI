@@ -237,7 +237,7 @@ async def test_create_task_init(async_client, auth_headers):
         json={
             "title": "test",
             "description": "probando el testing",
-            "date_exp": "2025-12-30",
+            "date_exp": "2030-12-30",
             "user_ids": [1],
         },
     )
