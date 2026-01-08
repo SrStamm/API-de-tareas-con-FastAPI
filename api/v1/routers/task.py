@@ -65,7 +65,7 @@ async def get_users_for_task(
     task_id: int,
     limit: int = 10,
     skip: int = 0,
-    user: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
     task_serv: TaskService = Depends(get_task_service),
 ) -> List[schemas.ReadUser]:
     return await task_serv.get_users_for_task(task_id, limit, skip)
@@ -98,11 +98,11 @@ async def get_task_in_project(
     skip: int = 0,
     labels: List[TypeOfLabel] = Query(default=None),
     state: List[State] = Query(default=None),
-    user: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
     task_serv: TaskService = Depends(get_task_service),
 ) -> List[schemas.ReadTaskInProject]:
     return await task_serv.get_all_task_for_project(
-        user.user_id, project_id, limit, skip, labels, state
+        project_id, limit, skip, labels, state
     )
 
 
@@ -178,7 +178,7 @@ async def update_task(
 async def delete_task(
     task_id: int,
     project_id: int,
-    auth_data: dict = Depends(require_permission(permissions=["admin"])),
+    _: dict = Depends(require_permission(permissions=["admin"])),
     task_serv: TaskService = Depends(get_task_service),
 ):
     return await task_serv.delete(task_id, project_id)

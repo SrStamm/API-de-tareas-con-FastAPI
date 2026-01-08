@@ -1,9 +1,8 @@
 from fastapi import HTTPException
 from repositories.task_repositories import TaskRepository
-from services.cache_service import cache_manager
 from services import project_services
 from models.db_models import TypeOfLabel, State, Project_Permission, User
-from models.schemas import ReadTask, ReadUser, ReadTaskInProject, CreateTask, UpdateTask
+from models.schemas import CreateTask, UpdateTask
 from models.exceptions import (
     DatabaseError,
     NotAuthorized,
@@ -57,61 +56,23 @@ class TaskService:
         state: List[State] | None = None,
     ):
         try:
-            key = f"task:user:user_id:{user_id}:labels:{labels}:state:{state}:limit:{limit}:offset:{skip}"
-            cached = await cache_manager.get(key, "get_all_task_for_user")
-
-            if cached:
-                return [ReadTask(task) for task in cached]
-
-            found_tasks = self.task_repo.get_all_task_for_user(
+            return self.task_repo.get_all_task_for_user(
                 user_id, limit, skip, labels, state
             )
 
-            to_cache = [
-                ReadTask(
-                    task_id=task.task_id,
-                    project_id=task.project_id,
-                    title=task.title,
-                    description=task.description,
-                    date_exp=task.date_exp,
-                    state=task.state,
-                    task_label_links=task.task_label_links,
-                )
-                for task in found_tasks
-            ]
-
-            await cache_manager.set(key, to_cache, "get_all_task_for_user")
-
-            return to_cache
         except DatabaseError as e:
             logger.error(f"[TaskService.get_all_task_for_user] Error: {e}")
             raise
 
     async def get_users_for_task(self, task_id: int, limit: int, skip: int):
         try:
-            key = f"task:users:task_id:{task_id}:limit:{limit}:offset:{skip}"
-            cached = await cache_manager.get(key, "get_user_for_task")
-
-            if cached:
-                return [ReadUser(user) for user in cached]
-
-            results = self.task_repo.get_user_for_task(task_id, limit, skip)
-
-            to_cache = [
-                ReadUser(user_id=user_id, username=username)
-                for user_id, username in results
-            ]
-
-            await cache_manager.set(key, to_cache, "get_user_for_task")
-
-            return to_cache
+            return self.task_repo.get_user_for_task(task_id, limit, skip)
         except DatabaseError as e:
             logger.error(f"[TaskService.get_user_for_task] Error: {e}")
             raise
 
     async def get_all_task_for_project(
         self,
-        user_id: int,
         project_id: int,
         limit: int,
         skip: int,
@@ -119,38 +80,10 @@ class TaskService:
         state: List[State] | None,
     ):
         try:
-            key = f"task:users:project_id:{project_id}:user_id:{user_id}:labels:{labels}:state:{state}:limit:{limit}:offset:{skip}"
-            cached = await cache_manager.get(key, "get_all_task_for_project")
-
-            if cached:
-                return [ReadTaskInProject(**task) for task in cached]
-
-            results = self.task_repo.get_all_task_to_project(
+            return self.task_repo.get_all_task_to_project(
                 project_id, limit, skip, labels, state
             )
 
-            print("Resultado de tareas en proyecto", results)
-
-            to_cache = [
-                ReadTaskInProject(
-                    task_id=task.task_id,
-                    title=task.title,
-                    description=task.description,
-                    date_exp=task.date_exp,
-                    state=task.state,
-                    asigned=task.asigned,
-                    task_label_links=task.task_label_links,
-                )
-                for task in results
-            ]
-
-            await cache_manager.set(
-                key,
-                [task.model_dump() for task in to_cache],
-                "get_all_task_for_project",
-            )
-
-            return to_cache
         except DatabaseError as e:
             logger.error(f"[TaskService.get_all_task_for_project] Error: {e}")
             raise
@@ -174,17 +107,6 @@ class TaskService:
                 # Envia el evento
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
-                # Elimina cache existente
-                await cache_manager.delete_pattern(
-                    f"task:users:project_id:{project_id}:user_id:*:labels:*:state:*:limit:*:offset:*",
-                    "create",
-                )
-
-                await cache_manager.delete_pattern(
-                    f"task:user:user_id:{user_id}:labels:*:state:*:limit:*:offset:*",
-                    "create",
-                )
-
             return {
                 "detail": "A new task has been created and users have been successusfully assigned"
             }
@@ -199,15 +121,6 @@ class TaskService:
             task = self.found_task_or_404(project_id, task_id)
 
             self.task_repo.delete(task)
-
-            await cache_manager.delete_pattern(
-                f"task:users:task_id:{task_id}:limit:*:offset:*", "delete"
-            )
-
-            await cache_manager.delete_pattern(
-                f"task:users:project_id:{project_id}:user_id:*:state:*:labels:*:limit:*:offset:*",
-                "delete",
-            )
 
             return {"detail": "Task successfully deleted"}
 
@@ -249,15 +162,6 @@ class TaskService:
 
                         self.task_repo.add_user(user_id, task_id)
 
-                        await cache_manager.delete_pattern(
-                            f"task:user:user_id:{user_id}:labels:*:state:*:limit:*:offset:*",
-                            "update_task",
-                        )
-
-                        await cache_manager.delete_pattern(
-                            f"task:users:task_id:{task_id}:limit:*:offset:*",
-                            "update_task",
-                        )
                 else:
                     logger.error(
                         f"[update_task] Unauthorized | User {user.user_id} not authorized for this action"
@@ -281,15 +185,6 @@ class TaskService:
 
                         self.task_repo.remove_user(user_in_task)
 
-                        await cache_manager.delete_pattern(
-                            f"task:user:user_id:{user_id}:labels:*:state:*:limit:*:offset:*",
-                            "update_task",
-                        )
-
-                        await cache_manager.delete_pattern(
-                            f"task:users:task_id:{task_id}:limit:*:offset:*",
-                            "update_task",
-                        )
                 else:
                     logger.error(
                         f"[update_task] Unauthorized | User {user.user_id} not authorized for this action"
@@ -371,15 +266,6 @@ class TaskService:
                         message=outgoing_event_json, user_id=user_id
                     )
 
-                    await cache_manager.delete_pattern(
-                        f"task:user:user_id:{user_id}:labels:*:state:*:limit:*:offset:*",
-                        "update_task",
-                    )
-
-                    await cache_manager.delete_pattern(
-                        f"task:users:task_id:{task_id}:limit:*:offset:*", "update_task"
-                    )
-
             if update_task.exclude_user_ids:
                 for user_id in update_task.exclude_user_ids:
                     outgoing_event_json = format_notification(
@@ -390,20 +276,6 @@ class TaskService:
                     await manager.send_to_user(
                         message=outgoing_event_json, user_id=user_id
                     )
-
-                    await cache_manager.delete_pattern(
-                        f"task:user:user_id:{user_id}:labels:*:state:*:limit:*:offset:*",
-                        "update_task",
-                    )
-
-                    await cache_manager.delete_pattern(
-                        f"task:users:task_id:{task_id}:limit:*:offset:*", "update_task"
-                    )
-
-            await cache_manager.delete_pattern(
-                f"task:users:project_id:{project_id}:user_id:*:state:*:labels:*:limit:*:offset:*",
-                "update_task",
-            )
 
             return {"detail": "A task has been successfully updated"}
 

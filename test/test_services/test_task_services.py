@@ -78,7 +78,7 @@ async def test_get_all_task_for_project_error(mocker):
     )
 
     with pytest.raises(DatabaseError):
-        await service.get_all_task_for_project(1, 1, 1, 1, None, None)
+        await service.get_all_task_for_project(1, 1, 1, None, None)
 
 
 @pytest.mark.asyncio
