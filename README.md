@@ -7,7 +7,14 @@ Permite crear, asignar y completar tareas, con autenticación y control de permi
 Incluye un sistema de chat por proyecto, comentarios en tareas asignadas, control de estado y vencimiento.
 Además de contar con notificaciones al asignarse una tarea, actualizar una tarea asignada, mencionar en un comentario, entre otras.
 
-**Status:** En desarrollo activo / MVP estable
+- **Status:** En desarrollo activo / MVP estable
+- **Deploy:** Servidor en EC2 + RDS (Postgres)
+- **Frontend Deploy:** https://front-task-api-vanilla.vercel.app/dashboard/tasks
+- **Username:** test
+- **Password:** test123
+
+> El frontend es un cliente de demostración.
+> El foco principal del proyecto es el diseño y la arquitectura del backend.
 
 ---
 
@@ -59,6 +66,21 @@ La aplicación sigue una **arquitectura modular en capas**, separando responsabi
 - **Real-time Layer**: WebSockets + Redis Pub/Sub
 
 Esta separación permite escalar funcionalidades, testear la lógica de negocio de forma aislada y desacoplar la API de infraestructuras externas.
+
+```
+Client (React)
+   ↓
+FastAPI (Routers)
+   ↓
+Services
+   ↓
+Repositories
+   ↓
+PostgreSQL
+
+WebSockets → Redis Pub/Sub
+Celery → Redis → Notifications
+```
 
 ---
 
