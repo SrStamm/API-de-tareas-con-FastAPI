@@ -1,6 +1,6 @@
 from repositories.group_repositories import GroupRepository
 from repositories.user_repositories import UserRepository
-from models.schemas import ReadGroup, CreateGroup, ReadGroupUser, UpdateGroup
+from models.schemas import ReadGroup, CreateGroup, UpdateGroup
 from models.db_models import Group_Role, Group
 from models.exceptions import DatabaseError
 from models import exceptions
@@ -50,7 +50,7 @@ class GroupService:
             logger.error(f"[GroupService.get_groups_where_user_in] Error: {e}")
             raise
 
-    async def get_users_in_group(self, group_id: int, limit: int, skip: int):
+    async def get_users_in_group(self, group_id: int):
         try:
             # TODO: Se debe hacer cambios en utils que utilicen los repositorios
             self.get_group_or_404(group_id)
@@ -91,9 +91,7 @@ class GroupService:
             logger.error(f"[services.update_group] Repo failed: {str(e)}")
             raise
 
-    async def delete_group(
-        self, group_id: int, user_id: int
-    ):  # Se agregó el parámetro user_id
+    async def delete_group(self, group_id: int):
         try:
             group = self.get_group_or_404(group_id)
 
@@ -105,7 +103,7 @@ class GroupService:
             logger.error(f"[services.delete_group] Repo failed: {str(e)}")
             raise
 
-    async def append_user(self, group_id, user_id: int, actual_user_id: int):
+    async def append_user(self, group_id, user_id: int):
         try:
             group = self.get_group_or_404(group_id)
 
@@ -204,7 +202,10 @@ class GroupService:
             raise
 
     async def update_user_role(
-        self, group_id: int, user_id: int, role: Group_Role, actual_user_id: int
+        self,
+        group_id: int,
+        user_id: int,
+        role: Group_Role,
     ):
         try:
             self.get_group_or_404(group_id)
