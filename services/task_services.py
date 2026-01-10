@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from repositories.task_repositories import TaskRepository
 from services import project_services
 from models.db_models import TypeOfLabel, State, Project_Permission, User
-from models.schemas import CreateTask, UpdateTask
+from models.schemas import CreateTask, ReadTask, UpdateTask
 from models.exceptions import (
     DatabaseError,
     NotAuthorized,
@@ -107,9 +107,7 @@ class TaskService:
                 # Envia el evento
                 await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
-            return {
-                "detail": "A new task has been created and users have been successusfully assigned"
-            }
+            return new_task
         except DatabaseError as e:
             logger.error(f"[TaskService.create] Error: {e}")
             raise
@@ -137,7 +135,7 @@ class TaskService:
         update_task: UpdateTask,
         user: User,
         permission: Project_Permission,
-    ):
+    ) -> ReadTask:
         try:
             task = self.found_task_or_404(task_id=task_id, project_id=project_id)
 
