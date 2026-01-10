@@ -74,8 +74,8 @@ class CommentService:
                 )
                 raise UserNotAuthorizedInCommentError(user_id, comment_id)
 
-            self.comment_repo.update(update_comment, comment_found)
-            return {"detail": "Comment successfully updated"}
+            comment = self.comment_repo.update(update_comment, comment_found)
+            return comment
         except DatabaseError as e:
             logger.error(f"[CommentService.update] Repo failed: {str(e)}")
             raise
