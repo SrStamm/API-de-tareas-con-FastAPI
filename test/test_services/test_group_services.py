@@ -67,7 +67,7 @@ async def test_get_users_in_group_error(mocker):
     mocker.patch.object(GroupService, "get_group_or_404", return_value=mock_group)
 
     with pytest.raises(DatabaseError):
-        await service.get_users_in_group(1, 10, 10)
+        await service.get_users_in_group(1)
 
 
 @pytest.mark.asyncio
@@ -122,7 +122,7 @@ async def test_delete_group_error(mocker):
     )
 
     with pytest.raises(DatabaseError):
-        await service.delete_group(group_id=1, user_id=1)
+        await service.delete_group(group_id=1)
 
 
 @pytest.mark.asyncio
@@ -144,7 +144,7 @@ async def test_append_user_group_error(mocker):
     service = GroupService(mock_group_repo, mock_user_repo)
 
     with pytest.raises(DatabaseError):
-        await service.append_user(1, 1, 2)
+        await service.append_user(1, 1)
 
 
 @pytest.mark.asyncio
@@ -216,7 +216,7 @@ async def test_update_user_error(mocker):
 
     # Error de base de datos
     with pytest.raises(DatabaseError):
-        await service.update_user_role(1, 1, Group_Role.EDITOR, 2)
+        await service.update_user_role(1, 1, Group_Role.EDITOR)
 
 
 @pytest.mark.asyncio
@@ -233,4 +233,4 @@ async def test_update_user_user_not_found_error(mocker):
 
     # Usuario no existe en el grupo
     with pytest.raises(UserNotInGroupError):
-        await service.update_user_role(1, 1, Group_Role.EDITOR, 2)
+        await service.update_user_role(1, 1, Group_Role.EDITOR)
