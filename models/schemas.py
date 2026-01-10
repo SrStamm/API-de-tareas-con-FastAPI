@@ -166,7 +166,7 @@ class ReadComment(BaseModel):
 
 
 class UpdateComment(BaseModel):
-    content: Optional[str] = Field(default=None, max_length=300)
+    content: str = Field(max_length=300)
     update_at: dt = Field(default_factory=lambda: dt.now(timezone.utc))
     is_deleted: Optional[bool] = Field(default=None)
 
