@@ -75,7 +75,20 @@ def test_update_comment(client, auth_headers):
         json={"content": "esto es un comentario actualizado"},
     )
     assert response.status_code == 200
-    assert response.json() == {"detail": "Comment successfully updated"}
+
+    comment = response.json()
+    assert all(
+        key in comment
+        for key in [
+            "comment_id",
+            "content",
+            "created_at",
+            "task_id",
+            "user_id",
+            "update_at",
+            "is_deleted",
+        ]
+    )
 
 
 @pytest.mark.asyncio
