@@ -157,14 +157,12 @@ class CreateComment(BaseModel):
 class ReadComment(BaseModel):
     comment_id: int
     task_id: int
+    user_id: int
     username: str
     content: str
     created_at: dt
     update_at: dt
     is_deleted: bool
-
-    user_id: int
-    username: str
 
 
 class UpdateComment(BaseModel):

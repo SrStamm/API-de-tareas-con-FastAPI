@@ -15,7 +15,8 @@ class CommentRepository:
             Task_comments.comment_id == comment_id,
             Task_comments.user_id == User.user_id,
         )
-        return self.session.exec(stmt).first()
+        result = self.session.exec(stmt).first()
+        return result[0] if result else None
 
     def get_comments(self, task_id: int):
         stmt = select(Task_comments, User.username).where(
