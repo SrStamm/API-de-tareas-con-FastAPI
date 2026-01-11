@@ -46,7 +46,7 @@ def get_comments(
 def get_all_comments(
     request: Request,
     task_id: int,
-    user: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
     comment_serv: CommentService = Depends(get_comment_service),
 ) -> List[schemas.ReadComment]:
     return comment_serv.get_all_comments(task_id)

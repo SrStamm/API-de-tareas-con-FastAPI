@@ -11,7 +11,10 @@ class CommentRepository:
         self.session = session
 
     def get_comment_by_id(self, comment_id: int):
-        stmt = select(Task_comments).where(Task_comments.comment_id == comment_id)
+        stmt = select(Task_comments, User.username).where(
+            Task_comments.comment_id == comment_id,
+            Task_comments.user_id == User.user_id,
+        )
         return self.session.exec(stmt).first()
 
     def get_comments(self, task_id: int):
