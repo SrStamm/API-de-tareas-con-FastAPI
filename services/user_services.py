@@ -6,7 +6,7 @@ from models.exceptions import (
     UserWithUsernameExist,
     UserWithEmailExist,
 )
-from models.schemas import ReadUser, CreateUser, UpdateUser
+from models.schemas import CreateUser, UpdateUser
 from models.db_models import User
 
 

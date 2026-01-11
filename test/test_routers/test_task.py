@@ -24,7 +24,14 @@ from api.v1.routers import task
                 "label": ["bug"],
             },
             200,
-            "A new task has been created and users have been successusfully assigned",
+            {
+                "date_exp": "2030-10-10T00:00:00",
+                "description": "probando el testing",
+                "project_id": 1,
+                "state": "sin empezar",
+                "task_id": 1,
+                "title": "probando",
+            },
         ),
         (
             1,
@@ -35,7 +42,9 @@ from api.v1.routers import task
                 "user_ids": [3],
             },
             400,
-            "User with user_id 3 is not in project with project_id 1",
+            {
+                "detail": "User with user_id 3 is not in project with project_id 1",
+            },
         ),
         (
             1,
@@ -46,7 +55,9 @@ from api.v1.routers import task
                 "user_ids": [1000],
             },
             404,
-            "User with user_id 1000 not found",
+            {
+                "detail": "User with user_id 1000 not found",
+            },
         ),
     ],
 )
@@ -63,7 +74,7 @@ async def test_create_task(
         f"/task/{project_id}", headers=auth_headers, json=datos
     )
     assert response.status_code == status
-    assert response.json() == {"detail": detail}
+    assert response.json() == detail
 
 
 @pytest.mark.asyncio
@@ -144,21 +155,32 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
                 ],
             },
             200,
-            "A task has been successfully updated",
+            {
+                "date_exp": "2030-10-10T00:00:00",
+                "description": "probando el testing... otra vez",
+                "project_id": 1,
+                "state": "en proceso",
+                "task_id": 1,
+                "title": "probando",
+            },
         ),
         (
             1000,
             1,
             {"description": "probando el testing", "date_exp": "2030-10-10"},
             400,
-            "User with user_id 1 is not in project with project_id 1000",
+            {
+                "detail": "User with user_id 1 is not in project with project_id 1000",
+            },
         ),
         (
             1,
             1000,
             {"description": "probando el testing", "date_exp": "2030-10-10"},
             404,
-            "Task with task_id 1000 is not in Project with project_id 1",
+            {
+                "detail": "Task with task_id 1000 is not in Project with project_id 1",
+            },
         ),
         (
             1,
@@ -169,7 +191,9 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
                 "exclude_user_ids": [100000],
             },
             400,
-            "Task with task_id 1 is NOT assigned to User with user_id 100000",
+            {
+                "detail": "Task with task_id 1 is NOT assigned to User with user_id 100000",
+            },
         ),
         (
             1,
@@ -180,7 +204,9 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
                 "append_user_ids": [3],
             },
             400,
-            "User with user_id 3 is not in project with project_id 1",
+            {
+                "detail": "User with user_id 3 is not in project with project_id 1",
+            },
         ),
         (
             1,
@@ -191,7 +217,9 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
                 "append_user_ids": [2],
             },
             400,
-            "Task with task_id 1 is assigned to User with user_id 2",
+            {
+                "detail": "Task with task_id 1 is assigned to User with user_id 2",
+            },
         ),
         (
             1,
@@ -202,7 +230,9 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
                 "append_user_ids": [100000],
             },
             404,
-            "User with user_id 100000 not found",
+            {
+                "detail": "User with user_id 100000 not found",
+            },
         ),
     ],
 )
@@ -213,7 +243,7 @@ async def test_update_task(
         f"/task/{project_id}/{task_id}", headers=auth_headers, json=datos
     )
     assert response.status_code == status
-    assert response.json() == {"detail": detail}
+    assert response.json() == detail
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,6 @@ from models import schemas, responses
 from models.db_models import User
 from typing import List
 from core.permission import require_role
-from core.logger import logger
 from core.limiter import limiter
 from dependency.group_dependencies import get_group_service, GroupService
 from dependency.auth_dependencies import get_current_user
@@ -82,7 +81,6 @@ async def update_group(
     auth_data: dict = Depends(require_role(roles=["admin", "editor"])),
     group_service: GroupService = Depends(get_group_service),
 ) -> schemas.ReadGroup:
-
     actual_role = auth_data["role"]
     actual_user = auth_data["user"]
 
@@ -109,10 +107,10 @@ async def update_group(
 async def delete_group(
     request: Request,
     group_id: int,
-    auth_data: dict = Depends(require_role(roles=["admin"])),
+    _: dict = Depends(require_role(roles=["admin"])),
     group_service: GroupService = Depends(get_group_service),
 ):
-    return await group_service.delete_group(group_id, auth_data["user"].user_id)
+    return await group_service.delete_group(group_id)
 
 
 @router.get(
@@ -166,11 +164,10 @@ async def append_user_group(
     request: Request,
     group_id: int,
     user_id: int,
-    auth_data: dict = Depends(require_role(roles=["admin", "editor"])),
+    _: dict = Depends(require_role(roles=["admin", "editor"])),
     group_service: GroupService = Depends(get_group_service),
 ):
-    actual_user = auth_data["user"]
-    return await group_service.append_user(group_id, user_id, actual_user.user_id)
+    return await group_service.append_user(group_id, user_id)
 
 
 @router.delete(
@@ -231,14 +228,10 @@ async def update_user_group(
     group_id: int,
     user_id: int,
     update_role: schemas.UpdateRoleUser,
-    auth_data: dict = Depends(require_role(roles=["admin"])),
+    _: dict = Depends(require_role(roles=["admin"])),
     group_service: GroupService = Depends(get_group_service),
 ):
-    actual_user = auth_data["user"]
-
-    return await group_service.update_user_role(
-        group_id, user_id, update_role.role, actual_user.user_id
-    )
+    return await group_service.update_user_role(group_id, user_id, update_role.role)
 
 
 @router.get(
@@ -260,9 +253,7 @@ async def update_user_group(
 async def get_user_in_group(
     request: Request,
     group_id: int,
-    limit: int = 10,
-    skip: int = 0,
-    user: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
     group_service: GroupService = Depends(get_group_service),
 ) -> List[schemas.ReadGroupUser]:
-    return await group_service.get_users_in_group(group_id, limit, skip)
+    return await group_service.get_users_in_group(group_id)

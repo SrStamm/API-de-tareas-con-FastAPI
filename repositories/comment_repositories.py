@@ -75,11 +75,12 @@ class CommentRepository:
 
     def update(self, update_comment: UpdateComment, comment: Task_comments):
         try:
-            if update_comment.content:
-                comment.content = update_comment.content
-
+            comment.content = update_comment.content
             comment.update_at = update_comment.update_at
+
             self.session.commit()
+            self.session.refresh(comment)
+            return comment
         except SQLAlchemyError as e:
             self.session.rollback()
             raise DatabaseError(e, "update")
