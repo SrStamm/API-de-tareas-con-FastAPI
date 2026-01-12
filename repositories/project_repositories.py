@@ -58,6 +58,25 @@ class ProjectRepository:
             logger.error(f"[ProjectRepository.get_all_project_by_user] Error: {e}")
             raise DatabaseError(e, "get_all_project_by_user")
 
+    def get_all_project_by_user_in_group(self, user_id: int, group_id: int):
+        try:
+            stmt = (
+                select(Project)
+                .options(selectinload(Project.users))
+                .join(project_user)
+                .where(
+                    Project.group_id == group_id,
+                    project_user.user_id == user_id,
+                )
+            )
+            return self.session.exec(stmt).all()
+
+        except SQLAlchemyError as e:
+            logger.error(
+                f"[ProjectRepository.get_all_project_by_user_in_group] Error: {e}"
+            )
+            raise DatabaseError(e, "get_all_project_by_user_in_group")
+
     def get_all_projects(self, group_id: int, limit: int, skip: int):
         try:
             stmt = (
