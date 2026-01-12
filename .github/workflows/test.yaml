@@ -89,3 +89,21 @@ jobs:
 
       - name: Run tests
         run: pytest -q --disable-warnings ./test/test_routers
+
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+  
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ec2-user/API-de-tareas-con-FastAPI/
+            git pull origin main
+            docker compose down
+            docker compose up -d --build
