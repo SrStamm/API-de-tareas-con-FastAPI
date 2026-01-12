@@ -257,3 +257,24 @@ async def get_user_in_group(
     group_service: GroupService = Depends(get_group_service),
 ) -> List[schemas.ReadGroupUser]:
     return await group_service.get_users_in_group(group_id)
+
+
+@router.get(
+    "/{group_id}/role",
+    summary="Get role for user in the group",
+    responses={
+        200: {
+            "description": "Rol del Usuario en el Grupo obtenido",
+            "model": schemas.ReadRoleUser,
+        },
+        500: {"description": "error interno", "model": responses.DatabaseErrorResponse},
+    },
+)
+@limiter.limit("60/minute")
+async def get_user_role_in_group(
+    request: Request,
+    group_id: int,
+    user: User = Depends(get_current_user),
+    group_service: GroupService = Depends(get_group_service),
+) -> schemas.ReadRoleUser:
+    return group_service.get_user_data_for_group(user.user_id, group_id)

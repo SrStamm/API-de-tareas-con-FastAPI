@@ -283,3 +283,32 @@ async def get_user_in_project(
     project_serv: ProjectService = Depends(get_project_service),
 ) -> List[schemas.ReadProjectUser]:
     return await project_serv.get_user_in_project(group_id, project_id, limit, skip)
+
+
+@router.get(
+    "/{group_id}/{project_id}/permission",
+    summary="Get permission for user in the project",
+    responses={
+        200: {
+            "description": "User's permission from the project obtained",
+            "model": schemas.ReadPermissionUser,
+        },
+        400: {"description": "Error in request", "model": responses.ErrorInRequest},
+        404: {
+            "description": "Group or project not obtained",
+            "model": responses.NotFound,
+        },
+        500: {
+            "description": "Internal error",
+            "model": responses.DatabaseErrorResponse,
+        },
+    },
+)
+@limiter.limit("20/minute")
+async def get_user_in_project(
+    request: Request,
+    project_id: int,
+    user: User = Depends(get_current_user),
+    project_serv: ProjectService = Depends(get_project_service),
+) -> schemas.ReadPermissionUser:
+    return project_serv.get_access_data_in_project(project_id, user.user_id)

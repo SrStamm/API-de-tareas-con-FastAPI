@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from repositories.project_repositories import ProjectRepository
 from services.group_service import GroupService
 from services.user_services import UserService
@@ -47,6 +48,15 @@ class ProjectService:
         if not user:
             logger.error(f"User {user_id} no encontrado en project {project_id}")
             raise UserNotInProjectError(user_id=user_id, project_id=project_id)
+
+        return user
+
+    def get_access_data_in_project(self, project_id: int, user_id: int):
+        user = self.project_repo.get_user_permission(project_id, user_id)
+
+        if not user:
+            logger.error(f"User {user_id} no encontrado en project {project_id}")
+            raise UserNotInProjectError(user_id, project_id)
 
         return user
 

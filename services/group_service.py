@@ -33,6 +33,18 @@ class GroupService:
 
         return found_user.role
 
+    def get_user_data_for_group(self, user_id: int, group_id: int):
+        try:
+            found_user = self.group_repo.get_role_for_user_in_group(group_id, user_id)
+
+            if not found_user:
+                raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
+
+            return found_user
+        except Exception as e:
+            logger.error(f"[GroupService.get_user_data_for_group] Error: {e}")
+            raise
+
     async def get_groups_with_cache(self, limit: int, skip: int) -> List[ReadGroup]:
         try:
             # Get from repository

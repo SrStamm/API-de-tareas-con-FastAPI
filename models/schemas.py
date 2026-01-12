@@ -37,6 +37,14 @@ class ReadUser(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ReadRoleUser(BaseModel):
+    user_id: int = Field(examples=[1])
+    group_id: int
+    role: Group_Role
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ReadGroupUser(BaseModel):
     user_id: int = Field(examples=[1])
     username: str = Field(examples=["User64"])
@@ -51,6 +59,12 @@ class ReadProjectUser(BaseModel):
     permission: Project_Permission = Field(examples=[Project_Permission.WRITE])
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ReadPermissionUser(BaseModel):
+    user_id: int
+    project_id: int
+    permission: Project_Permission
 
 
 # Task

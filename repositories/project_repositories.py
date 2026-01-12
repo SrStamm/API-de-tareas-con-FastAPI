@@ -3,12 +3,17 @@ from models.db_models import Project, project_user, Project_Permission, User
 from models.schemas import CreateProject, UpdateProject
 from models.exceptions import DatabaseError
 from db.database import Session, select, selectinload, SQLAlchemyError
-from typing import List
 
 
 class ProjectRepository:
     def __init__(self, session: Session):
         self.session = session
+
+    def get_user_permission(self, project_id, user_id: int):
+        stmt = select(project_user).where(
+            project_user.user_id == user_id, project_user.project_id == project_id
+        )
+        return self.session.exec(stmt).first()
 
     def get_project_by_id(self, group_id: int, project_id: int):
         try:
