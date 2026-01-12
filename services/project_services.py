@@ -70,6 +70,14 @@ class ProjectService:
             logger.error(f"[project_service.get_projects_iam] Error: {e}")
             raise
 
+    def get_projects_in_group_where_iam(self, user_id: int, group_id: int):
+        try:
+            return self.project_repo.get_all_project_by_user_in_group(user_id, group_id)
+
+        except DatabaseError as e:
+            logger.error(f"[project_service.get_projects_iam] Error: {e}")
+            raise
+
     async def get_all_projects(self, group_id: int, limit: int, skip: int):
         try:
             self.group_serv.get_group_or_404(group_id)

@@ -3,7 +3,6 @@ from models import schemas, responses
 from models.db_models import User
 from typing import List
 from core.permission import require_permission, require_role
-from core.logger import logger
 from core.limiter import limiter
 from dependency.auth_dependencies import get_current_user
 from dependency.project_dependencies import get_project_service, ProjectService
@@ -37,6 +36,36 @@ async def get_projects_iam(
     project_serv: ProjectService = Depends(get_project_service),
 ) -> List[schemas.ReadBasicProject]:
     return await project_serv.get_projects_iam(user.user_id, limit, skip)
+
+
+@router.get(
+    "/{group_id}/projects",
+    summary="Get all projects on the group where I am",
+    responses={
+        200: {
+            "description": "Projects of the group obtained",
+            "model": schemas.ReadProject,
+        },
+        404: {
+            "description": "Group or proyects not found",
+            "model": responses.NotFound,
+        },
+        500: {
+            "description": "Internal error",
+            "model": responses.DatabaseErrorResponse,
+        },
+    },
+)
+@limiter.limit("20/minute")
+def get_projects_in_group_where_iam(
+    request: Request,
+    group_id: int,
+    user: User = Depends(get_current_user),
+    project_serv: ProjectService = Depends(get_project_service),
+) -> List[schemas.ReadProject]:
+    return project_serv.get_projects_in_group_where_iam(
+        group_id=group_id, user_id=user.user_id
+    )
 
 
 @router.get(
@@ -279,7 +308,7 @@ async def get_user_in_project(
     project_id: int,
     limit: int = 10,
     skip: int = 0,
-    user: User = Depends(get_current_user),
+    _: User = Depends(get_current_user),
     project_serv: ProjectService = Depends(get_project_service),
 ) -> List[schemas.ReadProjectUser]:
     return await project_serv.get_user_in_project(group_id, project_id, limit, skip)
@@ -305,7 +334,7 @@ async def get_user_in_project(
     },
 )
 @limiter.limit("20/minute")
-async def get_user_in_project(
+async def get_user_data_in_project(
     request: Request,
     project_id: int,
     user: User = Depends(get_current_user),
