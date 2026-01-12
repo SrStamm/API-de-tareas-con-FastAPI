@@ -94,6 +94,7 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    environment: production
   
     steps:
       - name: Deploy to EC2
