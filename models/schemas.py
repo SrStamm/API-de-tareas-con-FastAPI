@@ -79,7 +79,7 @@ class CreateTask(BaseModel):
         ],
     )
     date_exp: dt = Field(examples=["2025-10-28"])
-    user_ids: List[int] = Field(examples=[[1, 5, 88]])
+    assigned_user_id: int | None = None
     label: List[TypeOfLabel] | None = None
 
     @field_validator("date_exp")
@@ -87,10 +87,6 @@ class CreateTask(BaseModel):
         if value <= dt.now():
             raise ValueError("La fechad expiración debe ser en el futuro.")
         return value
-
-
-class AsignUser(BaseModel):
-    users: int | List[int] = Field(examples=[[1, 5, 10]])
 
 
 class ReadLabel(BaseModel):
@@ -107,12 +103,13 @@ class ReadLabel(BaseModel):
 
 
 class ReadTask(BaseModel):
-    task_id: int = Field(examples=[1])
-    project_id: int = Field(examples=[1])
+    task_id: int
+    project_id: int
     title: str = Field(examples=["TaskAPI"])
-    description: str | None = Field(default=None, examples=["Actualizar los datos"])
-    date_exp: dt = Field(examples=["2025-10-24"])
-    state: State = Field(examples=[State.EN_PROCESO])
+    description: str | None
+    assigned_user: ReadUser | None
+    date_exp: dt
+    state: State
     task_label_links: List[ReadLabel] | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -124,14 +121,7 @@ class ReadTaskInProject(BaseModel):
     description: str | None = Field(default=None, examples=[])
     date_exp: dt = Field(examples=[])
     state: State = Field(examples=[])
-    asigned: List[ReadUser] = Field(
-        examples=[
-            [
-                {"user_id": 1, "username": "user64"},
-                {"user_id": 2, "username": "user_falso"},
-            ]
-        ]
-    )
+    assigned_user: ReadUser | None
     task_label_links: Optional[List[ReadLabel]] | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -139,13 +129,13 @@ class ReadTaskInProject(BaseModel):
 
 class UpdateTask(BaseModel):
     title: str | None = Field(default=None, examples=["Error en Front"])
+
     description: str | None = Field(
-        default=None, examples=["Eliminar los datos duplicados"]
+        default=None,
     )
     date_exp: dt | None = Field(default=None, examples=["2025-12-20"])
     state: State | None = Field(default=None, examples=[State.CANCELADO])
-    append_user_ids: Optional[List[int]] = Field(default=None, examples=[1])
-    exclude_user_ids: Optional[List[int]] = Field(default=None, examples=[1])
+    assigned_user_id: Optional[int]
 
     remove_label: Optional[List[TypeOfLabel]] | None = Field(
         default=None, examples=[TypeOfLabel.HIGH_PRIORITY, TypeOfLabel.BACKEND]
@@ -274,7 +264,7 @@ class UpdateProject(BaseModel):
     )
 
 
-# Tocken
+# Token
 class Token(BaseModel):
     access_token: str = Field(examples=[])
     token_type: str = Field(examples=["bearer"])
