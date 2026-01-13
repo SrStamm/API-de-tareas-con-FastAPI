@@ -1,4 +1,13 @@
-from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    EmailStr,
+    ConfigDict,
+    ValidationInfo,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 from typing import List, Optional
 from datetime import datetime as dt, timezone
 from .db_models import State, Group_Role, Project_Permission, TypeOfLabel, TaskLabelLink
@@ -295,8 +304,26 @@ class ChatMessage(BaseModel):
     chat_id: int
     project_id: int
     user_id: int
+    username: str
     message: str
     timestamp: dt
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def get_username_from_obj(cls, data):
+        if data.user or data["user"]:
+            return {
+                "chat_id": data.chat_id,
+                "project_id": data.project_id,
+                "user_id": data.user_id,
+                "username": data.user.username,
+                "message": data.message,
+                "timestamp": data.timestamp,
+            }
+
+        raise ValueError
 
 
 class WebSocketEvent(BaseModel):

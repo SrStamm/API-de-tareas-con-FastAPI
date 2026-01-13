@@ -123,6 +123,7 @@ class User(SQLModel, table=True):
     tasks_assigned: Mapped[List["Task"]] = Relationship(back_populates="assigned_user")
     comments: List["Task_comments"] = Relationship(back_populates="user")
     notifications: List["Notifications"] = Relationship(back_populates="user")
+    messages: List["ProjectChat"] = Relationship(back_populates="user")
 
 
 class Task(SQLModel, table=True):
@@ -174,6 +175,7 @@ class ProjectChat(SQLModel, table=True):
     timestamp: dt = Field(default_factory=lambda: dt.now(timezone.utc))
 
     project: Mapped[Optional["Project"]] = Relationship(back_populates="chats")
+    user: Mapped["User"] = Relationship(back_populates="messages")
 
 
 class Session(SQLModel, table=True):
