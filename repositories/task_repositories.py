@@ -2,12 +2,9 @@ from models.exceptions import DatabaseError
 from models.schemas import ReadTask, CreateTask, UpdateTask
 from models.db_models import (
     Task,
-    tasks_user,
     TypeOfLabel,
     State,
     TaskLabelLink,
-    User,
-    project_user,
 )
 from db.database import Session, select, joinedload, func, SQLAlchemyError
 from typing import List
@@ -28,11 +25,9 @@ class TaskRepository:
             logger.error(f"[TaskRepository.get_task_by_id] Error: {e}")
             raise DatabaseError(e, "get_task_by_id")
 
-    def get_task_is_asigned(self, task_id: int, user_id: int):
+    def get_task_is_asigned(self, user_id: int):
         try:
-            stmt = select(tasks_user).where(
-                tasks_user.user_id == user_id, tasks_user.task_id == task_id
-            )
+            stmt = select(Task).where(Task.assigned_user_id == user_id)
             return self.session.exec(stmt).first()
 
         except SQLAlchemyError as e:
@@ -69,8 +64,7 @@ class TaskRepository:
         try:
             stmt = (
                 select(Task)
-                .join(tasks_user, Task.task_id == tasks_user.task_id)
-                .where(tasks_user.user_id == user_id)
+                .where(Task.assigned_user_id == user_id)
                 .options(joinedload(Task.task_label_links))
             )
 
@@ -100,11 +94,7 @@ class TaskRepository:
         state: List[State] | None,
     ):
         try:
-            stmt = (
-                select(Task)
-                .where(Task.project_id == project_id)
-                .options(joinedload(Task.asigned))
-            )
+            stmt = select(Task).where(Task.project_id == project_id)
 
             if labels:
                 stmt = (
@@ -123,35 +113,6 @@ class TaskRepository:
             logger.error(f"[TaskRepository.get_all_task_to_project] Error: {e}")
             raise DatabaseError(e, "get_all_task_to_project")
 
-    def get_user_for_task(self, task_id: int, limit: int, skip: int):
-        try:
-            stmt = (
-                select(User.user_id, User.username)
-                .join(tasks_user, tasks_user.user_id == User.user_id)
-                .where(tasks_user.task_id == task_id)
-                .limit(limit)
-                .offset(skip)
-            )
-            return self.session.exec(stmt).all()
-
-        except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.get_user_for_task] Error: {e}")
-            raise DatabaseError(e, "get_user_for_task")
-
-    def validate_in_task(self, users: List[User], task_id: int):
-        try:
-            stmt = select(User.username, User.user_id).where(
-                tasks_user.user_id == User.user_id,
-                tasks_user.task_id == task_id,
-                User.username.in_(users),
-            )
-
-            return self.session.exec(stmt).all()
-
-        except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.validate_in_task] Error: {e}")
-            raise DatabaseError(e, "validate_in_task")
-
     def create(self, project_id: int, task: CreateTask) -> Task:
         try:
             new_task = Task(
@@ -159,6 +120,7 @@ class TaskRepository:
                 title=task.title,
                 description=task.description,
                 date_exp=task.date_exp,
+                assigned_user_id=task.assigned_user_id,
             )
 
             self.session.add(new_task)
@@ -170,11 +132,6 @@ class TaskRepository:
                     label = TaskLabelLink(task_id=new_task.task_id, label=lb.value)
 
                     self.session.add(label)
-
-            for user_id in task.user_ids:
-                task_user = tasks_user(task_id=new_task.task_id, user_id=user_id)
-                self.session.add(task_user)
-                print(f"Usuario agredado: {user_id}")
 
             self.session.commit()
             return new_task
@@ -193,6 +150,8 @@ class TaskRepository:
                 task.date_exp = update_task.date_exp
             if task.state != update_task.state and update_task.state:
                 task.state = update_task.state
+            if update_task.assigned_user_id:
+                task.assigned_user_id = update_task.assigned_user_id
             self.session.commit()
             return
         except SQLAlchemyError as e:
@@ -215,23 +174,9 @@ class TaskRepository:
             self.session.rollback()
             raise
 
-    def add_user(self, user_id: int, task_id: int):
+    def remove_user(self, task: Task):
         try:
-            new_user = tasks_user(user_id=user_id, task_id=task_id)
-            self.session.add(new_user)
-            self.session.commit()
-            return
-        except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.add_user] Error: {e}")
-            self.session.rollback()
-            raise DatabaseError(e, "add_user")
-        except Exception:
-            self.session.rollback()
-            raise
-
-    def remove_user(self, user: tasks_user):
-        try:
-            self.session.delete(user)
+            task.assigned_user_id = None
             self.session.commit()
             return
         except SQLAlchemyError as e:
