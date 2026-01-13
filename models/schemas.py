@@ -78,13 +78,13 @@ class CreateTask(BaseModel):
             "Debido a varios cambios, se debe actualizar en las siguientes partes..."
         ],
     )
-    date_exp: dt = Field(examples=["2025-10-28"])
+    date_exp: Optional[dt] = Field(default=None, examples=["2025-10-28"])
     assigned_user_id: int | None = None
     label: List[TypeOfLabel] | None = None
 
     @field_validator("date_exp")
     def date_exp_must_be_future(cls, value):
-        if value <= dt.now():
+        if value and value <= dt.now():
             raise ValueError("La fechad expiración debe ser en el futuro.")
         return value
 
@@ -119,7 +119,7 @@ class ReadTaskInProject(BaseModel):
     task_id: int = Field(examples=[1])
     title: str = Field(examples=["TaskAPI"])
     description: str | None = Field(default=None, examples=[])
-    date_exp: dt = Field(examples=[])
+    date_exp: Optional[dt] = Field(default=None, examples=[])
     state: State = Field(examples=[])
     assigned_user: ReadUser | None
     task_label_links: Optional[List[ReadLabel]] | None = None
@@ -135,7 +135,7 @@ class UpdateTask(BaseModel):
     )
     date_exp: dt | None = Field(default=None, examples=["2025-12-20"])
     state: State | None = Field(default=None, examples=[State.CANCELADO])
-    assigned_user_id: Optional[int]
+    assigned_user_id: Optional[int] = Field(default=None)
     remove_assigned_user_id: bool = False
 
     remove_label: Optional[List[TypeOfLabel]] | None = Field(
@@ -147,7 +147,7 @@ class UpdateTask(BaseModel):
 
     @field_validator("date_exp")
     def date_exp_must_be_future(cls, value):
-        if value <= dt.now():
+        if value and value <= dt.now():
             raise ValueError("La fechad expiración debe ser en el futuro.")
         return value
 

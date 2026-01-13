@@ -135,7 +135,7 @@ class Task(SQLModel, table=True):
 
     title: str | None = Field(default=None)
     description: str | None = Field(default=None)
-    date_exp: dt
+    date_exp: Optional[dt] = Field(default=None)
     state: State = Field(default=State.SIN_EMPEZAR)
 
     assigned_user: Optional["User"] = Relationship(
