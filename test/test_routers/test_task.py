@@ -20,7 +20,7 @@ from api.v1.routers import task
                 "title": "probando",
                 "description": "probando el testing",
                 "date_exp": "2030-10-10",
-                "user_ids": [1],
+                "assigned_user_id": 1,
                 "label": ["bug"],
             },
             200,
@@ -31,6 +31,7 @@ from api.v1.routers import task
                 "state": "sin empezar",
                 "task_id": 1,
                 "title": "probando",
+                "assigned_user_id": 1,
             },
         ),
         (
@@ -39,7 +40,7 @@ from api.v1.routers import task
                 "title": "probando",
                 "description": "probando el testing",
                 "date_exp": "2030-10-10",
-                "user_ids": [3],
+                "assigned_user_id": 3,
             },
             400,
             {
@@ -52,7 +53,7 @@ from api.v1.routers import task
                 "title": "probando",
                 "description": "probando el testing",
                 "date_exp": "2030-10-10",
-                "user_ids": [1000],
+                "assigned_user_id": 1000,
             },
             404,
             {
@@ -120,10 +121,11 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
             key in task
             for key in [
                 "task_id",
+                "title",
                 "description",
                 "date_exp",
                 "state",
-                "asigned",
+                "assigned_user",
                 "task_label_links",
             ]
         )
@@ -143,8 +145,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
                 "description": "probando el testing... otra vez",
                 "date_exp": "2030-10-10",
                 "state": db_models.State.EN_PROCESO,
-                "exclude_user_ids": [1],
-                "append_user_ids": [2],
+                "assigned_user_id": 1,
                 "append_label": [
                     db_models.TypeOfLabel.BACKEND.value,
                     db_models.TypeOfLabel.BUG.value,
@@ -159,6 +160,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
                 "date_exp": "2030-10-10T00:00:00",
                 "description": "probando el testing... otra vez",
                 "project_id": 1,
+                "assigned_user_id": 1,
                 "state": "en proceso",
                 "task_id": 1,
                 "title": "probando",
@@ -176,7 +178,11 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
         (
             1,
             1000,
-            {"description": "probando el testing", "date_exp": "2030-10-10"},
+            {
+                "description": "probando el testing",
+                "date_exp": "2030-10-10",
+                "assigned_user_id": None,
+            },
             404,
             {
                 "detail": "Task with task_id 1000 is not in Project with project_id 1",
@@ -188,50 +194,11 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
             {
                 "description": "probando el testing",
                 "date_exp": "2030-10-10",
-                "exclude_user_ids": [100000],
-            },
-            400,
-            {
-                "detail": "Task with task_id 1 is NOT assigned to User with user_id 100000",
-            },
-        ),
-        (
-            1,
-            1,
-            {
-                "description": "probando el testing",
-                "date_exp": "2030-10-10",
-                "append_user_ids": [3],
+                "assigned_user_id": 3,
             },
             400,
             {
                 "detail": "User with user_id 3 is not in project with project_id 1",
-            },
-        ),
-        (
-            1,
-            1,
-            {
-                "description": "probando el testing",
-                "date_exp": "2030-10-10",
-                "append_user_ids": [2],
-            },
-            400,
-            {
-                "detail": "Task with task_id 1 is assigned to User with user_id 2",
-            },
-        ),
-        (
-            1,
-            1,
-            {
-                "description": "probando el testing",
-                "date_exp": "2030-10-10",
-                "append_user_ids": [100000],
-            },
-            404,
-            {
-                "detail": "User with user_id 100000 not found",
             },
         ),
     ],
@@ -258,16 +225,3 @@ async def test_delete_task(async_client, auth_headers, task_id, status, detail):
     response = await async_client.delete(f"/task/1/{task_id}", headers=auth_headers)
     assert response.status_code == status
     assert response.json() == {"detail": detail}
-
-
-@pytest.mark.asyncio
-async def test_get_users_for_task(async_client, auth_headers, clean_redis):
-    response = await async_client.get("/task/1/users", headers=auth_headers)
-    assert response.status_code == 200
-    users = response.json()
-    assert isinstance(users, list)
-    for user in users:
-        assert all(key in user for key in ["user_id", "username"])
-
-    response = await async_client.get("/task/1/users", headers=auth_headers)
-    assert response.status_code == 200

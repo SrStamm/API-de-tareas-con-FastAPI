@@ -40,13 +40,12 @@ class CommentService:
 
             users = self.comment_repo.extract_valid_mentions(comment.content)
 
-            if users:
-                users_validated = self.task_serv.validate_in_task(users, task_id)
-                if users_validated:
-                    payload = format_notification(
-                        notification_type="comment_mention", message=f"User {user_id}"
-                    )
-                    await manager.send_to_user(message=payload, user_id=user_id)
+            for user in users:
+                payload = format_notification(
+                    notification_type="comment_mention",
+                    message=f"User {user_id} he mentioned you",
+                )
+                await manager.send_to_user(message=payload, user_id=user.user_id)
 
             return new_comment
         except DatabaseError as e:

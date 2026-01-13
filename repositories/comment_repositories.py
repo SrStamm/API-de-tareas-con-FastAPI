@@ -56,7 +56,7 @@ class CommentRepository:
         if not mentions:
             return []
 
-        stmt = select(User.username).where(User.username.in_(mentions))
+        stmt = select(User).where(User.username.in_(mentions))
         return self.session.exec(stmt).all()
 
     def create(self, new_comment: CreateComment, task_id: int, user_id: int):
