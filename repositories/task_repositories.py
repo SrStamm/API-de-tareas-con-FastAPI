@@ -154,8 +154,9 @@ class TaskRepository:
         try:
             if update_task.description != task.description and update_task.description:
                 task.description = update_task.description
-            if update_task.date_exp != task.date_exp and update_task.date_exp:
-                task.date_exp = update_task.date_exp
+
+            task.date_exp = update_task.date_exp
+
             if task.state != update_task.state and update_task.state:
                 task.state = update_task.state
             self.session.commit()

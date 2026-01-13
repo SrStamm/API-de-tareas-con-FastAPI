@@ -78,7 +78,7 @@ class CreateTask(BaseModel):
             "Debido a varios cambios, se debe actualizar en las siguientes partes..."
         ],
     )
-    date_exp: dt = Field(examples=["2025-10-28"])
+    date_exp: Optional[dt] = Field(default=None, examples=["2025-10-28"])
     assigned_user_id: int | None = None
     label: List[TypeOfLabel] | None = None
 
@@ -119,7 +119,7 @@ class ReadTaskInProject(BaseModel):
     task_id: int = Field(examples=[1])
     title: str = Field(examples=["TaskAPI"])
     description: str | None = Field(default=None, examples=[])
-    date_exp: dt = Field(examples=[])
+    date_exp: Optional[dt] = Field(default=None, examples=[])
     state: State = Field(examples=[])
     assigned_user: ReadUser | None
     task_label_links: Optional[List[ReadLabel]] | None = None
