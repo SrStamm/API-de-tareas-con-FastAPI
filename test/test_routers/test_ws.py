@@ -50,17 +50,13 @@ def test_get_chat_error(mocker):
     session_mock.exec.return_value.all.return_value = []
 
     with pytest.raises(exceptions.ChatNotFoundError):
-        ws.get_chat(
-            request=mock_request, project_id=1, user=mock_user, session=session_mock
-        )
+        ws.get_chat(request=mock_request, project_id=1, session=session_mock)
 
     # Prueba la excepcion de DB
     session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
 
     with pytest.raises(exceptions.DatabaseError):
-        ws.get_chat(
-            request=mock_request, project_id=1, user=mock_user, session=session_mock
-        )
+        ws.get_chat(request=mock_request, project_id=1, session=session_mock)
 
 
 @pytest.mark.asyncio
