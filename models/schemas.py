@@ -84,7 +84,7 @@ class CreateTask(BaseModel):
 
     @field_validator("date_exp")
     def date_exp_must_be_future(cls, value):
-        if value <= dt.now():
+        if value and value <= dt.now():
             raise ValueError("La fechad expiración debe ser en el futuro.")
         return value
 
@@ -135,7 +135,7 @@ class UpdateTask(BaseModel):
     )
     date_exp: dt | None = Field(default=None, examples=["2025-12-20"])
     state: State | None = Field(default=None, examples=[State.CANCELADO])
-    assigned_user_id: Optional[int]
+    assigned_user_id: Optional[int] = Field(default=None)
     remove_assigned_user_id: bool = False
 
     remove_label: Optional[List[TypeOfLabel]] | None = Field(
@@ -147,7 +147,7 @@ class UpdateTask(BaseModel):
 
     @field_validator("date_exp")
     def date_exp_must_be_future(cls, value):
-        if value <= dt.now():
+        if value and value <= dt.now():
             raise ValueError("La fechad expiración debe ser en el futuro.")
         return value
 
