@@ -15,6 +15,14 @@ class TaskRepository:
     def __init__(self, session: Session):
         self.session = session
 
+    def get_task_by_task_id(self, task_id: int):
+        try:
+            stmt = select(Task).where(Task.task_id == task_id)
+            return self.session.exec(stmt).first()
+        except SQLAlchemyError as e:
+            logger.error(f"[TaskRepository.get_task_by_task_id] Error: {e}")
+            raise DatabaseError(e, "get_task_by_task_id")
+
     def get_task_by_id(self, task_id: int, project_id: int):
         try:
             stmt = select(Task).where(
@@ -150,8 +158,6 @@ class TaskRepository:
                 task.date_exp = update_task.date_exp
             if task.state != update_task.state and update_task.state:
                 task.state = update_task.state
-            if update_task.assigned_user_id:
-                task.assigned_user_id = update_task.assigned_user_id
             self.session.commit()
             return
         except SQLAlchemyError as e:
@@ -186,6 +192,22 @@ class TaskRepository:
         except Exception:
             self.session.rollback()
             raise
+
+    def change_assigned_user(self, user_id: int, task: Task):
+        try:
+            task.assigned_user_id = user_id
+            self.session.commit()
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, "change_assigned_user")
+
+    def remove_assigned_user(self, task: Task):
+        try:
+            task.assigned_user_id = None
+            self.session.commit()
+        except SQLAlchemyError as e:
+            self.session.rollback()
+            raise DatabaseError(e, "remove_assigned_user")
 
     def add_label(self, task_id: int, label: TypeOfLabel):
         try:

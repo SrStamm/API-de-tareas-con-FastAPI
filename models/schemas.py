@@ -136,6 +136,7 @@ class UpdateTask(BaseModel):
     date_exp: dt | None = Field(default=None, examples=["2025-12-20"])
     state: State | None = Field(default=None, examples=[State.CANCELADO])
     assigned_user_id: Optional[int]
+    remove_assigned_user_id: bool = False
 
     remove_label: Optional[List[TypeOfLabel]] | None = Field(
         default=None, examples=[TypeOfLabel.HIGH_PRIORITY, TypeOfLabel.BACKEND]
