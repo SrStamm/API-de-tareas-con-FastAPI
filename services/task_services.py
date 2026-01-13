@@ -37,16 +37,6 @@ class TaskService:
 
         return task_found
 
-    def found_user_assigned_to_task(self, task_id: int, user_id: int):
-        user = self.task_repo.get_task_is_asigned(task_id=task_id, user_id=user_id)
-
-        if not user:
-            raise TaskIsNotAssignedError(task_id=task_id, user_id=user_id)
-        return user
-
-    def validate_in_task(self, users: List[User], task_id: int):
-        return self.task_repo.validate_in_task(users, task_id)
-
     async def get_all_task_for_user(
         self,
         user_id: int,
@@ -62,13 +52,6 @@ class TaskService:
 
         except DatabaseError as e:
             logger.error(f"[TaskService.get_all_task_for_user] Error: {e}")
-            raise
-
-    async def get_users_for_task(self, task_id: int, limit: int, skip: int):
-        try:
-            return self.task_repo.get_user_for_task(task_id, limit, skip)
-        except DatabaseError as e:
-            logger.error(f"[TaskService.get_user_for_task] Error: {e}")
             raise
 
     async def get_all_task_for_project(
@@ -90,22 +73,25 @@ class TaskService:
 
     async def create(self, task: CreateTask, project_id: int):
         try:
-            if task.user_ids:
-                for user_id in task.user_ids:
-                    self.user_ser.get_user_or_404(user_id)
+            if task.assigned_user_id:
+                self.user_ser.get_user_or_404(task.assigned_user_id)
 
-                    self.proj_ser.found_user_in_project_or_404(user_id, project_id)
+                self.proj_ser.found_user_in_project_or_404(
+                    task.assigned_user_id, project_id
+                )
 
             new_task = self.task_repo.create(project_id, task)
 
-            for user_id in task.user_ids:
+            if task.assigned_user_id:
                 outgoing_event_json = format_notification(
                     notification_type="assigned_task",
                     message=f"You are assigned to the task {new_task.task_id} in project {project_id}",
                 )
 
                 # Envia el evento
-                await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
+                await manager.send_to_user(
+                    message=outgoing_event_json, user_id=task.assigned_user_id
+                )
 
             return new_task
         except DatabaseError as e:
@@ -133,61 +119,12 @@ class TaskService:
         task_id: int,
         project_id: int,
         update_task: UpdateTask,
-        user: User,
         permission: Project_Permission,
     ) -> ReadTask:
         try:
             task = self.found_task_or_404(task_id=task_id, project_id=project_id)
 
             self.task_repo.update(update_task, task)
-
-            if update_task.append_user_ids:
-                if permission == "admin":
-                    for user_id in update_task.append_user_ids:
-                        user = self.user_ser.get_user_or_404(user_id)
-
-                        self.proj_ser.found_user_in_project_or_404(user_id, project_id)
-
-                        user_in_task = self.task_repo.get_task_is_asigned(
-                            task_id=task_id, user_id=user_id
-                        )
-
-                        if user_in_task:
-                            logger.error(
-                                f"[update_task] User {user_id} was already assigned to task {task_id}"
-                            )
-                            raise TaskIsAssignedError(user_id=user_id, task_id=task_id)
-
-                        self.task_repo.add_user(user_id, task_id)
-
-                else:
-                    logger.error(
-                        f"[update_task] Unauthorized | User {user.user_id} not authorized for this action"
-                    )
-                    raise NotAuthorized(user.user_id)
-
-            if update_task.exclude_user_ids:
-                if permission == "admin":
-                    for user_id in update_task.exclude_user_ids:
-                        user_in_task = self.task_repo.get_task_is_asigned(
-                            task_id, user_id
-                        )
-
-                        if not user_in_task:
-                            logger.error(
-                                f"[update_task] Update Task Error | User {user_id} not assigned to task {task_id}"
-                            )
-                            raise TaskIsNotAssignedError(
-                                user_id=user_id, task_id=task_id
-                            )
-
-                        self.task_repo.remove_user(user_in_task)
-
-                else:
-                    logger.error(
-                        f"[update_task] Unauthorized | User {user.user_id} not authorized for this action"
-                    )
-                    raise NotAuthorized(user.user_id)
 
             if update_task.append_label:
                 if permission in ("admin", "editor"):
@@ -254,26 +191,14 @@ class TaskService:
 
             task = self.task_repo.get_task_by_id(task_id, project_id)
 
-            if update_task.append_user_ids:
-                for user_id in update_task.append_user_ids:
-                    outgoing_event_json = format_notification(
-                        notification_type="assigned_task",
-                        message=f"You were assigned to the task {task_id} in the project {project_id}",
-                    )
-                    await manager.send_to_user(
-                        message=outgoing_event_json, user_id=user_id
-                    )
-
-            if update_task.exclude_user_ids:
-                for user_id in update_task.exclude_user_ids:
-                    outgoing_event_json = format_notification(
-                        notification_type="assigned_task",
-                        message=f"You are no longer assigned to the task {task_id} in project {project_id}",
-                    )
-
-                    await manager.send_to_user(
-                        message=outgoing_event_json, user_id=user_id
-                    )
+            if update_task.assigned_user_id:
+                outgoing_event_json = format_notification(
+                    notification_type="assigned_task",
+                    message=f"You were assigned to the task {task_id} in the project {project_id}",
+                )
+                await manager.send_to_user(
+                    message=outgoing_event_json, user_id=update_task.assigned_user_id
+                )
 
             return task
 

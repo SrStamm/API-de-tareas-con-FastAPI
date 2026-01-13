@@ -43,35 +43,6 @@ async def get_task(
 
 
 @router.get(
-    "/{task_id}/users",
-    summary="Get users assigned to the task",
-    description=""" Obtain all of asigned users to task.
-                        'skip' receives an "int" that skips the result obtained.
-                        'limit' receives an "int" that limits the result obtained.""",
-    responses={
-        200: {
-            "description": "Users assigned to tasks obtained",
-            "model": schemas.ReadUser,
-        },
-        500: {
-            "description": "Internal error",
-            "model": responses.DatabaseErrorResponse,
-        },
-    },
-)
-@limiter.limit("20/minute")
-async def get_users_for_task(
-    request: Request,
-    task_id: int,
-    limit: int = 10,
-    skip: int = 0,
-    _: User = Depends(get_current_user),
-    task_serv: TaskService = Depends(get_task_service),
-) -> List[schemas.ReadUser]:
-    return await task_serv.get_users_for_task(task_id, limit, skip)
-
-
-@router.get(
     "/{project_id}",
     summary="Get all task to the project",
     description=""" Obtain all assigned proyect tasks.
@@ -155,10 +126,9 @@ async def update_task(
     task_serv: TaskService = Depends(get_task_service),
 ):
     actual_permission = auth_data["permission"]
-    user: User = auth_data["user"]
 
     return await task_serv.update_task(
-        task_id, project_id, update_task, user, actual_permission
+        task_id, project_id, update_task, actual_permission
     )
 
 
