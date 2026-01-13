@@ -12,6 +12,7 @@ from typing import List
 from core.logger import logger
 from core.event_ws import format_notification
 from core.socket_manager import manager
+from datetime import datetime as dt
 
 
 class TaskService:
@@ -123,6 +124,12 @@ class TaskService:
     ) -> ReadTask:
         try:
             task = self.found_task_or_404(task_id=task_id, project_id=project_id)
+
+            if update_task.date_exp and update_task.date_exp != task.date_exp:
+                if update_task.date_exp <= dt.now():
+                    raise HTTPException(
+                        status_code=400, detail="La nueva fecha debe ser futura"
+                    )
 
             self.task_repo.update(update_task, task)
 

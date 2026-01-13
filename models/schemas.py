@@ -154,12 +154,6 @@ class UpdateTask(BaseModel):
         default=None, examples=[TypeOfLabel.BUG, TypeOfLabel.FRONTEND]
     )
 
-    @field_validator("date_exp")
-    def date_exp_must_be_future(cls, value):
-        if value and value <= dt.now():
-            raise ValueError("La fechad expiración debe ser en el futuro.")
-        return value
-
 
 # Comment
 
