@@ -25,6 +25,9 @@ class TaskService:
         self.user_ser = user_ser
         self.proj_ser = proj_ser
 
+    def get_task_by_task_id(self, task_id: int) -> ReadTask:
+        return self.task_repo.get_task_by_task_id(task_id)
+
     def found_task_or_404(self, project_id: int, task_id: int):
         task_found = self.task_repo.get_task_by_id(task_id, project_id)
 
