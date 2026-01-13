@@ -1,14 +1,11 @@
 from fastapi import HTTPException
 from repositories.task_repositories import TaskRepository
 from services import project_services
-from models.db_models import TypeOfLabel, State, Project_Permission, User
+from models.db_models import TypeOfLabel, State, Project_Permission
 from models.schemas import CreateTask, ReadTask, UpdateTask
 from models.exceptions import (
     DatabaseError,
-    NotAuthorized,
     TaskNotFound,
-    TaskIsAssignedError,
-    TaskIsNotAssignedError,
 )
 from db.database import IntegrityError
 from typing import List
@@ -125,6 +122,15 @@ class TaskService:
             task = self.found_task_or_404(task_id=task_id, project_id=project_id)
 
             self.task_repo.update(update_task, task)
+
+            if update_task.assigned_user_id:
+                self.proj_ser.found_user_in_project_or_404(
+                    update_task.assigned_user_id, project_id
+                )
+                self.task_repo.change_assigned_user(update_task.assigned_user_id, task)
+
+            if update_task.remove_assigned_user_id:
+                self.task_repo.remove_assigned_user(task)
 
             if update_task.append_label:
                 if permission in ("admin", "editor"):
