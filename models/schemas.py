@@ -117,7 +117,7 @@ class ReadTask(BaseModel):
     title: str = Field(examples=["TaskAPI"])
     description: str | None
     assigned_user: ReadUser | None
-    date_exp: dt
+    date_exp: Optional[dt]
     state: State
     task_label_links: List[ReadLabel] | None = None
 
@@ -128,7 +128,7 @@ class ReadTaskInProject(BaseModel):
     task_id: int = Field(examples=[1])
     title: str = Field(examples=["TaskAPI"])
     description: str | None = Field(default=None, examples=[])
-    date_exp: Optional[dt] = Field(default=None, examples=[])
+    date_exp: Optional[dt]
     state: State = Field(examples=[])
     assigned_user: ReadUser | None
     task_label_links: Optional[List[ReadLabel]] | None = None
