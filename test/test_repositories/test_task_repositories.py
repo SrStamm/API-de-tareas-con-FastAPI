@@ -1,4 +1,4 @@
-from models.db_models import State, TypeOfLabel
+from models.db_models import Task
 from repositories.task_repositories import TaskRepository
 from models.exceptions import DatabaseError
 from db.database import SQLAlchemyError
@@ -24,7 +24,7 @@ def test_get_task_is_assigned_error(mocker):
     mock_session.exec.side_effect = SQLAlchemyError("db error")
 
     with pytest.raises(DatabaseError):
-        repo.get_task_is_asigned(1, 1)
+        repo.get_task_is_asigned(1)
 
 
 def test_get_labels_for_task_error(mocker):
@@ -73,29 +73,6 @@ def test_get_all_tasks_to_project_error(mocker):
         )
 
 
-def test_get_user_for_task_error(mocker):
-    mock_session = mocker.Mock()
-
-    repo = TaskRepository(mock_session)
-
-    mock_session.exec.side_effect = SQLAlchemyError("db error")
-
-    with pytest.raises(DatabaseError):
-        repo.get_user_for_task(1, 1, 1)
-
-
-def test_validate_in_task_error(mocker):
-    mock_session = mocker.Mock()
-    mock_user = mocker.Mock()
-
-    repo = TaskRepository(mock_session)
-
-    mock_session.exec.side_effect = SQLAlchemyError("db error")
-
-    with pytest.raises(DatabaseError):
-        repo.validate_in_task([mock_user], 1)
-
-
 def test_update_error(mocker):
     mock_session = mocker.Mock()
     mock_project = mocker.Mock()
@@ -125,11 +102,12 @@ def test_add_user_error(mocker):
     mock_session = mocker.Mock()
 
     repo = TaskRepository(mock_session)
+    task_mocked = mocker.Mock(spec=Task)
 
-    mock_session.add.side_effect = SQLAlchemyError("db error")
+    mock_session.commit.side_effect = SQLAlchemyError("db error")
 
     with pytest.raises(DatabaseError):
-        repo.add_user(1, 1)
+        repo.change_assigned_user(1, task_mocked)
 
 
 def test_remove_user_error(mocker):

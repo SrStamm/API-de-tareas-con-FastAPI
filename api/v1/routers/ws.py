@@ -8,6 +8,8 @@ from fastapi import (
 )
 from typing import List
 from datetime import datetime
+
+from sqlalchemy.orm import joinedload
 from models import schemas, db_models, exceptions, responses
 from db.database import get_session, Session, select, SQLAlchemyError
 from .auth import auth_user_ws
@@ -276,12 +278,13 @@ def get_chat(
     project_id: int,
     limit: int = 100,
     skip: int = 0,
-    user: db_models.User = Depends(get_current_user),
+    _: db_models.User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> List[schemas.ChatMessage]:
     try:
         stmt = (
             select(db_models.ProjectChat)
+            .options(joinedload(db_models.ProjectChat.user))
             .where(
                 db_models.ProjectChat.project_id == project_id,
             )

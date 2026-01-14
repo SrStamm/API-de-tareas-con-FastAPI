@@ -1,4 +1,13 @@
-from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    EmailStr,
+    ConfigDict,
+    ValidationInfo,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 from typing import List, Optional
 from datetime import datetime as dt, timezone
 from .db_models import State, Group_Role, Project_Permission, TypeOfLabel, TaskLabelLink
@@ -78,19 +87,15 @@ class CreateTask(BaseModel):
             "Debido a varios cambios, se debe actualizar en las siguientes partes..."
         ],
     )
-    date_exp: dt = Field(examples=["2025-10-28"])
-    user_ids: List[int] = Field(examples=[[1, 5, 88]])
+    date_exp: Optional[dt] = Field(default=None, examples=["2025-10-28"])
+    assigned_user_id: int | None = None
     label: List[TypeOfLabel] | None = None
 
     @field_validator("date_exp")
     def date_exp_must_be_future(cls, value):
-        if value <= dt.now():
+        if value and value <= dt.now():
             raise ValueError("La fechad expiración debe ser en el futuro.")
         return value
-
-
-class AsignUser(BaseModel):
-    users: int | List[int] = Field(examples=[[1, 5, 10]])
 
 
 class ReadLabel(BaseModel):
@@ -107,12 +112,13 @@ class ReadLabel(BaseModel):
 
 
 class ReadTask(BaseModel):
-    task_id: int = Field(examples=[1])
-    project_id: int = Field(examples=[1])
+    task_id: int
+    project_id: int
     title: str = Field(examples=["TaskAPI"])
-    description: str | None = Field(default=None, examples=["Actualizar los datos"])
-    date_exp: dt = Field(examples=["2025-10-24"])
-    state: State = Field(examples=[State.EN_PROCESO])
+    description: str | None
+    assigned_user: ReadUser | None
+    date_exp: dt
+    state: State
     task_label_links: List[ReadLabel] | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -122,16 +128,9 @@ class ReadTaskInProject(BaseModel):
     task_id: int = Field(examples=[1])
     title: str = Field(examples=["TaskAPI"])
     description: str | None = Field(default=None, examples=[])
-    date_exp: dt = Field(examples=[])
+    date_exp: Optional[dt] = Field(default=None, examples=[])
     state: State = Field(examples=[])
-    asigned: List[ReadUser] = Field(
-        examples=[
-            [
-                {"user_id": 1, "username": "user64"},
-                {"user_id": 2, "username": "user_falso"},
-            ]
-        ]
-    )
+    assigned_user: ReadUser | None
     task_label_links: Optional[List[ReadLabel]] | None = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -139,13 +138,14 @@ class ReadTaskInProject(BaseModel):
 
 class UpdateTask(BaseModel):
     title: str | None = Field(default=None, examples=["Error en Front"])
+
     description: str | None = Field(
-        default=None, examples=["Eliminar los datos duplicados"]
+        default=None,
     )
     date_exp: dt | None = Field(default=None, examples=["2025-12-20"])
     state: State | None = Field(default=None, examples=[State.CANCELADO])
-    append_user_ids: Optional[List[int]] = Field(default=None, examples=[1])
-    exclude_user_ids: Optional[List[int]] = Field(default=None, examples=[1])
+    assigned_user_id: Optional[int] = Field(default=None)
+    remove_assigned_user_id: bool = False
 
     remove_label: Optional[List[TypeOfLabel]] | None = Field(
         default=None, examples=[TypeOfLabel.HIGH_PRIORITY, TypeOfLabel.BACKEND]
@@ -153,12 +153,6 @@ class UpdateTask(BaseModel):
     append_label: Optional[List[TypeOfLabel]] | None = Field(
         default=None, examples=[TypeOfLabel.BUG, TypeOfLabel.FRONTEND]
     )
-
-    @field_validator("date_exp")
-    def date_exp_must_be_future(cls, value):
-        if value <= dt.now():
-            raise ValueError("La fechad expiración debe ser en el futuro.")
-        return value
 
 
 # Comment
@@ -274,7 +268,7 @@ class UpdateProject(BaseModel):
     )
 
 
-# Tocken
+# Token
 class Token(BaseModel):
     access_token: str = Field(examples=[])
     token_type: str = Field(examples=["bearer"])
@@ -304,8 +298,26 @@ class ChatMessage(BaseModel):
     chat_id: int
     project_id: int
     user_id: int
+    username: str
     message: str
     timestamp: dt
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def get_username_from_obj(cls, data):
+        if data.user or data["user"]:
+            return {
+                "chat_id": data.chat_id,
+                "project_id": data.project_id,
+                "user_id": data.user_id,
+                "username": data.user.username,
+                "message": data.message,
+                "timestamp": data.timestamp,
+            }
+
+        raise ValueError
 
 
 class WebSocketEvent(BaseModel):

@@ -1,4 +1,4 @@
-from sqlmodel import Field, SQLModel, Relationship
+from sqlmodel import FetchedValue, Field, SQLModel, Relationship
 from sqlalchemy.orm import Mapped
 from datetime import datetime as dt, timezone
 from enum import Enum
@@ -63,11 +63,6 @@ class project_user(SQLModel, table=True):
     permission: Project_Permission = Field(default=Project_Permission.WRITE)
 
 
-class tasks_user(SQLModel, table=True):
-    task_id: int = Field(primary_key=True, foreign_key="task.task_id")
-    user_id: int = Field(primary_key=True, foreign_key="user.user_id")
-
-
 class TaskLabelLink(SQLModel, table=True):
     task_id: Optional[int] = Field(
         default=None, primary_key=True, foreign_key="task.task_id"
@@ -120,29 +115,37 @@ class User(SQLModel, table=True):
     groups: Mapped[List["Group"]] = Relationship(
         back_populates="users", link_model=group_user
     )
+
     projects: Mapped[List["Project"]] = Relationship(
         back_populates="users", link_model=project_user
     )
-    tasks_asigned: Mapped[List["Task"]] = Relationship(
-        back_populates="asigned", link_model=tasks_user
-    )
+
+    tasks_assigned: Mapped[List["Task"]] = Relationship(back_populates="assigned_user")
     comments: List["Task_comments"] = Relationship(back_populates="user")
     notifications: List["Notifications"] = Relationship(back_populates="user")
+    messages: List["ProjectChat"] = Relationship(back_populates="user")
 
 
 class Task(SQLModel, table=True):
     task_id: Optional[int] = Field(default=None, primary_key=True)
     project_id: int = Field(foreign_key="project.project_id", index=True)
+
+    assigned_user_id: Optional[int] = Field(
+        default=None, foreign_key="user.user_id", index=True
+    )
+
     title: str | None = Field(default=None)
     description: str | None = Field(default=None)
-    date_exp: dt
+    date_exp: Optional[dt] = Field(default=None)
     state: State = Field(default=State.SIN_EMPEZAR)
 
-    asigned: Mapped[List["User"]] = Relationship(
-        back_populates="tasks_asigned", link_model=tasks_user
+    assigned_user: Optional["User"] = Relationship(
+        back_populates="tasks_assigned",
     )
+
     project: Mapped[Optional["Project"]] = Relationship(back_populates="tasks")
     comments: List["Task_comments"] = Relationship(back_populates="task")
+
     task_label_links: List["TaskLabelLink"] = Relationship(
         back_populates="task", sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
@@ -172,6 +175,7 @@ class ProjectChat(SQLModel, table=True):
     timestamp: dt = Field(default_factory=lambda: dt.now(timezone.utc))
 
     project: Mapped[Optional["Project"]] = Relationship(back_populates="chats")
+    user: Mapped["User"] = Relationship(back_populates="messages")
 
 
 class Session(SQLModel, table=True):
