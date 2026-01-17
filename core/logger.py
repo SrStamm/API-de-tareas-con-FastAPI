@@ -5,6 +5,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 import logging
 import structlog
 from structlog.processors import (
+    JSONRenderer,
     StackInfoRenderer,
     format_exc_info,
     dict_tracebacks,
@@ -16,21 +17,34 @@ import sys
 
 from structlog.stdlib import LoggerFactory
 
-structlog.configure(
-    processors=[
+
+def configure_structlog(is_production: bool = False):
+    shared_processors = [
         StackInfoRenderer(),
         format_exc_info,
         dict_tracebacks,
         add_log_level,
         TimeStamper(fmt="iso", utc=True),
         ConsoleRenderer(colors=True),
-    ],
-    wrapper_class=structlog.stdlib.BoundLogger,
-    logger_factory=LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
+    ]
 
-logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
+    if is_production:
+        processors = shared_processors + [JSONRenderer]
+
+    else:
+        processors = shared_processors + [ConsoleRenderer(colors=True)]
+
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
+
+
+configure_structlog(is_production=False)
 
 logger = structlog.get_logger()
 
