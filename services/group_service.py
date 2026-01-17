@@ -20,7 +20,6 @@ class GroupService:
         group = self.group_repo.get_group_by_id(group_id)
 
         if not group:
-            logger.error(f"Group {group_id} no encontrado")
             raise exceptions.GroupNotFoundError(group_id)
 
         return group
@@ -41,8 +40,7 @@ class GroupService:
                 raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
 
             return found_user
-        except Exception as e:
-            logger.error(f"[GroupService.get_user_data_for_group] Error: {e}")
+        except Exception:
             raise
 
     async def get_groups_with_cache(self, limit: int, skip: int) -> List[ReadGroup]:
@@ -50,16 +48,14 @@ class GroupService:
             # Get from repository
             return self.group_repo.get_all_groups(limit, skip)
 
-        except DatabaseError as e:
-            logger.error(f"[GroupService.get_groups_with_cache] Error: {e}")
+        except DatabaseError:
             raise
 
     async def get_groups_where_user_in(self, user_id: int, limit: int, skip: int):
         try:
             return self.group_repo.get_groups_for_user(user_id, limit, skip)
 
-        except DatabaseError as e:
-            logger.error(f"[GroupService.get_groups_where_user_in] Error: {e}")
+        except DatabaseError:
             raise
 
     async def get_users_in_group(self, group_id: int):
@@ -69,17 +65,19 @@ class GroupService:
 
             return self.group_repo.get_users_for_group(group_id)
 
-        except DatabaseError as e:
-            logger.error(f"[GroupService.get_users_in_group] Error: {e}")
+        except DatabaseError:
             raise
 
     async def create_group(self, new_group: CreateGroup, user_id: int) -> ReadGroup:
         try:
             # Create a new group
-            return self.group_repo.create(new_group, user_id)
+            group = self.group_repo.create(new_group, user_id)
 
-        except DatabaseError as e:
-            logger.error(f"[services.create_group] Repo failed: {str(e)}")
+            logger.info("grop_created", user_id=user_id)
+
+            return group
+
+        except DatabaseError:
             raise
 
     async def update_group(
@@ -97,22 +95,24 @@ class GroupService:
 
             group_updated = self.group_repo.update(actual_group, update_group)
 
+            logger.info("group_updated", group_id=group_id, user_id=user_id)
+
             return group_updated
 
-        except DatabaseError as e:
-            logger.error(f"[services.update_group] Repo failed: {str(e)}")
+        except DatabaseError:
             raise
 
-    async def delete_group(self, group_id: int):
+    async def delete_group(self, group_id: int, user_id: int):
         try:
             group = self.get_group_or_404(group_id)
 
             self.group_repo.delete(group)
 
+            logger.info("group_deleted", group_id=group_id, user_id=user_id)
+
             return {"detail": "Se ha eliminado el grupo"}
 
-        except DatabaseError as e:
-            logger.error(f"[services.delete_group] Repo failed: {str(e)}")
+        except DatabaseError:
             raise
 
     async def append_user(self, group_id, user_id: int):
@@ -122,13 +122,9 @@ class GroupService:
             user = self.user_repo.get_user_by_id(user_id)
 
             if not user:
-                logger.error(f"User {user_id} no encontrado")
                 raise exceptions.UserNotFoundError(user_id)
 
             if user in group.users:
-                logger.error(
-                    f"[append_user_group] User {user_id} is in Group {group_id} | Error"
-                )
                 raise exceptions.UserInGroupError(
                     user_id=user.user_id, group_id=group.group_id
                 )
@@ -145,12 +141,14 @@ class GroupService:
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
             logger.info(
-                f"[append_user_group] User {user_id} Append to Group {group_id} Success"
+                "append_user_group",
+                user_id=user_id,
+                group_id=group_id,
             )
+
             return {"detail": "El usuario ha sido agregado al grupo"}
 
-        except DatabaseError as e:
-            logger.error(f"[services.delete_group] Repo failed: {str(e)}")
+        except DatabaseError:
             raise
 
     async def delete_user(
@@ -166,14 +164,10 @@ class GroupService:
             user = self.user_repo.get_user_by_id(user_id)
 
             if not user:
-                logger.error(f"User {user_id} no encontrado")
                 raise exceptions.UserNotFoundError(user_id)
 
             if user in group.users:
                 role_user = self.role_of_user_in_group(user_id, group_id)
-
-                print(f"DEBBUG: rol de usuario a eliminar: {role_user}")
-                print(f"DEBBUG: rol de usuario actual: {actual_user_role}")
 
                 if (
                     role_user in ["editor", "member"]
@@ -195,22 +189,23 @@ class GroupService:
                     )
 
                     logger.info(
-                        f"[delete_user] User {user_id} Delete to Group {group_id} Success"
+                        "removed_user_from_the_group",
+                        group_id=group_id,
+                        user_id=user_id,
                     )
+
                     return {"detail": "El usuario ha sido eliminado del grupo"}
                 else:
-                    logger.info(
-                        f"[delete_user_group] Unauthorized Error | User {actual_user_id} not authorized in group {group_id}"
+                    logger.warning(
+                        "not_authorized_to_remove_user_from_the_group",
+                        group_id=group_id,
+                        user_id=actual_user_id,
                     )
                     raise exceptions.NotAuthorized(actual_user_id)
             else:
-                logger.error(
-                    f"[delete_user_group] User {user_id} not found in Group {group_id}"
-                )
                 raise exceptions.UserNotFoundError(user_id)
 
-        except DatabaseError as e:
-            logger.error(f"[services.delete_user_group] Repo failed: {str(e)}")
+        except DatabaseError:
             raise
 
     async def update_user_role(
@@ -225,12 +220,16 @@ class GroupService:
             user = self.role_of_user_in_group(user_id, group_id)
 
             if not user:
-                logger.error(
-                    f"[update_user_role] User not found Error | User {user_id} not found in group {group_id}"
-                )
                 raise exceptions.UserNotInGroupError(user_id=user_id, group_id=group_id)
 
             self.group_repo.update_role(user_id, role)
+
+            logger.info(
+                "update_user_role_in_group",
+                group_id=group_id,
+                user_id=user_id,
+                role=role.value,
+            )
 
             outgoing_event_json = format_notification(
                 notification_type="update_role_to_group",
@@ -241,6 +240,5 @@ class GroupService:
 
             return {"detail": "Se ha cambiado los permisos del usuario en el grupo"}
 
-        except DatabaseError as e:
-            logger.error(f"[services.update_user_role] Repo failed: {str(e)}")
+        except DatabaseError:
             raise

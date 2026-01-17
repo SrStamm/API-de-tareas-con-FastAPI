@@ -33,7 +33,6 @@ class TaskService:
         task_found = self.task_repo.get_task_by_id(task_id, project_id)
 
         if not task_found:
-            logger.error(f"Task {task_id} no encontrado en Project {project_id}")
             raise TaskNotFound(task_id=task_id, project_id=project_id)
 
         return task_found
@@ -51,8 +50,7 @@ class TaskService:
                 user_id, limit, skip, labels, state
             )
 
-        except DatabaseError as e:
-            logger.error(f"[TaskService.get_all_task_for_user] Error: {e}")
+        except DatabaseError:
             raise
 
     async def get_all_task_for_project(
@@ -68,8 +66,7 @@ class TaskService:
                 project_id, limit, skip, labels, state
             )
 
-        except DatabaseError as e:
-            logger.error(f"[TaskService.get_all_task_for_project] Error: {e}")
+        except DatabaseError:
             raise
 
     async def create(self, task: CreateTask, project_id: int):
@@ -83,6 +80,8 @@ class TaskService:
 
             new_task = self.task_repo.create(project_id, task)
 
+            logger.info("task_created", project_id=project_id, task_id=new_task.task_id)
+
             if task.assigned_user_id:
                 outgoing_event_json = format_notification(
                     notification_type="assigned_task",
@@ -95,22 +94,24 @@ class TaskService:
                 )
 
             return new_task
-        except DatabaseError as e:
-            logger.error(f"[TaskService.create] Error: {e}")
+        except DatabaseError:
             raise
         except Exception:
             raise
 
-    async def delete(self, task_id: int, project_id: int):
+    async def delete(self, task_id: int, project_id: int, user_id: int):
         try:
             task = self.found_task_or_404(project_id, task_id)
 
             self.task_repo.delete(task)
 
+            logger.info(
+                "task_deleted", project_id=project_id, task_id=task_id, user_id=user_id
+            )
+
             return {"detail": "Task successfully deleted"}
 
-        except DatabaseError as e:
-            logger.error(f"[TaskService.delete] Error: {e}")
+        except DatabaseError:
             raise
         except Exception:
             raise
@@ -121,6 +122,7 @@ class TaskService:
         project_id: int,
         update_task: UpdateTask,
         permission: Project_Permission,
+        user_id: int,
     ) -> ReadTask:
         try:
             task = self.found_task_or_404(task_id=task_id, project_id=project_id)
@@ -133,11 +135,23 @@ class TaskService:
 
             self.task_repo.update(update_task, task)
 
+            logger.info(
+                "task_updated", project_id=project_id, task_id=task_id, user_id=user_id
+            )
+
             if update_task.assigned_user_id:
                 self.proj_ser.found_user_in_project_or_404(
                     update_task.assigned_user_id, project_id
                 )
+
                 self.task_repo.change_assigned_user(update_task.assigned_user_id, task)
+
+                logger.info(
+                    "change_user_assigned_in_task",
+                    task_id=task_id,
+                    user_id=user_id,
+                    new_user_assigned=update_task.assigned_user_id,
+                )
 
             if update_task.remove_assigned_user_id:
                 self.task_repo.remove_assigned_user(task)
@@ -162,18 +176,13 @@ class TaskService:
                             for label in new_labels:
                                 self.task_repo.add_label(task_id, label)
 
-                        except IntegrityError as e:
-                            logger.error(
-                                f"[update_task] Database Integrity Error when adding labbels | Error: {str(e)}"
-                            )
+                        except IntegrityError:
                             raise HTTPException(
                                 status_code=409,
                                 detail="Failed to add labels due to database conflict (label might already exist).",
                             )
-                        except Exception as e:
-                            logger.error(
-                                f"[update_task] Error adding labels | Error: {str(e)}"
-                            )
+                        except Exception:
+                            raise
 
             if update_task.remove_label:
                 if permission in ("admin", "editor"):
@@ -189,21 +198,17 @@ class TaskService:
                                 self.task_repo.delete_label(label)
                             else:
                                 logger.warning(
-                                    f"[update_task] Label {label_to_remove.value} not exists for Task {task_id}. Skipping"
+                                    "removing_label_on_task",
+                                    task_id=task_id,
                                 )
 
-                    except IntegrityError as e:
-                        logger.error(
-                            f"[update_task] Database Integrity Error when removing labbels | Error: {str(e)}"
-                        )
+                    except IntegrityError:
                         raise HTTPException(
                             status_code=409,
                             detail="Failed to remove labels due to database conflict (label might already exist).",
                         )
-                    except Exception as e:
-                        logger.error(
-                            f"[update_task] Error removing labels | Error: {str(e)}"
-                        )
+                    except Exception:
+                        raise
 
             task = self.task_repo.get_task_by_id(task_id, project_id)
 
@@ -218,8 +223,7 @@ class TaskService:
 
             return task
 
-        except DatabaseError as e:
-            logger.error(f"[TaskService.update_task] Error: {e}")
+        except DatabaseError:
             raise
         except Exception:
             raise

@@ -27,9 +27,6 @@ class CommentService:
         comments = self.comment_repo.get_all_comments(task_id)
 
         if not comments:
-            logger.error(
-                f"[get_all_comments] Not found Error | Comments not found in Task {task_id}"
-            )
             raise CommentNotFoundError(task_id)
 
         return comments
@@ -48,11 +45,9 @@ class CommentService:
                 await manager.send_to_user(message=payload, user_id=user.user_id)
 
             return new_comment
-        except DatabaseError as e:
-            logger.error(f"[CommentService.create] Repo failed: {str(e)}")
+        except DatabaseError:
             raise
-        except Exception as e:
-            logger.error(f"[CommentService.create] Unknown Error: {str(e)}")
+        except Exception:
             raise
 
     def update(
@@ -62,47 +57,44 @@ class CommentService:
             comment_found = self.comment_repo.get_comment_by_id(comment_id)
 
             if not comment_found:
-                logger.error(
-                    f"[update_comment] Not Found Error | Comment not found in Task {task_id}"
+                logger.warning(
+                    "update_comment", reason="comment_not_found", task_id=task_id
                 )
                 raise CommentNotFoundError(task_id)
 
             if comment_found.user_id != user_id:
-                logger.error(
-                    f"[update_comment] Unauthorized Error | User {user_id} not authorized"
+                logger.warning(
+                    "update_comment",
+                    reason="unauthorized_user",
+                    user_id=user_id,
                 )
                 raise UserNotAuthorizedInCommentError(user_id, comment_id)
 
             comment = self.comment_repo.update(update_comment, comment_found)
             return comment
-        except DatabaseError as e:
-            logger.error(f"[CommentService.update] Repo failed: {str(e)}")
+        except DatabaseError:
             raise
-        except Exception as e:
-            logger.error(f"[CommentService.update] Unknown Error: {str(e)}")
+        except Exception:
             raise
 
     def delete(self, task_id: int, comment_id: int, user_id: int):
         try:
             comment_found = self.comment_repo.get_comment_by_id(comment_id)
             if not comment_found:
-                logger.error(
-                    f"[delete_comment] Not Found Error | Comment not found in Task {task_id}"
-                )
                 raise CommentNotFoundError(task_id)
 
             if comment_found.user_id != user_id:
-                logger.error(
-                    f"[delete_comment] Unauthorized Error| User {user_id} not authorized"
+                logger.warning(
+                    "delete_comment",
+                    reason="unauthorized_user",
+                    user_id=user_id,
                 )
                 raise UserNotAuthorizedInCommentError(user_id, comment_id)
 
             self.comment_repo.delete(comment_found)
 
             return {"detail": "Comment successfully deleted"}
-        except DatabaseError as e:
-            logger.error(f"[CommentService.delete] Repo failed: {str(e)}")
+        except DatabaseError:
             raise
-        except Exception as e:
-            logger.error(f"[CommentService.delete] Unknown Error: {str(e)}")
+        except Exception:
             raise

@@ -35,13 +35,10 @@ class AuthService:
         try:
             exp_sessions = self.auth_repo.get_expired_sessions()
             if exp_sessions:
-                logger.info("[AuthService.get_expired_sessions] Expired Sessions Found")
                 return exp_sessions
 
-            logger.info("[AuthService.get_expired_sessions]Expired Sessions not Found")
             return {"detail": "No expired sessions"}
-        except Exception as e:
-            logger.error(f"[AuthService.get_expired_sessions] Unknown error: {e}")
+        except Exception:
             raise
 
     def auth_user(self, token: str):
@@ -49,51 +46,44 @@ class AuthService:
             # Decodes the token
             payload = jwt.decode(token, SECRET, algorithms=ALGORITHM)
 
-            # Verifies thath the token is an access token
+            # Verifies that the token is an access token
             scope = payload.get("scope")
             if not scope or scope != "api_access":
-                logger.error(
-                    "[AuthService.auth_user] token Error | Is not a access token"
-                )
                 raise InvalidToken
 
             # Get necessary data
             user_id = payload.get("sub")
             if not user_id:
-                logger.error("[AuthService.auth_user] Token Error | Missing user data")
                 raise InvalidToken
 
             user = self.auth_repo.get_user_by_id(user_id)
             if not user:
-                logger.error(
-                    f"[AuthService.auth_user] Error | User {user_id} not found"
-                )
                 raise UserNotFoundError(user_id)
 
             exp = payload.get("exp")
             if exp is None:
-                logger.error("[AuthService.auth_user] Token Error | No expiration")
                 raise InvalidToken
 
             exp_datetime = datetime.fromtimestamp(exp, tz=timezone.utc)
             if exp_datetime < datetime.now(timezone.utc):
-                logger.error("[AuthService.auth_user] Token Error | Token expired")
                 raise InvalidToken
 
             return user
-        except JWTError as e:
-            logger.error(f"[AuthService.auth_user] Token error | Error: {e}")
+        except JWTError:
             raise InvalidToken
 
     async def login(self, form: OAuth2PasswordRequestForm):
         try:
             user = self.auth_repo.get_user_whit_username(form.username)
             if not user:
-                logger.error("[AuthService.login] Login Error | User not found")
                 raise UserNotFoundInLogin
 
             if not crypt.verify(form.password, user.password):
-                logger.error("[AuthService.login] Login Error | Incorrect password")
+                logger.error(
+                    "login_attempt_failed",
+                    reason="invalid_password",
+                    username=user.username,
+                )
                 raise LoginError(user.user_id)
 
             # Create access token
@@ -134,8 +124,7 @@ class AuthService:
                 "token_type": "bearer",
                 "refresh_token": encoded_refresh_token,
             }
-        except DatabaseError as e:
-            logger.error(f"[AuthService.login] DatabaseError Error: {e}")
+        except DatabaseError:
             raise
 
     def refresh(self, refresh: RefreshTokenRequest):
@@ -146,42 +135,34 @@ class AuthService:
 
             actual_session = self.auth_repo.get_session_with_jti(jti)
             if not actual_session:
-                logger.error(
-                    "[AuthService.refresh] Token error | Not found active session for jti: {jti}"
-                )
                 raise InvalidToken
 
             payload = jwt.decode(refresh)
 
             scope = payload.get("scope")
             if not scope:
-                logger.error("[AuthService.refresh] Token error | Not have scope")
                 raise InvalidToken
 
             if scope != "token_refresh":
-                logger.error("[AuthService.refresh] Token error | Invalid scope")
                 raise InvalidToken
 
             user_id = payload.get("sub")
             if not user_id:
-                logger.error("[AuthService.refresh] Token error | Not have user_id")
                 raise InvalidToken
 
             user = self.auth_repo.get_user_by_id(user_id)
             if not user:
                 logger.error(
-                    f"[AuthService.refresh] Token error | User {user_id} not found"
+                    "refresh_attempt_failed", reason="user_not_found", user_id=user_id
                 )
                 raise UserNotFoundError(user_id)
 
             exp = payload.get("exp")
             if exp is None:
-                logger.error("[AuthService.refresh] Token error | Not have expire date")
                 raise InvalidToken
 
             exp_datetime = datetime.fromtimestamp(exp, tz=timezone.utc)
             if exp_datetime < datetime.now(timezone.utc):
-                logger.error("[AuthService.refresh] Token error | Token expired")
                 raise InvalidToken
 
             self.auth_repo.delete_session(actual_session)
@@ -222,33 +203,22 @@ class AuthService:
                 token_type="bearer",
                 refresh_token=encoded_refresh_token,
             )
-        except JWTError as e:
-            logger.error(f"[AuthService.refresh] JWT Error: {e}")
+        except JWTError:
             raise InvalidToken
         except DatabaseError:
-            logger.error("[AuthService.refresh] Database Error")
             raise
 
     def logout(self, user_id: int):
         try:
             active_sessions = self.auth_repo.get_active_sessions(str(user_id))
             if not active_sessions:
-                logger.error(
-                    f"[AuthService.logout] Not found active sessions for User {user_id}"
-                )
                 raise SessionNotFound(user_id)
 
             for individual_session in active_sessions:
                 self.auth_repo.delete_session(individual_session)
 
-            logger.info(
-                f"[AuthService.logout] All sessions are closed - User {user_id} closed {len(active_sessions)} sessions"
-            )
-
             return {"detail": "Closed all sessions"}
         except DatabaseError:
-            logger.error("[AuthService.logout] Database Error")
             raise
-        except Exception as e:
-            logger.error(f"[AuthService.logout] Unknown Error: {e}")
+        except Exception:
             raise
