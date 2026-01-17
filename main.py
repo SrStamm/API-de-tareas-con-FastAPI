@@ -1,15 +1,17 @@
+from contextvars import ContextVar
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from api.v1.routers import group, project, task, user, auth, ws, comment
 from db.database import create_db_and_tables
 from core.logger import logger, register_exceptions_handlers
-from core.limiter import limiter, _rate_limit_exceeded_handler, RateLimitExceeded
 from core.auto import run_scheduler_job
 from db.database import redis_client
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from contextlib import asynccontextmanager
 from apscheduler.triggers.interval import IntervalTrigger
 from time import time
+import structlog
+import uuid
 
 scheduler = AsyncIOScheduler()
 
@@ -69,22 +71,53 @@ def root():
     return {"detail": "Bienvenido a esta API!"}
 
 
+request_id_var: ContextVar[str] = ContextVar("request_id", default=None)
+
+
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
+async def structured_log_middleware(request: Request, call_next):
+    # Clean previous context
+    structlog.contextvars.clear_contextvars()
+
+    # Create and set request_id
+    request_id = str(uuid.uuid4())
+    request_id_var.set(request_id)
+
     start_time = time()
-    response = await call_next(request)
-    duration = time() - start_time
-    user = request.state.user if hasattr(request.state, "user") else "anonymous"
 
-    # Use request.url.scheme instead of request.scope["scheme"]
-    scheme = request.url.scheme or "http"  # Fallback to 'http' if scheme is empty
-    if not scheme:
-        logger.warning(f"Invalid scheme in request URL: {request.url}")
-
-    logger.info(
-        f"method={request.method} path={request.url.path} user={user} duration={duration:.3f}s status={response.status_code}"
+    structlog.contextvars.bind_contextvars(
+        request_id=request_id,
+        method=request.method,
+        path=request.url.path,
+        client_ip=request.client.host if request.client else "unknown",
+        # Puedes agregar user si tienes auth
+        # user_id=getattr(request.state, "user", {}).get("id", "anonymous")
     )
-    return response
+
+    try:
+        response = await call_next(request)
+        duration = time() - start_time
+        user = request.state.user if hasattr(request.state, "user") else "anonymous"
+
+        # Use request.url.scheme instead of request.scope["scheme"]
+        scheme = request.url.scheme or "http"  # Fallback to 'http' if scheme is empty
+        if not scheme:
+            logger.warning(f"Invalid scheme in request URL: {request.url}")
+
+        logger.info(
+            f"method={request.method} path={request.url.path} user={user} duration={duration:.3f}s status={response.status_code}"
+        )
+
+        return response
+
+    except Exception as exc:
+        log = structlog.get_logger()
+        log.exception(
+            "request_failed",
+            exc_info=exc,
+            status_code=500,
+        )
+        raise
 
 
 @app.get("/test-redis")
