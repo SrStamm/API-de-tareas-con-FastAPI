@@ -8,7 +8,6 @@ from models.db_models import (
 )
 from db.database import Session, select, joinedload, func, SQLAlchemyError
 from typing import List
-from core.logger import logger
 
 
 class TaskRepository:
@@ -20,7 +19,6 @@ class TaskRepository:
             stmt = select(Task).where(Task.task_id == task_id)
             return self.session.exec(stmt).first()
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.get_task_by_task_id] Error: {e}")
             raise DatabaseError(e, "get_task_by_task_id")
 
     def get_task_by_id(self, task_id: int, project_id: int):
@@ -30,7 +28,6 @@ class TaskRepository:
             )
             return self.session.exec(stmt).first()
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.get_task_by_id] Error: {e}")
             raise DatabaseError(e, "get_task_by_id")
 
     def get_task_is_asigned(self, user_id: int):
@@ -39,7 +36,6 @@ class TaskRepository:
             return self.session.exec(stmt).first()
 
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.get_task_by_id] Error: {e}")
             raise DatabaseError(e, "get_task_is_asigned")
 
     def get_labels_for_task(self, task_id: int):
@@ -47,7 +43,6 @@ class TaskRepository:
             stmt = select(TaskLabelLink.label).where(TaskLabelLink.task_id == task_id)
             return set(self.session.exec(stmt).all())
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.get_labels_for_task] Error: {e}")
             raise DatabaseError(e, "get_labels_for_task")
 
     def get_label_for_task_by_label(self, task_id: int, label: TypeOfLabel):
@@ -58,7 +53,6 @@ class TaskRepository:
             return self.session.exec(stmt).first()
 
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.get_label_for_task_by_label] Error: {e}")
             raise DatabaseError(e, "get_label_for_task_by_label")
 
     def get_all_task_for_user(
@@ -90,7 +84,6 @@ class TaskRepository:
             return self.session.exec(stmt.limit(limit).offset(skip)).unique().all()
 
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.get_all_task_for_user] Error: {e}")
             raise DatabaseError(e, "get_all_task_for_user")
 
     def get_all_task_to_project(
@@ -118,7 +111,6 @@ class TaskRepository:
             return self.session.exec(stmt.limit(limit).offset(skip)).unique().all()
 
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.get_all_task_to_project] Error: {e}")
             raise DatabaseError(e, "get_all_task_to_project")
 
     def create(self, project_id: int, task: CreateTask) -> Task:
@@ -144,7 +136,6 @@ class TaskRepository:
             self.session.commit()
             return new_task
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.create] Error: {e}")
             raise DatabaseError(e, "create")
         except Exception:
             self.session.rollback()
@@ -162,7 +153,6 @@ class TaskRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.update] Error: {e}")
             raise DatabaseError(e, "update")
         except Exception:
             self.session.rollback()
@@ -174,7 +164,6 @@ class TaskRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.delete] Error: {e}")
             self.session.rollback()
             raise DatabaseError(e, "delete")
         except Exception:
@@ -187,7 +176,6 @@ class TaskRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.remove_user] Error: {e}")
             self.session.rollback()
             raise DatabaseError(e, "remove_user")
         except Exception:
@@ -217,7 +205,6 @@ class TaskRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.add_label] Error: {e}")
             self.session.rollback()
             raise DatabaseError(e, "add_label")
         except Exception:
@@ -230,7 +217,6 @@ class TaskRepository:
             self.session.commit()
             return
         except SQLAlchemyError as e:
-            logger.error(f"[TaskRepository.delete_label] Error: {e}")
             self.session.rollback()
             raise DatabaseError(e, "delete")
         except Exception:

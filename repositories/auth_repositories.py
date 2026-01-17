@@ -1,4 +1,3 @@
-from core.logger import logger
 from db.database import Session, select, SQLAlchemyError, or_
 from models.db_models import User, Session as SessionDB
 from datetime import datetime, timezone
@@ -26,7 +25,6 @@ class AuthRepository:
             self.session.refresh(new_session)
             return new_session
         except SQLAlchemyError as e:
-            logger.error(f"[AuthRepository.new_session] Database error: {e}")
             raise DatabaseError(e, "[AuthRepository.new_session]")
 
     def delete_session(self, actual_session: SessionDB):
