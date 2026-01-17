@@ -7,7 +7,6 @@ import structlog
 from structlog.processors import (
     JSONRenderer,
     StackInfoRenderer,
-    format_exc_info,
     dict_tracebacks,
     add_log_level,
     TimeStamper,
@@ -21,11 +20,9 @@ from structlog.stdlib import LoggerFactory
 def configure_structlog(is_production: bool = False):
     shared_processors = [
         StackInfoRenderer(),
-        format_exc_info,
         dict_tracebacks,
         add_log_level,
         TimeStamper(fmt="iso", utc=True),
-        ConsoleRenderer(colors=True),
     ]
 
     if is_production:
@@ -71,7 +68,10 @@ def register_exceptions_handlers(app):
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
-        logger.critical("unhandled_error", detail=str(exc), path=request.url)
+        logger.exception(
+            "unhandled_error",
+            path=str(request.url),
+        )
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal Server Error"},
