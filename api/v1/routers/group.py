@@ -107,10 +107,11 @@ async def update_group(
 async def delete_group(
     request: Request,
     group_id: int,
-    _: dict = Depends(require_role(roles=["admin"])),
+    user_data: dict = Depends(require_role(roles=["admin"])),
     group_service: GroupService = Depends(get_group_service),
 ):
-    return await group_service.delete_group(group_id)
+    user = user_data["user"]
+    return await group_service.delete_group(group_id, user.user_id)
 
 
 @router.get(

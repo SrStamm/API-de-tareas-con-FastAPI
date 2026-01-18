@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Request, Query
+from sqlmodel import AutoString
 from models import schemas, responses
 from models.db_models import User, TypeOfLabel, State
 from typing import List
@@ -126,9 +127,10 @@ async def update_task(
     task_serv: TaskService = Depends(get_task_service),
 ):
     actual_permission = auth_data["permission"]
+    user = auth_data["user"]
 
     return await task_serv.update_task(
-        task_id, project_id, update_task, actual_permission
+        task_id, project_id, update_task, actual_permission, user.user_id
     )
 
 
@@ -148,7 +150,8 @@ async def update_task(
 async def delete_task(
     task_id: int,
     project_id: int,
-    _: dict = Depends(require_permission(permissions=["admin"])),
+    user_data: dict = Depends(require_permission(permissions=["admin"])),
     task_serv: TaskService = Depends(get_task_service),
 ):
-    return await task_serv.delete(task_id, project_id)
+    user = user_data["user"]
+    return await task_serv.delete(task_id, project_id, user.user_id)
