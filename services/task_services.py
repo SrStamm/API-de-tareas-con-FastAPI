@@ -198,7 +198,7 @@ class TaskService:
                                 self.task_repo.delete_label(label)
                             else:
                                 logger.warning(
-                                    "removing_label_on_task",
+                                    "removing_label_on_task_failed",
                                     task_id=task_id,
                                 )
 

@@ -47,7 +47,7 @@ class TaskRepository:
 
     def get_label_for_task_by_label(self, task_id: int, label: TypeOfLabel):
         try:
-            stmt = select(TaskLabelLink.label).where(
+            stmt = select(TaskLabelLink).where(
                 TaskLabelLink.task_id == task_id, TaskLabelLink.label == label
             )
             return self.session.exec(stmt).first()

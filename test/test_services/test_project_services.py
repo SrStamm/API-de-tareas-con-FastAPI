@@ -151,7 +151,7 @@ async def test_update_project_error(mocker):
     )
 
     with pytest.raises(DatabaseError):
-        await service.update_project(1, 1, mock_update_project)
+        await service.update_project(1, 1, 1, mock_update_project)
 
 
 @pytest.mark.asyncio
@@ -172,7 +172,7 @@ async def test_delete_project_error(mocker):
     )
 
     with pytest.raises(DatabaseError):
-        await service.delete_project(1, 1)
+        await service.delete_project(1, 1, 1)
 
 
 @pytest.mark.asyncio

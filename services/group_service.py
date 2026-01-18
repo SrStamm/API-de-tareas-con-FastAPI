@@ -73,7 +73,7 @@ class GroupService:
             # Create a new group
             group = self.group_repo.create(new_group, user_id)
 
-            logger.info("grop_created", user_id=user_id)
+            logger.info("group_created", user_id=user_id)
 
             return group
 

@@ -124,7 +124,6 @@ class GroupRepository:
         try:
             self.session.delete(group)
             self.session.commit()
-            return
 
         except SQLAlchemyError as e:
             self.session.rollback()
