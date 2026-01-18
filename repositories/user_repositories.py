@@ -1,4 +1,3 @@
-from core import logger
 from models.schemas import CreateUser, UpdateUser
 from models.db_models import User
 from models.exceptions import DatabaseError

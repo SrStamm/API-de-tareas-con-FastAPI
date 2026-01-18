@@ -152,7 +152,10 @@ async def update_project(
     auth_data: dict = Depends(require_permission(permissions=["admin", "write"])),
     project_serv: ProjectService = Depends(get_project_service),
 ):
-    return await project_serv.update_project(group_id, project_id, updated_project)
+    user = auth_data["user"]
+    return await project_serv.update_project(
+        group_id, project_id, user.user_id, updated_project
+    )
 
 
 @router.delete(
@@ -177,7 +180,8 @@ async def delete_project(
     auth_data: dict = Depends(require_permission(permissions=["admin"])),
     project_serv: ProjectService = Depends(get_project_service),
 ):
-    return await project_serv.delete_project(group_id, project_id)
+    user = auth_data["user"]
+    return await project_serv.delete_project(group_id, project_id, user.user_id)
 
 
 @router.post(

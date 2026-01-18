@@ -1,5 +1,4 @@
 from fastapi import Depends
-from models.db_models import Group_Role
 from models.exceptions import (
     GroupNotFoundError,
     UserNotInGroupError,
@@ -62,7 +61,7 @@ def require_permission(permissions: List[str]) -> Callable:
         if found_user.permission not in permissions:
             raise NotAuthorized(user.user_id)
 
-        return {"user": user, "permission": found_user.permission}
+        return {"user": user, "permission": found_user.permission.value}
 
     return dependency
 

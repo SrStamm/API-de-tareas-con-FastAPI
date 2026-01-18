@@ -122,7 +122,7 @@ async def test_delete_group_error(mocker):
     )
 
     with pytest.raises(DatabaseError):
-        await service.delete_group(group_id=1)
+        await service.delete_group(1, 1)
 
 
 @pytest.mark.asyncio

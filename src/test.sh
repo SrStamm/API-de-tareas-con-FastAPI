@@ -15,7 +15,7 @@ pytest -q --disable-warnings
 echo "✅ Test finalizados correctamente"
 
 echo "🛑 Deteniendo contenedores"
-docker stop redis-stack task-db
+docker stop redis-stack
 
 echo "🧹 Eliminando cachés de tests"
 # find . -type d -name "__pycache__" -exec rm -r {} + && rm -rf .pytest_cache

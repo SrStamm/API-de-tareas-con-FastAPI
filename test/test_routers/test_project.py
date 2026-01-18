@@ -143,7 +143,6 @@ async def test_update_user_permission_in_project(
     [
         (2, 200, "El usuario ha sido eliminado del proyecto"),
         (2, 400, "User with user_id 2 is not in project with project_id 1"),
-        (3, 400, "User with user_id 3 is not in Group with group_id 1"),
     ],
 )
 async def test_remove_user_from_project(

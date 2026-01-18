@@ -13,4 +13,4 @@ pytest -vv --disable-warnings
 echo "✅ Test finalizados correctamente"
 
 echo "🛑 Deteniendo contenedores"
-docker stop redis-stack task-db
+docker stop redis-stack

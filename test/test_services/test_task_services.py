@@ -1,9 +1,8 @@
-from models.db_models import Project_Permission, Task, User
+from datetime import datetime
+from models.db_models import Project_Permission, Task
 from models.exceptions import (
     DatabaseError,
-    TaskIsNotAssignedError,
     TaskNotFound,
-    NotAuthorized,
 )
 from models.schemas import CreateTask, UpdateTask
 from services.task_services import TaskService
@@ -85,7 +84,7 @@ async def test_delete_error(mocker):
     mock_task_repo.found_task_or_404.return_value = mock_new_task
 
     with pytest.raises(DatabaseError):
-        await service.delete(mock_new_task, 1)
+        await service.delete(mock_new_task, 1, 1)
 
 
 async def test_update_error(mocker):
@@ -94,6 +93,7 @@ async def test_update_error(mocker):
     mock_proj_ser = mocker.Mock()
 
     mock_new_task = mocker.Mock(spec=UpdateTask)
+    mock_new_task.date_exp = datetime(2050, 12, 1)
 
     service = TaskService(mock_task_repo, mock_user_ser, mock_proj_ser)
     mock_task_repo.update.side_effect = DatabaseError(
@@ -102,4 +102,4 @@ async def test_update_error(mocker):
     mock_task_repo.found_task_or_404.return_value = mock_new_task
 
     with pytest.raises(DatabaseError):
-        await service.update_task(1, 1, mock_new_task, Project_Permission.ADMIN)
+        await service.update_task(1, 1, mock_new_task, Project_Permission.ADMIN, 1)

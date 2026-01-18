@@ -1,4 +1,4 @@
-from sqlmodel import FetchedValue, Field, SQLModel, Relationship
+from sqlmodel import Field, SQLModel, Relationship
 from sqlalchemy.orm import Mapped
 from datetime import datetime as dt, timezone
 from enum import Enum
