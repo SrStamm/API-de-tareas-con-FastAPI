@@ -12,6 +12,7 @@ from models.exceptions import (
 from models.schemas import (
     ReadBasicProject,
     CreateProject,
+    ReadUser,
     UpdateProject,
     UpdatePermissionUser,
 )
@@ -185,7 +186,9 @@ class ProjectService:
             # Envia el evento
             await manager.send_to_user(message=outgoing_event_json, user_id=user_id)
 
-            return {"detail": "El usuario ha sido agregado al proyecto"}
+            new_user = self.project_repo.get_user_data_in_project(project_id, user_id)
+
+            return new_user
 
         except DatabaseError:
             raise

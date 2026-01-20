@@ -27,7 +27,7 @@ router = APIRouter(prefix="/project", tags=["Project"])
         },
     },
 )
-@limiter.limit("10/minute")
+@limiter.limit("40/minute")
 async def get_projects_iam(
     request: Request,
     limit: int = 10,
@@ -56,7 +56,7 @@ async def get_projects_iam(
         },
     },
 )
-@limiter.limit("20/minute")
+@limiter.limit("40/minute")
 def get_projects_in_group_where_iam(
     request: Request,
     group_id: int,
@@ -89,7 +89,7 @@ def get_projects_in_group_where_iam(
         },
     },
 )
-@limiter.limit("20/minute")
+@limiter.limit("40/minute")
 async def get_projects(
     request: Request,
     group_id: int,
@@ -115,14 +115,14 @@ async def get_projects(
         },
     },
 )
-@limiter.limit("10/minute")
+@limiter.limit("20/minute")
 async def create_project(
     request: Request,
     new_project: schemas.CreateProject,
     group_id: int,
     auth_data: dict = Depends(require_role(roles=["admin"])),
     project_serv: ProjectService = Depends(get_project_service),
-):
+) -> schemas.ReadProject:
     actual_user: User = auth_data["user"]
 
     return await project_serv.create_project(group_id, actual_user.user_id, new_project)
@@ -143,7 +143,7 @@ async def create_project(
         },
     },
 )
-@limiter.limit("15/minute")
+@limiter.limit("20/minute")
 async def update_project(
     request: Request,
     group_id: int,
@@ -172,7 +172,7 @@ async def update_project(
         },
     },
 )
-@limiter.limit("5/minute")
+@limiter.limit("10/minute")
 async def delete_project(
     request: Request,
     group_id: int,
@@ -203,15 +203,15 @@ async def delete_project(
         },
     },
 )
-@limiter.limit("10/minute")
+@limiter.limit("20/minute")
 async def add_user_to_project(
     request: Request,
     group_id: int,
     user_id: int,
     project_id: int,
-    auth_data: dict = Depends(require_permission(permissions=["admin"])),
+    _: dict = Depends(require_permission(permissions=["admin"])),
     project_serv: ProjectService = Depends(get_project_service),
-):
+) -> schemas.ReadUser:
     return await project_serv.add_user(group_id, project_id, user_id)
 
 
@@ -237,7 +237,7 @@ async def add_user_to_project(
         },
     },
 )
-@limiter.limit("10/minute")
+@limiter.limit("20/minute")
 async def remove_user_from_project(
     request: Request,
     group_id: int,
@@ -268,7 +268,7 @@ async def remove_user_from_project(
         },
     },
 )
-@limiter.limit("15/minute")
+@limiter.limit("25/minute")
 async def update_user_permission_in_project(
     request: Request,
     group_id: int,
