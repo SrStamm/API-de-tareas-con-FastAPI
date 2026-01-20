@@ -68,10 +68,7 @@ def register_exceptions_handlers(app):
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
-        logger.exception(
-            "unhandled_error",
-            path=str(request.url),
-        )
+        logger.error("unhandled_error", path=str(request.url), error=str(exc))
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal Server Error"},
