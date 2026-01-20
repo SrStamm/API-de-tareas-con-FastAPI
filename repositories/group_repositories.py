@@ -9,6 +9,14 @@ class GroupRepository:
     def __init__(self, session: Session):
         self.session = session
 
+    def get_user_in_group(self, group_id: int, user_id: int):
+        stmt = (
+            select(User)
+            .join(group_user)
+            .where(group_user.group_id == group_id, group_user.user_id == user_id)
+        )
+        return self.session.exec(stmt).first()
+
     def get_group_by_id(self, group_id: int) -> ReadGroup:
         try:
             stmt = (

@@ -59,10 +59,10 @@ async def test_create_project(
         json={"title": "creando un proyecto"},
     )
     assert response.status_code == status
-    project = response.json()
+    new_project = response.json()
     assert all(
-        key in project
-        for key in ["description", "group_id", "project_id", "title", "date_at"]
+        key in new_project
+        for key in ["description", "group_id", "project_id", "title", "users"]
     )
 
 
@@ -83,16 +83,16 @@ async def test_update_project(async_client, auth_headers):
 @pytest.mark.parametrize(
     "user_id, status, detail",
     [
-        (2, 200, "El usuario ha sido agregado al proyecto"),
-        (2, 400, "User with user_id 2 is in project with project_id 1"),
-        (3, 400, "User with user_id 3 is not in Group with group_id 1"),
-        (100, 404, "User with user_id 100 not found"),
+        (2, 200, {"user_id": 2, "username": "moure"}),
+        (2, 400, {"detail": "User with user_id 2 is in project with project_id 1"}),
+        (3, 400, {"detail": "User with user_id 3 is not in Group with group_id 1"}),
+        (100, 404, {"detail": "User with user_id 100 not found"}),
     ],
 )
 async def test_add_user_to_project(async_client, auth_headers, user_id, status, detail):
     response = await async_client.post(f"/project/1/1/{user_id}", headers=auth_headers)
     assert response.status_code == status
-    assert response.json() == {"detail": detail}
+    assert response.json() == detail
 
 
 @pytest.mark.asyncio

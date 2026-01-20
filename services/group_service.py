@@ -146,7 +146,9 @@ class GroupService:
                 group_id=group_id,
             )
 
-            return {"detail": "El usuario ha sido agregado al grupo"}
+            new_user = self.group_repo.get_user_in_group(group_id, user_id)
+
+            return new_user
 
         except DatabaseError:
             raise

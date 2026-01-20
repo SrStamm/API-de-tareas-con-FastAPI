@@ -149,7 +149,6 @@ async def get_groups_in_user(
     responses={
         201: {
             "description": "User added to group",
-            "model": responses.GroupAppendUserSucces,
         },
         400: {"description": "request error", "model": responses.ErrorInRequest},
         401: {"description": "User not authorized", "model": responses.NotAuthorized},
@@ -167,7 +166,7 @@ async def append_user_group(
     user_id: int,
     _: dict = Depends(require_role(roles=["admin", "editor"])),
     group_service: GroupService = Depends(get_group_service),
-):
+) -> schemas.ReadUser:
     return await group_service.append_user(group_id, user_id)
 
 

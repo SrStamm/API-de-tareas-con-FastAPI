@@ -57,10 +57,10 @@ async def test_get_groups_in_user(async_client, auth_headers):
 @pytest.mark.parametrize(
     "group_id, user_id, status, respuesta",
     [
-        (1, 2, 200, "El usuario ha sido agregado al grupo"),
-        (1, 100000, 404, "User with user_id 100000 not found"),
-        (1, 2, 400, "User with user_id 2 is in Group with group_id 1"),
-        (2, 2, 200, "El usuario ha sido agregado al grupo"),
+        (1, 2, 200, {"user_id": 2, "username": "moure"}),
+        (1, 100000, 404, {"detail": "User with user_id 100000 not found"}),
+        (1, 2, 400, {"detail": "User with user_id 2 is in Group with group_id 1"}),
+        (2, 2, 200, {"user_id": 2, "username": "moure"}),
     ],
 )
 async def test_append_user_group(
@@ -70,7 +70,7 @@ async def test_append_user_group(
         f"/group/{group_id}/{user_id}", headers=auth_headers
     )
     assert response.status_code == status
-    assert response.json() == {"detail": respuesta}
+    assert response.json() == respuesta
 
 
 @pytest.mark.asyncio

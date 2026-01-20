@@ -112,9 +112,9 @@ async def structured_log_middleware(request: Request, call_next):
 
     except Exception as exc:
         log = structlog.get_logger()
-        log.exception(
+        log.error(
             "request_failed",
-            exc_info=exc,
+            exc_info=str(exc),
             status_code=500,
         )
         raise

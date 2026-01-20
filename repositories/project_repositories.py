@@ -1,5 +1,6 @@
+from sqlalchemy.orm import joinedload
 from models.db_models import Project, project_user, Project_Permission, User
-from models.schemas import CreateProject, UpdateProject
+from models.schemas import CreateProject, ReadUser, UpdateProject
 from models.exceptions import DatabaseError
 from db.database import Session, select, selectinload, SQLAlchemyError
 
@@ -153,6 +154,16 @@ class ProjectRepository:
         except Exception:
             self.session.rollback()
             raise
+
+    def get_user_data_in_project(self, project_id: int, user_id: int) -> ReadUser:
+        stmt = (
+            select(User)
+            .join(project_user)
+            .where(
+                project_user.project_id == project_id, project_user.user_id == user_id
+            )
+        )
+        return self.session.exec(stmt).first()
 
     def add_user(self, project_id: int, user_id: int):
         try:
