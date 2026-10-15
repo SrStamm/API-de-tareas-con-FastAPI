@@ -4,7 +4,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-amaterasu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ci-test-password}
       POSTGRES_DB: ${POSTGRES_DB:-database}
     ports:
       - "5432:5432"
@@ -14,7 +14,7 @@ services:
     image: redis/redis-stack:latest
     restart: always
     environment:
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-sasaki19}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-ci-test-password}
     ports:
       - "6379:6379"
       - "8001:8001"

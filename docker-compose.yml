@@ -39,7 +39,6 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
-      # REDIS_PASSWORD: sasaki19
     env_file: .env
     volumes:
       - .:/backend
@@ -54,7 +53,7 @@ services:
       REDIS_HOST: redis
     ports:
       - "8000:8000"
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     env_file: .env
     volumes:
       - .:/backend
