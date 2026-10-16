@@ -126,6 +126,7 @@ class ReadTask(BaseModel):
 
 class ReadTaskInProject(BaseModel):
     task_id: int = Field(examples=[1])
+    project_id: int = Field(examples=[1])
     title: str = Field(examples=["TaskAPI"])
     description: str | None = Field(default=None, examples=[])
     date_exp: Optional[dt]
