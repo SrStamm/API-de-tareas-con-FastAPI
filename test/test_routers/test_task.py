@@ -125,6 +125,7 @@ async def test_get_task_in_project(async_client, auth_headers, clean_redis):
                 "description",
                 "date_exp",
                 "state",
+                "project_id",
                 "assigned_user",
                 "task_label_links",
             ]
