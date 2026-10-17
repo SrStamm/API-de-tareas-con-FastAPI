@@ -3,3 +3,7 @@ env
 .env
 /env
 ./env
+.venv/
+.pytest_cache/
+.codegraph/
+.atl/

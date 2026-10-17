@@ -51,16 +51,15 @@ def test_db():
             print(f"Error al eliminar test.db: {e}")
             raise
 
-
-@pytest.fixture(scope="session")
-def redis_host():
-    return os.getenv("REDIS_HOST", "localhost")
-
-
 # Fixture para tests asíncronos
 @pytest_asyncio.fixture(scope="function")
 async def async_redis_client():
-    client = await redis.Redis(host="localhost", port=6379, db=0)
+    host = os.getenv("REDIS_HOST")
+    port = os.getenv("REDIS_PORT")
+    db = os.getenv("REDIS_DB")
+
+    client = await redis.Redis(host=host, port=port, db=db)
+
     yield client
 
     await client.flushdb()
