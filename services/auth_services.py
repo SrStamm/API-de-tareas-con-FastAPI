@@ -130,14 +130,14 @@ class AuthService:
     def refresh(self, refresh: RefreshTokenRequest):
         try:
             # Desencrypt the token
-            unverified_token = jwt.get_unverified_claims(refresh)
+            unverified_token = jwt.get_unverified_claims(refresh.refresh)
             jti = unverified_token.get("jti")
 
             actual_session = self.auth_repo.get_session_with_jti(jti)
             if not actual_session:
                 raise InvalidToken
 
-            payload = jwt.decode(refresh)
+            payload = jwt.decode(refresh.refresh, SECRET, algorithms=ALGORITHM)
 
             scope = payload.get("scope")
             if not scope:

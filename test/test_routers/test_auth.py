@@ -1,3 +1,5 @@
+from jose.exceptions import ExpiredSignatureError
+
 from conftest import (
     client,
     test_user,
@@ -16,6 +18,8 @@ from api.v1.routers.auth import SECRET, ALGORITHM, JWTError, ACCESS_TOKEN_DURATI
 from jose import jwt
 import uuid
 from core.logger import logger
+from services.auth_services import AuthService
+from repositories.auth_repositories import AuthRepository
 
 
 def test_root(client):
@@ -209,8 +213,7 @@ async def test_auth_user_expired_token(mocker):
 """
 
 
-@pytest.mark.asyncio
-async def test_logout(client, auth_headers):
+def test_logout(client, auth_headers):
     response = client.post("/logout", headers=auth_headers)
     assert response.status_code == 200
     assert response.json() == {"detail": "Closed all sessions"}
@@ -247,304 +250,346 @@ async def test_logout_error(mocker):
     
     session_mock.rollback.assert_called_once()"""
 
-"""
-def test_refresh_token(client):
-    login_response = client.post("/login", data={"username": 'mirko', "password": PASSWORD})
-    tokens = login_response.json()
-    refresh_token = tokens["refresh_token"]
 
-    token = schemas.RefreshTokenRequest(refresh=refresh_token).model_dump_json()
-    print(refresh_token)
-    print(token)
-
-    response = client.post("/refresh", json={"refresh": token})
+def test_refresh(client, auth_headers, auth_tokens):
+    response = client.post(
+        "/refresh", 
+        headers=auth_headers, 
+        json={"refresh": auth_tokens["refresh_token"]}
+    )
     assert response.status_code == 200
+
     data = response.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
+    assert "refresh_token" in data
+    assert data["access_token"] != auth_headers["Authorization"].split()[1]
 
 
-def test_refresh_token_format(client, auth_headers):
-    h = auth_headers
-    login_response = client.post("/login", data={"username": 'mirko', "password": PASSWORD})
-    tokens = login_response.json()
-    refresh_token = tokens["refresh_token"]
+# =============================================================================
+# B3 — Casos borde de AuthService.refresh()
+#
+# ESTRATEGIA: tests UNITARIOS sobre AuthService, no sobre el router.
+# ¿Por qué? Porque el happy path ya está cubierto por test_refresh() vía HTTP.
+# Lo que queda por cubrir son las 8 ramas de error de refresh(), y la mayoría
+# son IMPOSIBLES de provocar contra el router con datos reales (no podés hacer
+# que la BD "olvide" una sesión sin romper otras cosas, ni forzar un payload
+# sin 'scope' sin tener la clave secreta).
+#
+# PATRÓN que vas a repetir en CADA test de acá abajo:
+#
+#   1. ARRANGE
+#      - Crear `mock_repo = mocker.Mock(spec=AuthRepository)`
+#        (`spec=` es importante: si le pedís un método que no existe, explota
+#        en vez de devolverte un Mock silencioso y mentirte)
+#      - Crear `servicio = AuthService(auth_repo=mock_repo)`
+#      - Mockear `services.auth_services.jwt` (NO `api.v1.routers.auth.jwt`,
+#        este código vive en services/, no en el router)
+#   2. ACT  -> llamar `servicio.refresh(RefreshTokenRequest(refresh="..."))`
+#   3. ASSERT -> `pytest.raises(<excepción>)` + asserts sobre el mock
+#        para verificar que NO llegó más lejos de donde debía
+#
+# REGLA DE ORO: en cada caso de error, verificá además que el mock del repo
+# NO fue llamado para operaciones posteriores. Un `raise` que no corta el flujo
+# es un bug que este assert detecta.
+# =============================================================================
 
-    # Verifica el contenido del refresh token
-    claims = jwt.get_unverified_claims(refresh_token)
-    print("Refresh token payload:", claims)
 
-@pytest.mark.asyncio
-async def test_refresh_success(mocker):
-    # Setup
-    mock_session = mocker.Mock()
-    mock_user = mocker.Mock(spec=db_models.User)
-    expected_user_id = "123"
-    mock_user.user_id = expected_user_id
-    mock_session.get.return_value = mock_user
-    
-    mock_actual_session = mocker.Mock(spec=db_models.Session)
-    mock_actual_session.jti = str(uuid.uuid4())
-    mock_actual_session.is_active = True
-    mock_session.exec.return_value.first.return_value = mock_actual_session
-    
-    mock_request = mocker.Mock(spec=Request)
-    
-    # Use the real datetime for generating timestamps for the payload
-    current_time_for_payload = datetime.now(timezone.utc)
-    expiration_time_for_payload = current_time_for_payload + timedelta(hours=1)
-    mock_payload = {
-        "jti": mock_actual_session.jti,
-        "sub": expected_user_id,
-        "exp": expiration_time_for_payload.timestamp(),
-        "scope": "token_refresh"
-    }
-    
-    # This will be the controlled 'current time' within the function under test
-    controlled_current_time = datetime.now(timezone.utc) 
+def test_refresh_session_not_found(mocker):
+    # Rama auth_services.py:137 — el jti no existe en la BD.
 
-    # Mock dependencies
-    mocker.patch('api.v1.routers.auth.jwt.get_unverified_claims', return_value=mock_payload)
-    mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
+    mock_repo = mocker.Mock(spec=AuthRepository)
+    mock_repo.get_session_with_jti.return_value = None
 
-    # Correctly mock datetime within the 'auth' module
-    mocked_auth_datetime = mocker.patch('api.v1.routers.auth.datetime')
-    mocked_auth_datetime.now.return_value = controlled_current_time
-    # Ensure fromtimestamp uses the real datetime.fromtimestamp from the test's global scope
-    # (imported via 'from datetime import datetime')
-    mocked_auth_datetime.fromtimestamp = datetime.fromtimestamp 
-    
-    mock_jwt_encode = mocker.patch('api.v1.routers.auth.jwt.encode', side_effect=[
-        "new_access_token",  # First call for access token
-        "new_refresh_token"  # Second call for refresh token
-    ])
-    
-    test_token = "valid.fake.token"
-    
-    # Execution
-    result = await auth.refresh(
-        refresh=schemas.RefreshTokenRequest(refresh=test_token), 
-        request=mock_request, 
-        session=mock_session
+    mock_payload = { "jti" : "falso"}
+    mocker.patch('services.auth_services.jwt.get_unverified_claims', return_value=mock_payload)
+
+    with pytest.raises(exceptions.InvalidToken):
+        AuthService(auth_repo=mock_repo).refresh(schemas.RefreshTokenRequest(refresh="falso"))
+
+    mock_repo.get_session_with_jti.assert_called_once_with(mock_payload["jti"])
+    mock_repo.delete_session.assert_not_called()
+
+
+def test_refresh_missing_scope(mocker):
+    # Rama auth_services.py:143 — el payload no trae 'scope'.
+
+    mock_repo = mocker.Mock(spec=AuthRepository)
+    mock_repo.get_session_with_jti.return_value = mocker.Mock()
+
+    mocker.patch('services.auth_services.jwt.get_unverified_claims', return_value={})
+    mocker.patch('services.auth_services.jwt.decode', return_value={})
+
+    with pytest.raises(exceptions.InvalidToken):
+        AuthService(auth_repo=mock_repo).refresh(schemas.RefreshTokenRequest(refresh="falso"))
+
+    mock_repo.get_user_by_id.assert_not_called()
+
+
+def test_refresh_wrong_scope(mocker):
+    # Rama auth_services.py:146 — 'scope' existe pero no es 'token_refresh'.
+
+    mock_repo = mocker.Mock(spec=AuthRepository)
+    mock_repo.get_session_with_jti.return_value = mocker.Mock()
+
+    mocker.patch('services.auth_services.jwt.get_unverified_claims', return_value={})
+    mocker.patch('services.auth_services.jwt.decode', return_value={"scope" : "api_access"})
+
+    with pytest.raises(exceptions.InvalidToken):
+        AuthService(auth_repo=mock_repo).refresh(schemas.RefreshTokenRequest(refresh="falso"))
+
+    mock_repo.delete_session.assert_not_called()
+
+
+def test_refresh_missing_sub(mocker):
+    # Rama auth_services.py:150 — el payload no trae 'sub' (user_id).
+
+    mock_repo = mocker.Mock(spec=AuthRepository)
+    mock_repo.get_session_with_jti.return_value = mocker.Mock()
+
+    mocker.patch('services.auth_services.jwt.get_unverified_claims', return_value={})
+    mocker.patch('services.auth_services.jwt.decode', return_value={"scope" : "token_refresh"})
+
+    with pytest.raises(exceptions.InvalidToken):
+        AuthService(auth_repo=mock_repo).refresh(schemas.RefreshTokenRequest(refresh="falso"))
+
+    mock_repo.get_user_by_id.assert_not_called()
+
+
+def test_refresh_user_not_found(mocker):
+    # Rama auth_services.py:154 — el 'sub' existe pero ese usuario no está en BD.
+
+    mock_repo = mocker.Mock(spec=AuthRepository)
+    mock_repo.get_session_with_jti.return_value = mocker.Mock()
+    mock_repo.get_user_by_id.return_value = None
+
+    mocker.patch('services.auth_services.jwt.get_unverified_claims', return_value={})
+    mocker.patch('services.auth_services.jwt.decode', return_value={"scope" : "token_refresh", "sub": "u_1"})
+
+    with pytest.raises(exceptions.UserNotFoundError) as exc_info:
+        AuthService(auth_repo=mock_repo).refresh(schemas.RefreshTokenRequest(refresh="falso"))
+
+    assert exc_info.value.user_id == "u_1"
+    mock_repo.delete_session.assert_not_called()
+
+
+def test_refresh_missing_exp(mocker):
+    """Rama auth_services.py:162 — el payload no trae 'exp'.
+
+    Debe lanzar: InvalidToken (401)
+
+    ⚠️  CASO TRAMPOSO: jwt.decode NO valida 'exp' si el claim no existe.
+    Lo devuelve como None y seguís de largo hasta la línea 162.
+    (Distinto del token EXPIRADO, que sí lo revienta jwt.decode — ver test de abajo)
+
+    ARRANGE:
+      - jwt.decode -> payload con scope y sub, pero SIN "exp"
+
+    ASSERT:
+      - pytest.raises(exceptions.InvalidToken)
+      - mock_repo.delete_session.assert_not_called()
+    """
+
+    mock_repo = mocker.Mock(spec=AuthRepository)
+    mock_repo.get_session_with_jti.return_value = mocker.Mock()
+    mock_repo.get_user_by_id.return_value = mocker.Mock()
+
+    mocker.patch('services.auth_services.jwt.get_unverified_claims', return_value={})
+    mocker.patch('services.auth_services.jwt.decode', return_value={"scope" : "token_refresh", "sub": "u_1"})
+
+    with pytest.raises(exceptions.InvalidToken):
+        AuthService(auth_repo=mock_repo).refresh(schemas.RefreshTokenRequest(refresh="falso"))
+
+    mock_repo.delete_session.assert_not_called()
+
+
+def test_refresh_expired_token(mocker):
+    """Rama auth_services.py:206 (NO la 165) — token con 'exp' en el pasado.
+
+    Debe lanzar: InvalidToken (401)
+
+    ⚠️  TRAMPA CONFIRMADA — le dediqué una verificación a esto:
+        >>> jwt.encode({'exp': <pasado>, ...}); jwt.decode(...)  ->  ExpiredSignatureError
+        ExpiredSignatureError ES subclase de JWTError.
+
+    Consecuencia: jwt.decode explota en la LÍNEA 135, el `except JWTError` de la
+    línea 206 lo atrapa, y las líneas 162-166 (la verificación manual de exp)
+    NUNCA se ejecutan. Esa verificación es código muerto/defensivo.
+
+    Entonces: este test pasa, pero valida la línea 206, no la 165.
+    Si querés probar la 165 tendrías que mockear jwt.decode para que devuelva
+    un payload con exp viejo SIN lanzar excepción. Es válido hacerlo — decidí vos.
+
+    ARRANGE (opción A, camino real):
+      - mockear jwt.decode con side_effect=ExpiredSignatureError("Signature has expired")
+      - o construir un token REAL con exp pasado usando la clave SECRET
+    ARRANGE (opción B, para probar la línea 165 que está aislada):
+      - jwt.decode devuelve payload con exp = timestamp del pasado
+
+    ASSERT:
+      - pytest.raises(exceptions.InvalidToken)
+      - mock_repo.delete_session.assert_not_called()
+    """
+
+    mock_repo = mocker.Mock(spec=AuthRepository)
+    mock_repo.get_session_with_jti.return_value = mocker.Mock()
+
+    mocker.patch(
+        'services.auth_services.jwt.get_unverified_claims',
+        return_value={"jti": "jti_viejo"}
     )
-    
-    # Assertions
-    assert isinstance(result, schemas.Token)
-    assert result.access_token == "new_access_token"
-    assert result.refresh_token == "new_refresh_token"
-    assert result.token_type == "bearer"
-    
-    # Verify session interactions
-    mock_session.exec.assert_called_once()
-    mock_session.delete.assert_called_once_with(mock_actual_session)
-    mock_session.add.assert_called_once()
-    mock_session.commit.assert_called_once()
-    mock_session.refresh.assert_called_once()
-    
-    # Verify JWT encode calls
-    assert mock_jwt_encode.call_count == 2
-    access_token_call_args = mock_jwt_encode.call_args_list[0][0][0]
-    assert access_token_call_args["sub"] == expected_user_id
-    assert access_token_call_args["scope"] == "api_access"
-    # Check that the mocked 'now' was used for expiry calculation for access token
-    expected_access_exp = controlled_current_time + timedelta(minutes=ACCESS_TOKEN_DURATION) # Assuming ACCESS_TOKEN_DURATION is accessible or known
-    assert access_token_call_args["exp"] == expected_access_exp.timestamp()
+    mocker.patch(
+        'services.auth_services.jwt.decode',
+        side_effect=ExpiredSignatureError("Signature has expired")
+        )
 
-    refresh_token_call_args = mock_jwt_encode.call_args_list[1][0][0]
-    assert refresh_token_call_args["scope"] == "token_refresh"
-    assert refresh_token_call_args["sub"] == expected_user_id
-    # Check that the mocked 'now' was used for expiry calculation for refresh token
-    # This requires knowing REFRESH_TOKEN_DURATION or checking the 'new_session.expires_at' directly if it's based on the mocked time.
-    # The code under test does: new_session.expires_at = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_DURATION)
-    # So, the 'exp' in the refresh token should be based on 'controlled_current_time'.
-
-    # To properly verify expirations, ensure ACCESS_TOKEN_DURATION and REFRESH_TOKEN_DURATION
-    # are defined or imported in your test file if you want to check exact timestamps.
-    # For example:
-    # from api.v1.routers.auth import ACCESS_TOKEN_DURATION, REFRESH_TOKEN_DURATION
-
-    # ... (other test cases remain unchanged)
-
-@pytest.mark.asyncio
-async def test_refresh_invalid_session(mocker):
-    # Setup
-    mock_session = mocker.Mock()
-    mock_session.exec.return_value.first.return_value = None
-    mock_request = mocker.Mock(spec=Request)
-    
-    current_time = datetime.now(timezone.utc)
-    mock_payload = {
-        "jti": str(uuid.uuid4()),
-        "sub": "123",
-        "exp": (current_time + timedelta(hours=1)).timestamp(),
-        "scope": "token_refresh"
-    }
-    
-    mocker.patch('api.v1.routers.auth.jwt.get_unverified_claims', return_value=mock_payload)
-    
-    # Execution and Assertion
     with pytest.raises(exceptions.InvalidToken):
-        await auth.refresh(
-            refresh=schemas.RefreshTokenRequest(refresh="invalid.session.token"),
-            request=mock_request,
-            session=mock_session
+        AuthService(auth_repo=mock_repo).refresh(schemas.RefreshTokenRequest(refresh="falso"))
+
+    mock_repo.delete_session.assert_not_called()
+
+def test_refresh_invalid_signature(mocker):
+    """Rama auth_services.py:206 — firma inválida / token basura.
+
+    Debe lanzar: InvalidToken (401)
+
+    ARRANGE:
+      - mockear jwt.get_unverified_claims con side_effect=JWTError("Invalid signature")
+      - Esto es lo que pasa con un string random tipo "esto.no.es.un.jwt"
+
+    ASSERT:
+      - pytest.raises(exceptions.InvalidToken)
+      - mock_repo.get_session_with_jti.assert_not_called()
+        <- CLAVE: si la firma es inválida, NO debés consultar la BD.
+           Si este assert falla, tenés un problema de seguridad (oracle de
+           existencia de sesiones).
+    """
+
+    mock_repo = mocker.Mock(spec=AuthRepository)
+    mock_repo.get_session_with_jti.return_value({})
+
+    mocker.patch(
+        'services.auth_services.jwt.get_unverified_claims',
+        side_effect=JWTError("Invalid signature")
         )
 
-@pytest.mark.asyncio
-async def test_refresh_invalid_scope(mocker):
-    # Setup
-    mock_session = mocker.Mock()
-    mock_actual_session = mocker.Mock(spec=db_models.Session)
-    mock_actual_session.jti = str(uuid.uuid4())
-    mock_actual_session.is_active = True
-    mock_session.exec.return_value.first.return_value = mock_actual_session
-    mock_request = mocker.Mock(spec=Request)
-    
-    current_time = datetime.now(timezone.utc)
-    mock_payload = {
-        "jti": mock_actual_session.jti,
-        "sub": "123",
-        "exp": (current_time + timedelta(hours=1)).timestamp(),
-        "scope": "invalid_scope"
-    }
-    
-    mocker.patch('api.v1.routers.auth.jwt.get_unverified_claims', return_value=mock_payload)
-    mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
-    
-    # Execution and Assertion
     with pytest.raises(exceptions.InvalidToken):
-        await auth.refresh(
-            refresh=schemas.RefreshTokenRequest(refresh="invalid.scope.token"),
-            request=mock_request,
-            session=mock_session
-        )
+        AuthService(auth_repo=mock_repo).refresh(schemas.RefreshTokenRequest(refresh="falso"))
 
-@pytest.mark.asyncio
-async def test_refresh_expired_token(mocker):
-    # Setup
-    mock_session = mocker.Mock()
-    mock_actual_session = mocker.Mock(spec=db_models.Session)
-    mock_actual_session.jti = str(uuid.uuid4())
-    mock_actual_session.is_active = True
-    mock_session.exec.return_value.first.return_value = mock_actual_session
-    mock_request = mocker.Mock(spec=Request)
-    
-    # This is the time the token is supposedly checked
-    controlled_current_time = datetime.now(timezone.utc) 
-    
-    mock_payload = {
-        "jti": mock_actual_session.jti,
-        "sub": "123",
-        "exp": (controlled_current_time - timedelta(hours=1)).timestamp(),  # Expired
-        "scope": "token_refresh"
-    }
-    
-    mocker.patch('api.v1.routers.auth.jwt.get_unverified_claims', return_value=mock_payload)
-    mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
+    mock_repo.get_session_with_jti.assert_not_called()
 
-    # Correctly mock datetime within the 'auth' module
-    mocked_auth_datetime = mocker.patch('api.v1.routers.auth.datetime')
-    mocked_auth_datetime.now.return_value = controlled_current_time
-    mocked_auth_datetime.fromtimestamp = datetime.fromtimestamp
-    
-    # Execution and Assertion
-    with pytest.raises(exceptions.InvalidToken):
-        await auth.refresh(
-            refresh=schemas.RefreshTokenRequest(refresh="expired.token"),
-            request=mock_request,
-            session=mock_session
-        )
 
-@pytest.mark.asyncio
-async def test_refresh_user_not_found(mocker):
-    # Setup
-    mock_session = mocker.Mock()
-    mock_actual_session = mocker.Mock(spec=db_models.Session)
-    mock_actual_session.jti = str(uuid.uuid4())
-    mock_actual_session.is_active = True
-    mock_session.exec.return_value.first.return_value = mock_actual_session
-    mock_session.get.return_value = None
-    mock_request = mocker.Mock(spec=Request)
-    
-    current_time = datetime.now(timezone.utc)
-    mock_payload = {
-        "jti": mock_actual_session.jti,
-        "sub": "123",
-        "exp": (current_time + timedelta(hours=1)).timestamp(),
-        "scope": "token_refresh"
-    }
-    
-    mocker.patch('api.v1.routers.auth.jwt.get_unverified_claims', return_value=mock_payload)
-    mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
-    
-    # Execution and Assertion
-    with pytest.raises(exceptions.UserNotFoundError):
-        await auth.refresh(
-            refresh=schemas.RefreshTokenRequest(refresh="user.not.found.token"),
-            request=mock_request,
-            session=mock_session
-        )
+def test_refresh_database_error(mocker):
+    """Rama auth_services.py:208 — el repo lanza DatabaseError.
 
-@pytest.mark.asyncio
-async def test_refresh_jwt_error(mocker):
-    # Setup
-    mock_session = mocker.Mock()
-    mock_request = mocker.Mock(spec=Request)
-    
-    mocker.patch('api.v1.routers.auth.jwt.get_unverified_claims', side_effect=JWTError("Invalid JWT"))
-    
-    # Execution and Assertion
-    with pytest.raises(exceptions.InvalidToken):
-        await auth.refresh(
-            refresh=schemas.RefreshTokenRequest(refresh="invalid.jwt.token"),
-            request=mock_request,
-            session=mock_session
-        )
+    Debe lanzar: DatabaseError (500), propagado SIN tragar.
 
-@pytest.mark.asyncio
-async def test_refresh_database_error(mocker):
-    # Setup
-    mock_session = mocker.Mock()
-    mock_user = mocker.Mock(spec=db_models.User)
-    expected_user_id = "123"
-    mock_user.user_id = expected_user_id
-    mock_session.get.return_value = mock_user
-    
-    mock_actual_session = mocker.Mock(spec=db_models.Session)
-    mock_actual_session.jti = str(uuid.uuid4())
-    mock_actual_session.is_active = True
-    mock_session.exec.return_value.first.return_value = mock_actual_session
-    mock_session.commit.side_effect = SQLAlchemyError("Database error")
-    
-    mock_request = mocker.Mock(spec=Request)
-    
-    # This will be the controlled 'current time'
-    controlled_current_time = datetime.now(timezone.utc)
-    
-    mock_payload = {
-        "jti": mock_actual_session.jti,
-        "sub": expected_user_id,
-        "exp": (controlled_current_time + timedelta(hours=1)).timestamp(), # Not expired for this test
-        "scope": "token_refresh"
-    }
-    
-    mocker.patch('api.v1.routers.auth.jwt.get_unverified_claims', return_value=mock_payload)
-    mocker.patch('api.v1.routers.auth.jwt.decode', return_value=mock_payload)
+    ARRANGE:
+      - mock_repo.get_session_with_jti con side_effect=DatabaseError("boom", "get_session_with_jti")
+        (DatabaseError necesita 2 args: error y func)
+      - OJO: DatabaseError es HTTPException, así que tiene status_code 500
 
-    # Correctly mock datetime within the 'auth' module
-    mocked_auth_datetime = mocker.patch('api.v1.routers.auth.datetime')
-    mocked_auth_datetime.now.return_value = controlled_current_time
-    mocked_auth_datetime.fromtimestamp = datetime.fromtimestamp
-    
-    # Execution and Assertion
+    ASSERT:
+      - pytest.raises(exceptions.DatabaseError)
+      - Verificá que NO se convirtió en InvalidToken — si el except DatabaseError
+        no estuviera, caería en un handler genérico y el status podría cambiar.
+    """
+
+    mock_repo = mocker.Mock(spec=AuthRepository)
+    mocker.patch('services.auth_services.jwt.get_unverified_claims', return_value={})
+    mock_repo.get_session_with_jti.side_effect=exceptions.DatabaseError("boom", "get_session_with_jti")
+
     with pytest.raises(exceptions.DatabaseError):
-        await auth.refresh(
-            refresh=schemas.RefreshTokenRequest(refresh="db.error.token"),
-            request=mock_request,
-            session=mock_session
-        )
-    mock_session.rollback.assert_called_once()
-"""
+        AuthService(auth_repo=mock_repo).refresh(schemas.RefreshTokenRequest(refresh="falso"))
+
+
+def test_refresh_success_rotates_session(mocker):
+    """Rama feliz DETALLADA — verifica que rota la sesión correctamente.
+
+    Esto complementa test_refresh() (que es integration y sólo mira el 200).
+
+    Debe devolver: Token(access_token=..., token_type="bearer", refresh_token=...)
+
+    ARRANGE:
+      - mock_repo.get_session_with_jti -> una session mock con .jti
+      - mock_repo.get_user_by_id -> un user mock con .user_id
+      - mock_repo.new_session -> un objeto con .jti, .sub, .expires_at (datetime)
+        ⚠️ DEBE tener expires_at real, porque refresh() lee new_session.expires_at
+        para armar el exp del nuevo refresh token (línea 184)
+      - jwt.decode -> payload completo y válido
+      - jwt.encode -> side_effect=["nuevo_access", "nuevo_refresh"]
+
+    ASSERT (las que importan):
+      - result.access_token == "nuevo_access"
+      - result.token_type == "bearer"
+      - result.refresh_token == "nuevo_refresh"
+      - mock_repo.delete_session.assert_called_once_with(<la session vieja>)
+        <- la sesión VIEJA se borra. Es el corazón del refresh.
+      - mock_repo.new_session.assert_called_once()
+      - jwt.encode se llamó 2 veces
+      - El payload del PRIMER encode tiene scope="api_access"
+      - El payload del SEGUNDO encode tiene scope="token_refresh"
+    """
+    mock_repo = mocker.Mock(spec=AuthRepository)
+
+    mock_session = mocker.Mock()
+    mock_session.jti = "jti_viejo"
+    mock_repo.get_session_with_jti.return_value = mock_session
+
+
+    user_mock = mocker.Mock()
+    user_mock.user_id = "u_1"
+    mock_repo.get_user_by_id.return_value = user_mock
+
+    mock_new_session = mocker.Mock()
+    mock_new_session.jti = "jti_nuevo"
+    mock_new_session.sub = "u_1"
+    mock_new_session.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    mock_repo.new_session.return_value = mock_new_session
+
+    mocker.patch(
+        'services.auth_services.jwt.get_unverified_claims',
+        return_value={"jti": "jti_viejo"}
+    )
+    mocker.patch(
+        'services.auth_services.jwt.decode',
+        return_value={
+            "scope": "token_refresh",
+            "sub": "u_1",
+            "exp": (datetime.now(timezone.utc) + timedelta(minutes=10)).timestamp()
+        }
+    )
+
+    mock_jwt_encode = mocker.patch(
+        'services.auth_services.jwt.encode',
+        side_effect=["nuevo_access", "nuevo_refresh"]
+    )
+
+    result = AuthService(auth_repo=mock_repo).refresh(schemas.RefreshTokenRequest(refresh="falso"))
+
+
+    assert result.access_token == "nuevo_access"
+    assert result.token_type == "bearer"
+    assert result.refresh_token == "nuevo_refresh"
+
+    mock_repo.delete_session.assert_called_once_with(mock_session)
+    mock_repo.new_session.assert_called_once()
+
+    # Verificar llamadas a jwt.encode y sus payloads
+    assert mock_jwt_encode.call_count == 2
+
+    # Primer encode: access_token (scope="api_access")
+    first_call_args = mock_jwt_encode.call_args_list[0][0][0]
+    assert first_call_args["scope"] == "api_access"
+
+    # Segundo encode: refresh_token (scope="token_refresh")
+    second_call_args = mock_jwt_encode.call_args_list[1][0][0]
+    assert second_call_args["scope"] == "token_refresh"
+
+
+def test_refresh_with_garbage_token_returns_401(client):
+    response = client.post("/refresh", json={"refresh": "esto.no.es.un.jwt"})
+    assert response.status_code == 401
 
 
 def test_get_expired_sessions(client):
