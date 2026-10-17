@@ -114,7 +114,7 @@ async def structured_log_middleware(request: Request, call_next):
         log = structlog.get_logger()
         log.error(
             "request_failed",
-            exc_info=str(exc),
+            exc_info=exc,
             status_code=500,
         )
         raise
