@@ -85,19 +85,19 @@ flowchart LR
 
 ## 🛠️ Tech stack
 
-| Category | Technology |
-|---|---|
-| Language | Python 3.12 |
-| Web framework | FastAPI |
-| ORM / validation | SQLModel (Pydantic) |
-| Database | PostgreSQL (+ Alembic migrations) |
-| Cache / pub-sub | Redis |
-| Async tasks | Celery (Redis broker) |
-| Scheduler | APScheduler |
-| Auth | JWT (python-jose, HS256) |
-| Tests | pytest, pytest-cov |
-| CI | GitHub Actions |
-| Containers | Docker & Docker Compose |
+| Category         | Technology                        |
+| ---------------- | --------------------------------- |
+| Language         | Python 3.12                       |
+| Web framework    | FastAPI                           |
+| ORM / validation | SQLModel (Pydantic)               |
+| Database         | PostgreSQL (+ Alembic migrations) |
+| Cache / pub-sub  | Redis                             |
+| Async tasks      | Celery (Redis broker)             |
+| Scheduler        | APScheduler                       |
+| Auth             | JWT (python-jose, HS256)          |
+| Tests            | pytest, pytest-cov                |
+| CI               | GitHub Actions                    |
+| Containers       | Docker & Docker Compose           |
 
 ---
 
@@ -151,23 +151,23 @@ The API will be available at `http://localhost:8000` (PostgreSQL and Redis inclu
 
 Create a `.env` file at the project root. `SECRET_KEY` and `ALGORITHM` are **required** — the app fails at startup without them. If `DATABASE_URL` is set, it takes precedence over the individual `POSTGRES_*` values.
 
-| Variable | Used in | Default | Notes |
-|---|---|---|---|
-| `POSTGRES_USER` | `db/database.py` | — | Required |
-| `POSTGRES_PASSWORD` | `db/database.py` | — | Required |
-| `POSTGRES_DB` | `db/database.py` | — | Required |
-| `POSTGRES_HOST` | `db/database.py` | — | Required |
-| `POSTGRES_PORT` | `db/database.py` | — | Required |
-| `DATABASE_URL` | `db/database.py` | — | Full SQLAlchemy URL; takes precedence over `POSTGRES_*` |
-| `REDIS_HOST` | `db/database.py` | `localhost` | |
-| `REDIS_PORT` | `db/database.py` | `6379` | |
-| `REDIS_DB` | `db/database.py` | `0` | |
-| `REDIS_PASSWORD` | Redis client | — | Required in the Docker setup |
-| `REDIS_URL` | Celery (`tasks.py`) | — | Broker URL |
-| `SECRET_KEY` | auth | — | **Required — startup fails without it** |
-| `ALGORITHM` | auth | — | **Required — e.g. `HS256`** |
-| `ACCESS_TOKEN_DURATION` | `services/auth_services.py` | `15` | Access token lifetime in **minutes** |
-| `REFRESH_TOKEN_DURATION` | `services/auth_services.py` | `7` | Refresh token lifetime in **days** |
+| Variable                 | Used in                     | Default     | Notes                                                   |
+| ------------------------ | --------------------------- | ----------- | ------------------------------------------------------- |
+| `POSTGRES_USER`          | `db/database.py`            | —           | Required                                                |
+| `POSTGRES_PASSWORD`      | `db/database.py`            | —           | Required                                                |
+| `POSTGRES_DB`            | `db/database.py`            | —           | Required                                                |
+| `POSTGRES_HOST`          | `db/database.py`            | —           | Required                                                |
+| `POSTGRES_PORT`          | `db/database.py`            | —           | Required                                                |
+| `DATABASE_URL`           | `db/database.py`            | —           | Full SQLAlchemy URL; takes precedence over `POSTGRES_*` |
+| `REDIS_HOST`             | `db/database.py`            | `localhost` |                                                         |
+| `REDIS_PORT`             | `db/database.py`            | `6379`      |                                                         |
+| `REDIS_DB`               | `db/database.py`            | `0`         |                                                         |
+| `REDIS_PASSWORD`         | Redis client                | —           | Required in the Docker setup                            |
+| `REDIS_URL`              | Celery (`tasks.py`)         | —           | Broker URL                                              |
+| `SECRET_KEY`             | auth                        | —           | **Required — startup fails without it**                 |
+| `ALGORITHM`              | auth                        | —           | **Required — e.g. `HS256`**                             |
+| `ACCESS_TOKEN_DURATION`  | `services/auth_services.py` | `15`        | Access token lifetime in **minutes**                    |
+| `REFRESH_TOKEN_DURATION` | `services/auth_services.py` | `7`         | Refresh token lifetime in **days**                      |
 
 Copy-pasteable example (fake values only — generate your own):
 
@@ -208,18 +208,18 @@ Once the server is running:
 
 ## 🧪 Testing
 
-| Command | What it does |
-|---|---|
-| `pytest -q --disable-warnings` | Run the full suite (needs Redis on `localhost:6379`) |
-| `pytest -vv` | Verbose run |
-| `pytest --cov=./api/v1 --cov-report=html` | Coverage of routers → `htmlcov/index.html` |
-| `pytest --cov=. --cov-report=html` | Full-project coverage → `htmlcov/index.html` |
-| `src/ci-test.sh` | CI entrypoint — exits non-zero on test failure |
+| Command                                   | What it does                                         |
+| ----------------------------------------- | ---------------------------------------------------- |
+| `pytest -q --disable-warnings`            | Run the full suite (needs Redis on `localhost:6379`) |
+| `pytest -vv`                              | Verbose run                                          |
+| `pytest --cov=./api/v1 --cov-report=html` | Coverage of routers → `htmlcov/index.html`           |
+| `pytest --cov=. --cov-report=html`        | Full-project coverage → `htmlcov/index.html`         |
+| `src/ci-test.sh`                          | CI entrypoint — exits non-zero on test failure       |
 
 Notes:
 
 - Tests run against **SQLite** (`test/conftest.py`) with **Redis at `localhost:6379`**.
-- `src/test.sh` starts Redis for you (`docker start redis-stack`) before running pytest.
+- `src/test.sh` starts Redis for you (`docker compose up -d redis`) before running pytest.
 - Requirements are split: `requirements.txt` (app) vs `requirements-test.txt` (pytest, pytest-cov, …).
 
 **CI:** GitHub Actions (`.github/workflows/test.yaml`) runs on every push / PR to `main`: pytest over `./test/test_routers`, plus a non-blocking flake8 lint pass.
@@ -250,7 +250,7 @@ Store image files under docs/images/.
 
 ## ⚠️ Known limitations
 
-Honest list of what is *not* there yet — each entry includes why it matters:
+Honest list of what is _not_ there yet — each entry includes why it matters:
 
 1. **Notification channels** — real-time delivery is WebSocket + in-app only; no email or mobile push. Password reset and email verification are not implemented.
 2. **Single-instance deployment** — the demo runs on a single local VM; horizontal scaling and multi-instance WebSocket fan-out have not been load-tested.
