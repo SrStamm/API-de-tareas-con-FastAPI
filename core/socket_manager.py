@@ -1,7 +1,7 @@
 from typing import Dict, List
 from fastapi import WebSocket
 from .logger import logger
-from db.database import redis_client, sessionlocal
+from db.database import redis_client, SessionLocal
 from redis.asyncio import Redis
 from tasks import save_notification_in_db, get_pending_notifications_for_user
 from core.event_ws import format_notification
@@ -146,7 +146,7 @@ manager = RedisConnectionManager(redis_client)
 
 
 async def send_pending_notifications(user_id: int):
-    session = sessionlocal
+    session = SessionLocal()
     pending = get_pending_notifications_for_user(user_id)
     if not pending:
         return {"detail": "No habian notificaciones a enviar"}
