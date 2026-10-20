@@ -276,25 +276,11 @@ class Token(BaseModel):
     refresh_token: str
 
 
-class Access_Token(BaseModel):
-    access_token: str = Field(examples=[])
-    token_type: str = Field(examples=["bearer"])
-
-
 class RefreshTokenRequest(BaseModel):
     refresh: str
 
 
 # Mensaje y WebSocket
-
-
-class Message(BaseModel):
-    content: str = Field(max_length=150, examples=["Hola a todos!"])
-    user_id: int = Field(examples=[1])
-    project_id: int = Field(examples=[1])
-    timestamp: dt = Field(examples=["2025-10-15 09:12:12"])
-
-
 class ChatMessage(BaseModel):
     chat_id: int
     project_id: int

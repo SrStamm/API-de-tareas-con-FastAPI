@@ -35,7 +35,7 @@ async def test_get_groups_error(mocker):
     )
 
     with pytest.raises(DatabaseError):
-        await service.get_groups_with_cache(10, 10)
+        await service.get_groups(10, 10)
 
 
 @pytest.mark.asyncio
