@@ -3,7 +3,7 @@ from fastapi import WebSocket
 from .logger import logger
 from db.database import redis_client, SessionLocal
 from redis.asyncio import Redis
-from tasks import save_notification_in_db, get_pending_notifications_for_user
+from tasks import save_notification_in_db, deliver_pending_notifications
 from core.event_ws import format_notification
 import asyncio
 import json
@@ -146,16 +146,9 @@ manager = RedisConnectionManager(redis_client)
 
 
 async def send_pending_notifications(user_id: int):
-    session = SessionLocal()
-    pending = get_pending_notifications_for_user(user_id)
-    if not pending:
-        return {"detail": "No habian notificaciones a enviar"}
-    else:
-        for n in pending:
-            notification_to_send = format_notification(
-                notification_type=n.type, message=n.payload
-            )
-            await manager.send_to_user(user_id=user_id, message=notification_to_send)
-            n.status = Notify_State.ENVIADO
-        session.commit()
-        logger.info(f"[send_pending_notifications] Notifications were updated")
+    try:
+        deliver_pending_notifications.delay(user_id)
+        return {"detail": "Pending notifications delivery enqueued"}
+    except Exception as e:
+        logger.error(f"[send_pending_notifications] Error enqueuing delivery: {str(e)}")
+        return {"detail": "Error enqueuing pending notifications"}

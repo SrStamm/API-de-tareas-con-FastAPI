@@ -19,8 +19,7 @@ url = f"redis://{host}:{port}/{db}"
 app = Celery("tasks", broker=url)
 
 
-@app.task(retry_backoff=5)
-def get_pending_notifications_for_user(user_id: int) -> List[db_models.Notifications]:
+def get_pending_notifications_for_user_sync(user_id: int) -> List[db_models.Notifications]:
     session = SessionLocal()
     try:
         stmt = select(db_models.Notifications).where(
@@ -29,20 +28,59 @@ def get_pending_notifications_for_user(user_id: int) -> List[db_models.Notificat
         )
 
         notify_found = session.exec(stmt).all()
-
+        session.close()
         return notify_found
 
     except SQLAlchemyError as e:
+        session.close()
         logger.error(
             f"[get_pending_notifications_for_user] Internal Error | Error: {str(e)}."
         )
         raise
 
     except Exception as e:
+        session.close()
         logger.error(
             f"[get_pending_notifications_for_user] Notification Error | Error: {str(e)}."
         )
         return []
+
+
+@app.task(retry_backoff=5)
+def get_pending_notifications_for_user(user_id: int) -> List[db_models.Notifications]:
+    return get_pending_notifications_for_user_sync(user_id)
+
+
+@app.task
+def deliver_pending_notifications(user_id: int):
+    from core.event_ws import format_notification
+    from core.socket_manager import manager
+    import asyncio
+
+    session = SessionLocal()
+    try:
+        pending = get_pending_notifications_for_user_sync(user_id)
+        if not pending:
+            session.close()
+            return {"detail": "No habian notificaciones a enviar"}
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    async def _deliver():
+        nonlocal pending, session
+        for n in pending:
+            notification_to_send = format_notification(
+                notification_type=n.type, message=n.payload
+            )
+            await manager.send_to_user(user_id=user_id, message=notification_to_send)
+            n.status = db_models.Notify_State.ENVIADO
+        session.commit()
+        session.close()
+        logger.info(f"[deliver_pending_notifications] Notifications were updated")
+
+    return loop.run_until_complete(_deliver())
 
 
 @app.task
@@ -50,8 +88,6 @@ def save_notification_in_db(message, user_id: int):
     session = SessionLocal()
     try:
         message_decoded = json.loads(message)["payload"]
-        notice_payload = schemas.NotificationPayload(**message_decoded)
-
         notice_payload = schemas.NotificationPayload(**message_decoded)
 
         new_notice = db_models.Notifications(
