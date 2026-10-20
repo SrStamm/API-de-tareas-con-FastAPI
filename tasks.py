@@ -3,7 +3,7 @@ from typing import List
 import os
 import json
 from dotenv import load_dotenv
-from db.database import SessionLocal, sessionlocal, select, SQLAlchemyError
+from db.database import SessionLocal, select, SQLAlchemyError
 from models import db_models, schemas
 from core.logger import logger
 
@@ -21,7 +21,7 @@ app = Celery("tasks", broker=url)
 
 @app.task(retry_backoff=5)
 def get_pending_notifications_for_user(user_id: int) -> List[db_models.Notifications]:
-    session = sessionlocal
+    session = SessionLocal()
     try:
         stmt = select(db_models.Notifications).where(
             db_models.Notifications.user_id == user_id,

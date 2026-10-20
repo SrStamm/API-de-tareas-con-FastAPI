@@ -10,23 +10,27 @@ import os
 
 load_dotenv()
 
-user = os.environ.get("POSTGRES_USER")
-db_name = os.environ.get("POSTGRES_DB")
-password = os.environ.get("POSTGRES_PASSWORD")
-db_host = os.environ.get("POSTGRES_HOST")
-db_port = os.environ.get("POSTGRES_PORT")
-
-# url = f'postgresql+psycopg2://{user}:{password}@localhost:5432/{db_name}'
-
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL) # echo=True, pool_pre_ping=True
+if DATABASE_URL:
+    engine = create_engine(DATABASE_URL) # echo=True, pool_pre_ping=True
+else:
+    missing = [k for k in ("POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_DB")
+            if not os.environ.get(k)]
+    if missing:
+        raise RuntimeError(f"DATABASE_URL no definida y faltan variables: {', '.join(missing)}")
+
+    user = os.environ.get("POSTGRES_USER")
+    db_name = os.environ.get("POSTGRES_DB")
+    password = os.environ.get("POSTGRES_PASSWORD")
+    db_host = os.environ.get("POSTGRES_HOST")
+    db_port = os.environ.get("POSTGRES_PORT")
+
+    url = f'postgresql+psycopg2://{user}:{password}@{db_host}:{db_port}/{db_name}'
+    engine = create_engine(url) # echo=True, pool_pre_ping=True
 
 
 def create_db_and_tables():
-    ## Solo para entornos de testing/ local muy iniciales
-    # SQLModel.metadata.create_all(engine)
-
     try:
         with engine.connect() as connection:
             result = connection.execute(text("SELECT 1"))
@@ -34,10 +38,7 @@ def create_db_and_tables():
     except Exception as e:
         raise Exception(f"Error al conectar a la base de datos: {e}, {e.args}")
 
-
 SessionLocal = sessionmaker(autoflush=False, autocommit=False, bind=engine)
-sessionlocal = Session(engine)
-
 
 def get_session():
     session = Session(engine)
