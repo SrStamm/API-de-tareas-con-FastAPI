@@ -24,7 +24,7 @@ SECRET = os.environ.get("SECRET_KEY")
 
 crypt = CryptContext(schemes=["bcrypt"])
 
-oauth2 = OAuth2PasswordBearer(tokenUrl="token", scheme_name="Bearer")
+oauth2 = OAuth2PasswordBearer(tokenUrl="/login", scheme_name="Bearer")
 
 
 # @limiter.limit("10/minute")

@@ -1,6 +1,7 @@
 from contextvars import ContextVar
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
 from api.v1.routers import group, project, task, user, auth, ws, comment
 from db.database import create_db_and_tables
 from core.logger import logger, register_exceptions_handlers
@@ -12,6 +13,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 from time import time
 import structlog
 import uuid
+from core.limiter import limiter
+from slowapi import _rate_limit_exceeded_handler
 
 scheduler = AsyncIOScheduler()
 
@@ -37,13 +40,7 @@ app = FastAPI(lifespan=lifespan)
 register_exceptions_handlers(app)
 
 origins = [
-    "http://localhost",
-    "http://localhost:8000",
-    "http://localhost:8080",
-    "*",
-    "http://127.0.0.1:8080",
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
+    "http://localhost:5173"
 ]
 
 app.add_middleware(
@@ -54,8 +51,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# app.state.limiter = limiter
-# app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(group.router)
 app.include_router(project.router)
