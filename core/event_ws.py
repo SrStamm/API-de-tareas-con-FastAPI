@@ -5,10 +5,14 @@ from models.schemas import (
 )
 
 
-def format_notification(notification_type: str, message: str):
+def format_notification(
+    notification_type: str, message: str, related_entity_id: int | None = None
+):
     # Crea la notificacion
     outgoin_payload = OutgoingNotificationPayload(
-        notification_type=notification_type, message=message
+        notification_type=notification_type,
+        message=message,
+        related_entity_id=related_entity_id,
     ).model_dump()
 
     # Crea el evento

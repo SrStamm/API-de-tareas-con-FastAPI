@@ -41,6 +41,19 @@ class ProjectService:
 
         return founded_project
 
+    def get_project_title_or_none(self, project_id: int) -> str | None:
+        """Best-effort project title lookup.
+
+        Returns None instead of raising so notification building never fails a
+        task mutation when the project cannot be resolved.
+        """
+        try:
+            project = self.project_repo.get_project_by_project_id(project_id)
+        except Exception:
+            return None
+
+        return project.title if project else None
+
     def found_user_in_project_or_404(self, user_id: int, project_id: int):
         user = self.project_repo.get_user_in_project(project_id, user_id)
 
