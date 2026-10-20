@@ -43,7 +43,7 @@ class GroupService:
         except Exception:
             raise
 
-    async def get_groups_with_cache(self, limit: int, skip: int) -> List[ReadGroup]:
+    async def get_groups(self, limit: int, skip: int) -> List[ReadGroup]:
         try:
             # Get from repository
             return self.group_repo.get_all_groups(limit, skip)

@@ -31,7 +31,7 @@ async def get_groups(
     skip: int = 0,
     group_service: GroupService = Depends(get_group_service),
 ) -> List[schemas.ReadBasicDataGroup]:
-    return await group_service.get_groups_with_cache(limit, skip)
+    return await group_service.get_groups(limit, skip)
 
 
 @router.post(
