@@ -26,6 +26,13 @@ class ProjectRepository:
         except SQLAlchemyError as e:
             raise DatabaseError(e, "get_project_by_id")
 
+    def get_project_by_project_id(self, project_id: int):
+        try:
+            stmt = select(Project).where(Project.project_id == project_id)
+            return self.session.exec(stmt).first()
+        except SQLAlchemyError as e:
+            raise DatabaseError(e, "get_project_by_project_id")
+
     def get_user_in_project(self, project_id: int, user_id: int):
         try:
             stmt = select(project_user).where(

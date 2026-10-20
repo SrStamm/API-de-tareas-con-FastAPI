@@ -69,7 +69,49 @@ class TaskService:
         except DatabaseError:
             raise
 
-    async def create(self, task: CreateTask, project_id: int):
+    def _resolve_username(self, user_id: int | None) -> str | None:
+        """Best-effort username lookup for notification text (never raises)."""
+        if not user_id:
+            return None
+        try:
+            return self.user_ser.get_user_or_404(user_id).username
+        except Exception:
+            return None
+
+    def _build_assigned_task_message(
+        self,
+        task_title: str | None,
+        project_id: int,
+        project_title: str | None,
+        actor_username: str | None,
+        task_id: int,
+    ) -> str:
+        """Build the human-readable assignment message, with a safe fallback.
+
+        A notification is best-effort: if names cannot be resolved we fall back
+        to the id-based text instead of failing the task mutation.
+        """
+        try:
+            if not task_title or not project_title:
+                return f"You were assigned to the task {task_id} in the project {project_id}"
+
+            message = (
+                f"Fuiste asignado a la tarea «{task_title}» "
+                f"en el proyecto «{project_title}»"
+            )
+            if actor_username:
+                message += f" por {actor_username}"
+            return f"{message}."
+        except Exception:
+            return f"You were assigned to the task {task_id} in the project {project_id}"
+
+    async def create(
+        self,
+        task: CreateTask,
+        project_id: int,
+        actor_user_id: int | None = None,
+        actor_username: str | None = None,
+    ):
         try:
             if task.assigned_user_id:
                 self.user_ser.get_user_or_404(task.assigned_user_id)
@@ -82,10 +124,21 @@ class TaskService:
 
             logger.info("task_created", project_id=project_id, task_id=new_task.task_id)
 
-            if task.assigned_user_id:
+            # Do not notify the actor about their own assignment.
+            if task.assigned_user_id and task.assigned_user_id != actor_user_id:
+                project_title = self.proj_ser.get_project_title_or_none(project_id)
+                message = self._build_assigned_task_message(
+                    task_title=new_task.title,
+                    project_id=project_id,
+                    project_title=project_title,
+                    actor_username=actor_username,
+                    task_id=new_task.task_id,
+                )
+
                 outgoing_event_json = format_notification(
                     notification_type="assigned_task",
-                    message=f"You are assigned to the task {new_task.task_id} in project {project_id}",
+                    message=message,
+                    related_entity_id=new_task.task_id,
                 )
 
                 # Envia el evento
@@ -212,10 +265,21 @@ class TaskService:
 
             task = self.task_repo.get_task_by_id(task_id, project_id)
 
-            if update_task.assigned_user_id:
+            # Do not notify the actor about their own assignment.
+            if update_task.assigned_user_id and update_task.assigned_user_id != user_id:
+                project_title = self.proj_ser.get_project_title_or_none(project_id)
+                message = self._build_assigned_task_message(
+                    task_title=task.title,
+                    project_id=project_id,
+                    project_title=project_title,
+                    actor_username=self._resolve_username(user_id),
+                    task_id=task_id,
+                )
+
                 outgoing_event_json = format_notification(
                     notification_type="assigned_task",
-                    message=f"You were assigned to the task {task_id} in the project {project_id}",
+                    message=message,
+                    related_entity_id=task_id,
                 )
                 await manager.send_to_user(
                     message=outgoing_event_json, user_id=update_task.assigned_user_id

@@ -99,7 +99,11 @@ async def create_task(
     auth_data: dict = Depends(require_permission(permissions=["admin"])),
     task_serv: TaskService = Depends(get_task_service),
 ):
-    return await task_serv.create(new_task, project_id)
+    user = auth_data["user"]
+
+    return await task_serv.create(
+        new_task, project_id, actor_user_id=user.user_id, actor_username=user.username
+    )
 
 
 @router.patch(
