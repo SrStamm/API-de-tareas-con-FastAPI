@@ -159,11 +159,11 @@ Create a `.env` file at the project root. `SECRET_KEY` and `ALGORITHM` are **req
 | `POSTGRES_HOST`          | `db/database.py`            | —           | Required                                                |
 | `POSTGRES_PORT`          | `db/database.py`            | —           | Required                                                |
 | `DATABASE_URL`           | `db/database.py`            | —           | Full SQLAlchemy URL; takes precedence over `POSTGRES_*` |
-| `REDIS_HOST`             | `db/database.py`            | `localhost` |                                                         |
-| `REDIS_PORT`             | `db/database.py`            | `6379`      |                                                         |
-| `REDIS_DB`               | `db/database.py`            | `0`         |                                                         |
-| `REDIS_PASSWORD`         | Redis client                | —           | Required in the Docker setup                            |
-| `REDIS_URL`              | Celery (`tasks.py`)         | —           | Broker URL                                              |
+| `REDIS_HOST`             | `db/database.py`, `tasks.py` | `localhost` | Redis host                                             |
+| `REDIS_PORT`             | `db/database.py`, `tasks.py` | `6379`      | Redis port                                             |
+| `REDIS_DB`               | `db/database.py`, `tasks.py` | `0`         | Redis database index                                   |
+| `REDIS_URL`              | `db/database.py`            | —           | When set, overrides `REDIS_HOST`/`REDIS_PORT`/`REDIS_DB` for the Redis client (parsed into host/port/db) |
+| `REDIS_PASSWORD`         | Docker setup only           | —           | Declared by the compose files for the Redis image. `tasks.py` reads it but the broker URL does not include it (unused) |
 | `SECRET_KEY`             | auth                        | —           | **Required — startup fails without it**                 |
 | `ALGORITHM`              | auth                        | —           | **Required — e.g. `HS256`**                             |
 | `ACCESS_TOKEN_DURATION`  | `services/auth_services.py` | `15`        | Access token lifetime in **minutes**                    |
@@ -185,8 +185,9 @@ POSTGRES_PORT=5432
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_DB=0
+# REDIS_URL takes precedence for the Redis client when set:
+# REDIS_URL=redis://localhost:6379/0
 REDIS_PASSWORD=change-me
-REDIS_URL=redis://localhost:6379/0
 
 # Auth (required — startup fails without these)
 SECRET_KEY=replace-with-a-long-random-string
@@ -214,7 +215,9 @@ Once the server is running:
 | `pytest -vv`                              | Verbose run                                          |
 | `pytest --cov=./api/v1 --cov-report=html` | Coverage of routers → `htmlcov/index.html`           |
 | `pytest --cov=. --cov-report=html`        | Full-project coverage → `htmlcov/index.html`         |
-| `src/ci-test.sh`                          | CI entrypoint — exits non-zero on test failure       |
+
+> `src/ci-test.sh` is a local convenience wrapper only (run manually). CI does not
+> invoke it: the GitHub Actions workflow runs `pytest` directly.
 
 Notes:
 
@@ -230,7 +233,7 @@ Notes:
 
 - **Frontend:** <https://front-task-api-vanilla.vercel.app/dashboard/tasks>
 - **Username:** `test`
-- **Password:** `test123`
+- **Password:** `test`
 
 > These credentials are for the **public demo frontend only**. The frontend is a demo client; the main focus of this project is the backend design and architecture.
 

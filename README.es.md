@@ -159,11 +159,11 @@ Crea un archivo `.env` en la raíz del proyecto. `SECRET_KEY` y `ALGORITHM` son 
 | `POSTGRES_HOST`          | `db/database.py`            | —                 | Obligatoria                                                    |
 | `POSTGRES_PORT`          | `db/database.py`            | —                 | Obligatoria                                                    |
 | `DATABASE_URL`           | `db/database.py`            | —                 | URL completa de SQLAlchemy; tiene prioridad sobre `POSTGRES_*` |
-| `REDIS_HOST`             | `db/database.py`            | `localhost`       |                                                                |
-| `REDIS_PORT`             | `db/database.py`            | `6379`            |                                                                |
-| `REDIS_DB`               | `db/database.py`            | `0`               |                                                                |
-| `REDIS_PASSWORD`         | Cliente Redis               | —                 | Obligatoria en la configuración con Docker                     |
-| `REDIS_URL`              | Celery (`tasks.py`)         | —                 | URL del broker                                                 |
+| `REDIS_HOST`             | `db/database.py`, `tasks.py` | `localhost`       | Host de Redis                                                  |
+| `REDIS_PORT`             | `db/database.py`, `tasks.py` | `6379`            | Puerto de Redis                                                |
+| `REDIS_DB`               | `db/database.py`, `tasks.py` | `0`               | Índice de base de datos de Redis                               |
+| `REDIS_URL`              | `db/database.py`            | —                 | Si está definida, reemplaza a `REDIS_HOST`/`REDIS_PORT`/`REDIS_DB` para el cliente Redis (se parsea en host/port/db) |
+| `REDIS_PASSWORD`         | Solo configuración Docker   | —                 | Declarada por los compose files para la imagen de Redis. `tasks.py` la lee pero la URL del broker no la incluye (sin uso) |
 | `SECRET_KEY`             | Auth                        | —                 | **Obligatoria — la aplicación falla al iniciar sin ella**      |
 | `ALGORITHM`              | Auth                        | —                 | **Obligatoria — p. ej. `HS256`**                               |
 | `ACCESS_TOKEN_DURATION`  | `services/auth_services.py` | `15`              | Vigencia del access token en **minutos**                       |
@@ -185,8 +185,9 @@ POSTGRES_PORT=5432
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_DB=0
+# REDIS_URL tiene prioridad para el cliente Redis cuando está definida:
+# REDIS_URL=redis://localhost:6379/0
 REDIS_PASSWORD=change-me
-REDIS_URL=redis://localhost:6379/0
 
 # Auth (required — startup fails without these)
 SECRET_KEY=replace-with-a-long-random-string
@@ -214,7 +215,9 @@ Una vez que el servidor esté en ejecución:
 | `pytest -vv`                              | Ejecución en modo verbose                                      |
 | `pytest --cov=./api/v1 --cov-report=html` | Cobertura de los routers → `htmlcov/index.html`                |
 | `pytest --cov=. --cov-report=html`        | Cobertura del proyecto completo → `htmlcov/index.html`         |
-| `src/ci-test.sh`                          | Entrada de CI — termina con error si un test falla             |
+
+> `src/ci-test.sh` es solo un envoltorio de conveniencia local (se ejecuta a mano).
+> CI no lo invoca: el workflow de GitHub Actions corre `pytest` directamente.
 
 Notas:
 
@@ -230,7 +233,7 @@ Notas:
 
 - **Frontend:** <https://front-task-api-vanilla.vercel.app/dashboard/tasks>
 - **Usuario:** `test`
-- **Contraseña:** `test123`
+- **Contraseña:** `test`
 
 > Estas credenciales son solo para el **frontend público de demostración**. El frontend es un cliente de demostración; el enfoque principal de este proyecto es el diseño y la arquitectura del backend.
 
