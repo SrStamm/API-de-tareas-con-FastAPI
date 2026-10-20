@@ -9,16 +9,15 @@ from fastapi import (
 from typing import List
 from datetime import datetime
 
-from sqlalchemy.orm import joinedload
 from models import schemas, db_models, exceptions, responses
-from db.database import get_session, Session, select, SQLAlchemyError
+from db.database import get_session, Session, SQLAlchemyError
+from services.chat_services import ChatService, get_chat_service
 from .auth import auth_user_ws
 from dependency.auth_dependencies import get_current_user
 from core.logger import logger
 from core.limiter import limiter
 from core.socket_manager import manager, send_pending_notifications
 from core.event_ws import format_personal_message
-from core.utils import found_user_in_project_or_404
 import json
 
 router = APIRouter(tags=["WebSocket"])
@@ -66,6 +65,7 @@ async def get_current_user_ws(session: Session, websocket: WebSocket):
 async def websocket_endpoint(
     websocket: WebSocket,
     session: Session = Depends(get_session),
+    service: ChatService = Depends(get_chat_service)
 ):
     # Obtiene el usuario actual
     user = await get_current_user_ws(session, websocket)
@@ -105,41 +105,13 @@ async def websocket_endpoint(
                     # Verifica que tenga los datos del schema
                     message_payload = schemas.GroupMessagePayload(**event.payload)
 
-                    # Crea el mensaje a guardar en BD
-                    message = db_models.ProjectChat(
-                        project_id=message_payload.project_id,
-                        user_id=user.user_id,
-                        message=message_payload.content,
+                    outgoing_json = service.send_message(
+                        message_payload.project_id, user.user_id, message_payload
                     )
+                    await manager.broadcast(outgoing_json, message_payload.project_id)
 
-                    session.add(message)
-                    session.commit()
-                    session.refresh(message)
 
-                    # Crea el mensaje de salida, que se envia al grupo
-                    outgoing_payload = schemas.OutgoingGroupMessagePayload(
-                        id=message.chat_id,
-                        project_id=message.project_id,
-                        sender_id=message.user_id,
-                        content=message.message,
-                        timestamp=message.timestamp,
-                    )
-
-                    # Crea el evento completo
-                    outgoing_event = schemas.WebSocketEvent(
-                        type="group_message", payload=outgoing_payload.model_dump()
-                    )
-
-                    # Parsea a json
-                    outgoing_event_json = outgoing_event.model_dump_json()
-
-                    # Envia al broadcast
-                    await manager.broadcast(outgoing_event_json, message.project_id)
-                    logger.info(
-                        f"Broadcast group message ID {message.chat_id} for project {message.project_id} via WS"
-                    )
-
-                if event_type == "personal_message":
+                elif event_type == "personal_message":
                     # Verifica que tenga los datos del schema
                     message_payload = schemas.PersonalMessagePayload(**event.payload)
 
@@ -223,6 +195,17 @@ async def websocket_endpoint(
                     }
                 )
 
+            except exceptions.ProjectNotFoundError:
+                await websocket.send_json(
+                    {"type": "error", "payload": {"message": "Not a member of this project."}}
+                )
+            except exceptions.DatabaseError:
+                await websocket.send_json(
+                    {"type": "error", "payload": {"message": "Internal server error saving message."}}
+                )
+
+
+
             except Exception as e:
                 # Captura cualquier otro error durante el procesamiento del mensaje
                 logger.error(
@@ -269,7 +252,10 @@ async def websocket_endpoint(
             "description": "Chat del proyecto obtenido",
             "model": schemas.ChatMessage,
         },
-        500: {"description": "Error interno", "model": responses.DatabaseErrorResponse},
+        500: {
+            "description": "Error interno",
+            "model": responses.DatabaseErrorResponse
+        },
     },
 )
 @limiter.limit("20/minute")
@@ -278,31 +264,10 @@ def get_chat(
     project_id: int,
     limit: int = 100,
     skip: int = 0,
-    _: db_models.User = Depends(get_current_user),
-    session: Session = Depends(get_session),
+    user: db_models.User = Depends(get_current_user),
+    service: ChatService = Depends(get_chat_service)
 ) -> List[schemas.ChatMessage]:
-    try:
-        stmt = (
-            select(db_models.ProjectChat)
-            .options(joinedload(db_models.ProjectChat.user))
-            .where(
-                db_models.ProjectChat.project_id == project_id,
-            )
-            .order_by(db_models.ProjectChat.timestamp.asc())
-            .limit(limit)
-            .offset(skip)
-        )
-
-        response = session.exec(stmt)
-        messages_chat = response.all()
-
-        if not messages_chat:
-            raise exceptions.ChatNotFoundError(project_id)
-
-        return messages_chat
-
-    except SQLAlchemyError as e:
-        raise exceptions.DatabaseError(error=e, func="get_chat")
+    return service.get_chat(project_id, user.user_id, limit, skip)
 
 
 @router.post("/chat/{project_id}")
@@ -310,44 +275,13 @@ async def send_message_to_project(
     project_id: int,
     message_payload: schemas.GroupMessagePayload,
     user: db_models.User = Depends(get_current_user),
-    session: Session = Depends(get_session),
+    service: ChatService = Depends(get_chat_service)
 ):
-    try:
-        found_user_in_project_or_404(user.user_id, project_id, session)
+    message = service.send_message(project_id, user.user_id, message_payload)
 
-        # Crea el mensaje a guardar en BD
-        message = db_models.ProjectChat(
-            project_id=project_id, user_id=user.user_id, message=message_payload.content
-        )
+    # Envia al broadcast
+    await manager.broadcast(message, project_id)
 
-        session.add(message)
-        session.commit()
-        session.refresh(message)
-
-        # Crea el mensaje de salida, que se envia al grupo
-        outgoing_payload = schemas.OutgoingGroupMessagePayload(
-            id=message.chat_id,
-            project_id=message.project_id,
-            sender_id=message.user_id,
-            content=message.message,
-            timestamp=message.timestamp,
-        )
-
-        # Crea el evento completo
-        outgoing_event = schemas.WebSocketEvent(
-            type="group_message", payload=outgoing_payload.model_dump()
-        )
-
-        # Parsea a json
-        outgoing_event_json = outgoing_event.model_dump_json()
-
-        # Envia al broadcast
-        await manager.broadcast(outgoing_event_json, project_id)
-
-        return {
-            "detail": f"Mensaje enviado con exito al proyecto {project_id} por user {user.user_id}"
-        }
-
-    except SQLAlchemyError as e:
-        session.rollback()
-        raise exceptions.DatabaseError(error=e, func="send_message_to_project")
+    return {
+        "detail": f"Mensaje enviado con exito al proyecto {project_id} por user {user.user_id}"
+    }
