@@ -13,6 +13,8 @@ from models import exceptions, schemas
 from unittest.mock import AsyncMock
 from starlette.requests import Request
 
+from services.chat_services import ChatService
+
 
 @pytest.mark.asyncio
 async def test_send_message_to_project(
@@ -40,47 +42,41 @@ def test_get_chat(client, auth_headers):
             for key in ["chat_id", "project_id", "user_id", "message", "timestamp"]
         )
 
-
-def test_get_chat_error(mocker):
-    session_mock = mocker.Mock()
+def test_get_chat_non_member(mocker):
     mock_user = mocker.Mock(spec=db_models.User)
-    mock_request = mocker.Mock(spec=Request)
+    mock_user.user_id = 1
+    mock_service = mocker.Mock(spec=ChatService)
+    mock_service.get_chat.side_effect = exceptions.ProjectNotFoundError(1)
 
-    # Excepcion chat no encontrado
-    session_mock.exec.return_value.all.return_value = []
-
-    with pytest.raises(exceptions.ChatNotFoundError):
-        ws.get_chat(request=mock_request, project_id=1, session=session_mock)
-
-    # Prueba la excepcion de DB
-    session_mock.exec.side_effect = SQLAlchemyError("Error en base de datos")
-
-    with pytest.raises(exceptions.DatabaseError):
-        ws.get_chat(request=mock_request, project_id=1, session=session_mock)
-
+    with pytest.raises(exceptions.ProjectNotFoundError):
+        ws.get_chat(
+            request=mocker.Mock(spec=Request),
+            project_id=1,
+            user=mock_user,
+            service=mock_service,
+        )
 
 @pytest.mark.asyncio
-async def test_send_message_to_project_error(mocker, auth_headers):
-    message_mocker = mocker.Mock(spec=schemas.GroupMessagePayload)
-    message_mocker.content = "Probando error en base de datos"
-
+async def test_send_message_to_project_error(mocker):
     user_mock = mocker.Mock(spec=db_models.User)
-    session_mock = mocker.Mock()
-
-    mocker.patch("api.v1.routers.ws.found_user_in_project_or_404", return_value=1)
-
-    session_mock.add.side_effect = SQLAlchemyError("Error en base de datos")
+    user_mock.user_id = 1
+    payload = mocker.Mock(spec=schemas.GroupMessagePayload)
+    payload.content = "probando"
+    service = mocker.Mock(spec=ChatService)
+    service.send_message.side_effect = exceptions.DatabaseError(
+        Exception("boom"), "save_message"
+    )
+    broadcast = mocker.patch("api.v1.routers.ws.manager.broadcast", new_callable=AsyncMock)
 
     with pytest.raises(exceptions.DatabaseError):
         await ws.send_message_to_project(
             project_id=1,
-            message_payload=message_mocker,
+            message_payload=payload,
             user=user_mock,
-            session=session_mock,
+            service=service,
         )
 
-    session_mock.rollback.assert_called_once()
-
+    broadcast.assert_not_awaited() 
 
 @pytest.mark.asyncio
 async def test_get_current_user_ws_header_error(mocker):
